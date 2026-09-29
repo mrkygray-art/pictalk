@@ -219,3 +219,7 @@ button:focus-visible {
     transition: none;
   }
 }
+.stop-status { font-size: 0.85rem; color: #6e6e73; }
+.stop-status.is-pending { color: #b25000; }
+.stop-status.is-saved { color: #1a7f37; }
+.stop-note { font-size: 0.85rem; color: #6e6e73; font-style: italic; }

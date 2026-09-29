@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { startSession } from "./firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, startSession } from "./firebase";
+import {
+  queueStop,
+  getPendingStops,
+  watchStops,
+  startAutoSync,
+  onQueueChange,
+  urlFor,
+} from "./stopStore";
 
 // Pick an audio format this phone's browser can record (iPhone uses mp4, Android/Chrome uses webm)
 function pickAudioType() {
@@ -40,28 +49,126 @@ function StopIcon() {
   );
 }
 
+// One row in the Saved stops list
+function StopCard({ number, time, photoUrl, audioUrl, audioExpired, status, statusText }) {
+  return (
+    <article className="stop">
+      {photoUrl && <img src={photoUrl} alt="" className="thumb" />}
+      <div className="stop-info">
+        <strong>Stop {number}</strong>
+        <span>{time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
+        <span className={`stop-status is-${status}`}>{statusText}</span>
+        {audioUrl && <audio controls src={audioUrl} />}
+        {audioExpired && <span className="stop-note">Voice note expired</span>}
+      </div>
+    </article>
+  );
+}
+
+// A stop that's already in the cloud: look up its photo/voice download links
+function CloudStop({ stop, number }) {
+  const [urls, setUrls] = useState({ photo: null, audio: null, loaded: false });
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all([urlFor(stop.photoPath), urlFor(stop.audioPath)]).then(([photo, audio]) => {
+      if (alive) setUrls({ photo, audio, loaded: true });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [stop.photoPath, stop.audioPath]);
+
+  return (
+    <StopCard
+      number={number}
+      time={new Date(stop.clientCreatedAt)}
+      photoUrl={urls.photo}
+      audioUrl={urls.audio}
+      audioExpired={urls.loaded && stop.audioPath && !urls.audio}
+      status="saved"
+      statusText="Saved ✓"
+    />
+  );
+}
+
 export default function App() {
-  const [stops, setStops] = useState([]);
+  const [pending, setPending] = useState([]); // saved on this phone, not uploaded yet
+  const [synced, setSynced] = useState([]); // safely in the cloud
   const [photo, setPhoto] = useState(null);
   const [audio, setAudio] = useState(null);
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [online, setOnline] = useState(navigator.onLine);
   const [error, setError] = useState("");
 
   const fileInput = useRef(null);
   const recorder = useRef(null);
   const chunks = useRef([]);
   const timer = useRef(null);
+  const localUrls = useRef(new Map()); // pending stop id -> { photo, audio } preview links
 
-  // Sign in quietly in the background (anonymous, no account needed)
   useEffect(() => {
+    // Sign in quietly in the background (anonymous, no account needed)
     startSession().catch((err) => console.warn("Sign-in failed:", err));
-    return () => clearInterval(timer.current);
+
+    // Keep retrying uploads (on reconnect, app reopen, every minute)
+    const stopAutoSync = startAutoSync();
+
+    // Reload the "on this phone" list whenever the queue changes
+    const refreshPending = async () => {
+      const items = await getPendingStops();
+      const cache = localUrls.current;
+      const ids = new Set(items.map((i) => i.id));
+      for (const [id, u] of cache) {
+        if (!ids.has(id)) {
+          if (u.photo) URL.revokeObjectURL(u.photo);
+          if (u.audio) URL.revokeObjectURL(u.audio);
+          cache.delete(id);
+        }
+      }
+      setPending(
+        items.map((item) => {
+          if (!cache.has(item.id)) {
+            cache.set(item.id, {
+              photo: item.photoBlob ? URL.createObjectURL(item.photoBlob) : null,
+              audio: item.audioBlob ? URL.createObjectURL(item.audioBlob) : null,
+            });
+          }
+          return { ...item, urls: cache.get(item.id) };
+        })
+      );
+    };
+    const stopQueueWatch = onQueueChange(refreshPending);
+    refreshPending();
+
+    // Live list of stops already in the cloud
+    let stopCloudWatch = () => {};
+    const stopAuthWatch = onAuthStateChanged(auth, (user) => {
+      stopCloudWatch();
+      stopCloudWatch = user ? watchStops(user.uid, setSynced) : () => {};
+    });
+
+    const updateOnline = () => setOnline(navigator.onLine);
+    window.addEventListener("online", updateOnline);
+    window.addEventListener("offline", updateOnline);
+
+    return () => {
+      clearInterval(timer.current);
+      stopAutoSync();
+      stopQueueWatch();
+      stopAuthWatch();
+      stopCloudWatch();
+      window.removeEventListener("online", updateOnline);
+      window.removeEventListener("offline", updateOnline);
+    };
   }, []);
 
   const handlePhoto = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (photo) URL.revokeObjectURL(photo.url);
     setPhoto({ file, url: URL.createObjectURL(file) });
     e.target.value = "";
   };
@@ -97,21 +204,42 @@ export default function App() {
     setRecording(false);
   };
 
-  const saveStop = () => {
-    setStops((prev) => [{ id: Date.now(), photo, audio, time: new Date() }, ...prev]);
-    setPhoto(null);
-    setAudio(null);
+  const canSave = (photo || audio) && !recording && !saving;
+
+  const saveStop = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    setError("");
+    try {
+      // Saved to the phone first, then uploaded in the background
+      await queueStop({ photoBlob: photo?.file, audioBlob: audio?.blob });
+      if (photo) URL.revokeObjectURL(photo.url);
+      if (audio) URL.revokeObjectURL(audio.url);
+      setPhoto(null);
+      setAudio(null);
+    } catch (err) {
+      console.error("Save failed:", err);
+      setError("Couldn't save this stop. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const canSave = (photo || audio) && !recording;
-  const savedLabel = `${stops.length} stop${stops.length === 1 ? "" : "s"} saved`;
+  // Combine: phone-only stops + cloud stops (skip duplicates mid-upload), newest first
+  const syncedIds = new Set(synced.map((s) => s.id));
+  const allStops = [
+    ...pending.filter((p) => !syncedIds.has(p.id)).map((p) => ({ ...p, isPending: true })),
+    ...synced,
+  ].sort((a, b) => b.clientCreatedAt - a.clientCreatedAt);
+
+  const savedLabel = `${allStops.length} stop${allStops.length === 1 ? "" : "s"} saved`;
 
   return (
     <main className="app">
       <header className="header">
         <h1>PicTalk</h1>
         <p className="subtitle">
-          {stops.length === 0 ? "Take a picture, then say what you see." : savedLabel}
+          {allStops.length === 0 ? "Take a picture, then say what you see." : savedLabel}
         </p>
       </header>
 
@@ -158,22 +286,28 @@ export default function App() {
       </button>
 
       <button className="save-btn" onClick={saveStop} disabled={!canSave}>
-        Save This Stop
+        {saving ? "Saving…" : "Save This Stop"}
       </button>
 
-      {stops.length > 0 && (
+      {allStops.length > 0 && (
         <section className="saved" aria-label="Saved stops">
           <h2>Saved stops</h2>
-          {stops.map((stop, i) => (
-            <article className="stop" key={stop.id}>
-              {stop.photo && <img src={stop.photo.url} alt="" className="thumb" />}
-              <div className="stop-info">
-                <strong>Stop {stops.length - i}</strong>
-                <span>{stop.time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
-                {stop.audio && <audio controls src={stop.audio.url} />}
-              </div>
-            </article>
-          ))}
+          {allStops.map((stop, i) => {
+            const number = allStops.length - i;
+            return stop.isPending ? (
+              <StopCard
+                key={stop.id}
+                number={number}
+                time={new Date(stop.clientCreatedAt)}
+                photoUrl={stop.urls?.photo}
+                audioUrl={stop.urls?.audio}
+                status="pending"
+                statusText={online ? "Uploading…" : "Saved on this phone. Will upload when you're online."}
+              />
+            ) : (
+              <CloudStop key={stop.id} stop={stop} number={number} />
+            );
+          })}
         </section>
       )}
     </main>

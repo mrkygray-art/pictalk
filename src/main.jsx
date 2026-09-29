@@ -8,3 +8,10 @@ createRoot(document.getElementById('root')).render(
     <App />
   </StrictMode>,
 )
+
+// Offline support: register the service worker (live site only, not during npm run dev)
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((err) => console.warn('SW registration failed:', err));
+  });
+}

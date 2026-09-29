@@ -50,7 +50,7 @@ function StopIcon() {
 }
 
 // One row in the Saved stops list
-function StopCard({ number, time, photoUrl, audioUrl, audioExpired, status, statusText }) {
+function StopCard({ number, time, photoUrl, audioUrl, audioExpired, status, statusText, transcript }) {
   return (
     <article className="stop">
       {photoUrl && <img src={photoUrl} alt="" className="thumb" />}
@@ -58,11 +58,35 @@ function StopCard({ number, time, photoUrl, audioUrl, audioExpired, status, stat
         <strong>Stop {number}</strong>
         <span>{time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
         <span className={`stop-status is-${status}`}>{statusText}</span>
+        {transcript && <p className="stop-transcript">{transcript}</p>}
         {audioUrl && <audio controls src={audioUrl} />}
         {audioExpired && <span className="stop-note">Voice note expired</span>}
       </div>
     </article>
   );
+}
+
+// Turn the stop's cloud status into what the user sees
+function describeStatus(stop) {
+  switch (stop.status) {
+    case "transcribed":
+      return { status: "saved", text: "Saved ✓" };
+    case "transcribing":
+      return { status: "working", text: "Writing it down…" };
+    case "no_speech":
+      return { status: "saved", text: "Saved ✓ · No speech heard" };
+    case "transcription_failed":
+      return { status: "problem", text: "Saved ✓ · Couldn't write out the voice note" };
+    default: {
+      // "uploaded": a brand-new stop is about to be transcribed;
+      // older ones were saved before transcription existed
+      const createdMs = stop.createdAt?.toMillis?.() ?? stop.clientCreatedAt;
+      const isFresh = stop.audioPath && Date.now() - createdMs < 2 * 60 * 1000;
+      return isFresh
+        ? { status: "working", text: "Writing it down…" }
+        : { status: "saved", text: "Saved ✓" };
+    }
+  }
 }
 
 // A stop that's already in the cloud: look up its photo/voice download links
@@ -79,6 +103,8 @@ function CloudStop({ stop, number }) {
     };
   }, [stop.photoPath, stop.audioPath]);
 
+  const s = describeStatus(stop);
+
   return (
     <StopCard
       number={number}
@@ -86,8 +112,9 @@ function CloudStop({ stop, number }) {
       photoUrl={urls.photo}
       audioUrl={urls.audio}
       audioExpired={urls.loaded && stop.audioPath && !urls.audio}
-      status="saved"
-      statusText="Saved ✓"
+      status={s.status}
+      statusText={s.text}
+      transcript={stop.transcript}
     />
   );
 }

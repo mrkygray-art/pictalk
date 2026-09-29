@@ -223,3 +223,15 @@ button:focus-visible {
 .stop-status.is-pending { color: #b25000; }
 .stop-status.is-saved { color: #1a7f37; }
 .stop-note { font-size: 0.85rem; color: #6e6e73; font-style: italic; }
+.stop-status.is-working { color: #0066cc; }
+.stop-status.is-problem { color: #b3261e; }
+.stop-transcript {
+  margin: 6px 0 2px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: #1d1d1f;
+  background: #f5f5f7;
+  border-radius: 10px;
+  white-space: pre-wrap;
+}

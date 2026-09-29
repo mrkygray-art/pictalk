@@ -1,0 +1,221 @@
+:root {
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --text: #1c1c1e;
+  --muted: #636366;
+  --blue: #0066d6;
+  --red: #d70015;
+  --green: #1f7a37;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --surface: #1c1c1e;
+    --text: #f2f2f7;
+    --muted: #aeaeb2;
+    --blue: #0a84ff;
+    --red: #ff453a;
+    --green: #30d158;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.app {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: calc(24px + env(safe-area-inset-top)) 20px calc(40px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.header h1 {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+}
+
+.subtitle {
+  font-size: 19px;
+  color: var(--muted);
+  margin-top: 4px;
+  line-height: 1.35;
+}
+
+.current {
+  background: var(--surface);
+  border-radius: 22px;
+  overflow: hidden;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview {
+  width: 100%;
+  max-height: 340px;
+  object-fit: cover;
+  display: block;
+}
+
+.placeholder {
+  flex: 1;
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 19px;
+}
+
+.player {
+  width: calc(100% - 24px);
+  margin: 12px;
+}
+
+.big-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 88px;
+  border-radius: 22px;
+  font-family: inherit;
+  font-size: 24px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.big-btn:active {
+  transform: scale(0.98);
+}
+
+.big-btn svg {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.photo-btn {
+  background: var(--blue);
+  color: #ffffff;
+  border: 3px solid var(--blue);
+}
+
+.talk-btn {
+  background: var(--surface);
+  color: var(--blue);
+  border: 3px solid var(--blue);
+}
+
+.talk-btn.is-recording {
+  background: var(--red);
+  border-color: var(--red);
+  color: #ffffff;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.82;
+  }
+}
+
+.save-btn {
+  min-height: 60px;
+  border: none;
+  border-radius: 16px;
+  background: var(--green);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+button:focus-visible {
+  outline: 3px solid var(--text);
+  outline-offset: 3px;
+}
+
+.error {
+  background: var(--red);
+  color: #ffffff;
+  padding: 14px 16px;
+  border-radius: 14px;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.saved h2 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 12px 0;
+}
+
+.stop {
+  background: var(--surface);
+  border-radius: 16px;
+  display: flex;
+  gap: 14px;
+  padding: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.thumb {
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.stop-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  font-size: 17px;
+}
+
+.stop-info span {
+  color: var(--muted);
+}
+
+.stop-info audio {
+  width: 100%;
+  margin-top: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .talk-btn.is-recording {
+    animation: none;
+  }
+  .big-btn {
+    transition: none;
+  }
+}

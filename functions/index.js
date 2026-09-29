@@ -37,7 +37,14 @@ exports.transcribeStop = onDocumentCreated(
       const [audio] = await getStorage().bucket().file(stop.audioPath).download();
 
       // Send it to Deepgram
-      const params = new URLSearchParams({ model: "nova-3", smart_format: "true" });
+           const params = new URLSearchParams({ model: "nova-3", smart_format: "true" });
+      const KEYTERMS = [
+        "Verkada", "Avigilon", "Axis", "Hanwha", "Genetec", "Milestone",
+        "Brivo", "Openpath", "Lenel", "HID", "Aiphone", "Ubiquiti", "Meraki",
+        "Cat6", "IDF", "MDF", "PoE", "PoE switch", "NVR", "VMS",
+        "mag lock", "REX", "door contact", "card reader", "conduit", "J-hook",
+      ];
+      KEYTERMS.forEach((t) => params.append("keyterm", t));
       const res = await fetch(`https://api.deepgram.com/v1/listen?${params}`, {
         method: "POST",
         headers: {

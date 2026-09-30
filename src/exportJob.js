@@ -214,14 +214,25 @@ export async function loadPhotos(photoSources, onProgress = () => {}) {
 }
 
 // ---------- file name and delivery ----------
-/** "PicTalk_Acme_Corp_2026-09-30.pdf" (job's start date; unsafe characters removed) */
+/**
+ * "PicTalk_Acme-Company_123-West-Ave_2026-09-30_3-04PM.pdf": customer, location, and the
+ * job's start date and time. Blank parts are left out; unsafe characters are removed.
+ */
 export function exportFileName(data) {
-  const who = (data.customer || 'Job')
-    .normalize('NFKD').replace(/[^\w\s-]/g, '')
-    .trim().replace(/[\s-]+/g, '_').replace(/_+/g, '_').slice(0, 40) || 'Job';
+  const part = (v) =>
+    String(v || '')
+      .normalize('NFKD').replace(/[̀-ͯ]/g, '') // accents -> plain letters
+      .replace(/[^A-Za-z0-9\s-]/g, '')
+      .trim().replace(/[\s-]+/g, '-')
+      .slice(0, 40)
+      .replace(/-+$/, '');
   const d = new Date(data.startedAt || data.exportedAt);
-  const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  return `PicTalk_${who}_${ymd}.pdf`;
+  const pad = (n) => String(n).padStart(2, '0');
+  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const h = d.getHours();
+  const time = `${h % 12 || 12}-${pad(d.getMinutes())}${h < 12 ? 'AM' : 'PM'}`;
+  const who = [part(data.customer), part(data.location)].filter(Boolean);
+  return ['PicTalk', ...(who.length ? who : ['Job']), date, time].join('_') + '.pdf';
 }
 
 /** True when this phone can hand the PDF to the share sheet (text, email, save…). */

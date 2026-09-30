@@ -7,8 +7,12 @@ import {
   watchStops,
   startAutoSync,
   onQueueChange,
+  moveStop,
+  deleteStop,
 } from "./stopStore";
-import { watchJobs, startJob, endJob, reopenJob, touchJob, migrateEarlierStops } from "./jobStore";
+import {
+  watchJobs, startJob, endJob, reopenJob, renameJob, touchJob, migrateEarlierStops,
+} from "./jobStore";
 import { StopList } from "./StopCards";
 import JobsScreen from "./JobsScreen";
 
@@ -130,6 +134,7 @@ export default function App() {
   const [sheet, setSheet] = useState(null); // { type: "nojob", next } | { type: "end" }
   const [toast, setToast] = useState(null);
   const [view, setView] = useState("camera"); // "camera" | "jobs"
+  const [deleting, setDeleting] = useState(false);
 
   const fileInput = useRef(null);
   const recorder = useRef(null);
@@ -349,6 +354,47 @@ export default function App() {
     showToast(`Reopened ${job.name}`);
   };
 
+  const rename = (job, name) => {
+    renameJob(uid, job.id, name);
+    showToast("Name saved");
+  };
+
+  // Stop options: move to another job, or delete
+  const selectStop = (stop, { number, photoUrl }) => setSheet({ type: "stop", stop, number, photoUrl });
+
+  const moveTo = async (stop, job) => {
+    setSheet(null);
+    try {
+      await moveStop(uid, stop, job.id);
+      showToast(`Moved to ${job.name}`);
+    } catch (err) {
+      console.error("Move failed:", err);
+      setError("Couldn't move this stop. Please try again.");
+    }
+  };
+
+  const confirmDelete = async (stop) => {
+    setDeleting(true);
+    try {
+      await deleteStop(uid, stop);
+      setSheet(null);
+      showToast("Stop deleted");
+    } catch (err) {
+      console.error("Delete failed:", err);
+      setSheet(null);
+      setError(
+        err?.message === "offline"
+          ? "You need signal to delete a stop that's already uploaded. Try again when you're online."
+          : "Couldn't delete this stop. Please try again."
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const jobName = (id) => jobs.find((j) => j.id === id)?.name ?? "a job";
+  const clockOf = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
   return (
     <main className="app">
       <JobBar job={activeJob} />
@@ -361,6 +407,8 @@ export default function App() {
           online={online}
           onClose={() => showView("camera")}
           onReopen={requestReopen}
+          onRename={rename}
+          onStopSelect={selectStop}
         />
       ) : (
         <>
@@ -433,7 +481,7 @@ export default function App() {
                 Saved stops <span className="count">{stopCount}</span>
               </h2>
               {jobStops.length === 0 && <p className="empty">No stops yet in this job.</p>}
-              <StopList stops={jobStops} online={online} newestFirst />
+              <StopList stops={jobStops} online={online} newestFirst onSelect={selectStop} />
               <button className="big-btn end-btn" onClick={() => setSheet({ type: "end" })} disabled={recording}>
                 <FlagIcon />
                 End Job
@@ -488,6 +536,53 @@ export default function App() {
           </button>
           <button className="big-btn plain-btn" onClick={() => setSheet(null)}>
             Cancel
+          </button>
+        </Sheet>
+      )}
+
+      {sheet?.type === "stop" && (
+        <Sheet title={`Stop ${sheet.number}`} onClose={() => setSheet(null)}>
+          {sheet.photoUrl && <img src={sheet.photoUrl} alt="" className="sheet-photo" />}
+          <p>
+            In {jobName(sheet.stop.jobId)}, saved at {clockOf(sheet.stop.clientCreatedAt)}
+          </p>
+          <button className="big-btn photo-btn" onClick={() => setSheet({ ...sheet, type: "move" })}>
+            Move to a Different Job
+          </button>
+          <button className="big-btn plain-btn is-danger" onClick={() => setSheet({ ...sheet, type: "delete" })}>
+            Delete Stop
+          </button>
+          <button className="text-btn" onClick={() => setSheet(null)}>
+            Close
+          </button>
+        </Sheet>
+      )}
+
+      {sheet?.type === "move" && (
+        <Sheet title="Move this stop to…" onClose={() => setSheet(null)}>
+          {jobs.filter((j) => j.id !== sheet.stop.jobId).length === 0 && <p>There are no other jobs yet.</p>}
+          {jobs
+            .filter((j) => j.id !== sheet.stop.jobId)
+            .map((j) => (
+              <button key={j.id} className="job-card" onClick={() => moveTo(sheet.stop, j)}>
+                <strong>{j.name}</strong>
+                <span>{j.status === "open" ? "Open" : "Finished"}</span>
+              </button>
+            ))}
+          <button className="text-btn" onClick={() => setSheet(null)}>
+            Cancel
+          </button>
+        </Sheet>
+      )}
+
+      {sheet?.type === "delete" && (
+        <Sheet title="Delete this stop?" onClose={() => !deleting && setSheet(null)}>
+          <p>The photo and voice note will be gone for good.</p>
+          <button className="big-btn danger-btn" onClick={() => confirmDelete(sheet.stop)} disabled={deleting}>
+            {deleting ? "Deleting…" : "Delete Stop"}
+          </button>
+          <button className="big-btn plain-btn" onClick={() => setSheet(null)} disabled={deleting}>
+            Keep It
           </button>
         </Sheet>
       )}

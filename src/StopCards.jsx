@@ -9,7 +9,7 @@ function whenLabel(time) {
 }
 
 // One row in a list of stops
-function StopCard({ number, time, photoUrl, audioUrl, audioExpired, status, statusText, transcript }) {
+function StopCard({ number, time, photoUrl, audioUrl, audioExpired, status, statusText, transcript, onSelect }) {
   return (
     <article className="stop">
       {photoUrl && <img src={photoUrl} alt="" className="thumb" />}
@@ -20,6 +20,11 @@ function StopCard({ number, time, photoUrl, audioUrl, audioExpired, status, stat
         {transcript && <p className="stop-transcript">{transcript}</p>}
         {audioUrl && <audio controls src={audioUrl} />}
         {audioExpired && <span className="stop-note">Voice note expired</span>}
+        {onSelect && (
+          <button className="stop-more" onClick={() => onSelect({ number, photoUrl })}>
+            Move or Delete
+          </button>
+        )}
       </div>
     </article>
   );
@@ -49,7 +54,7 @@ function describeStatus(stop) {
 }
 
 // A stop that's already in the cloud: look up its photo/voice download links
-function CloudStop({ stop, number }) {
+function CloudStop({ stop, number, onSelect }) {
   const [urls, setUrls] = useState({ photo: null, audio: null, loaded: false });
 
   useEffect(() => {
@@ -74,19 +79,22 @@ function CloudStop({ stop, number }) {
       status={s.status}
       statusText={s.text}
       transcript={stop.transcript}
+      onSelect={onSelect}
     />
   );
 }
 
 // Phone-only and cloud stops together. Stops are numbered in the order they were
 // taken (Stop 1 is the first); newestFirst only changes the display order.
-export function StopList({ stops, online, newestFirst = false }) {
+// onSelect(stop, { number, photoUrl }) adds a "Move or Delete" button to each card.
+export function StopList({ stops, online, newestFirst = false, onSelect }) {
   const inOrder = [...stops].sort((a, b) => a.clientCreatedAt - b.clientCreatedAt);
   const shown = newestFirst ? [...inOrder].reverse() : inOrder;
   const numberOf = new Map(inOrder.map((s, i) => [s.id, i + 1]));
 
-  return shown.map((stop) =>
-    stop.isPending ? (
+  return shown.map((stop) => {
+    const select = onSelect && ((info) => onSelect(stop, info));
+    return stop.isPending ? (
       <StopCard
         key={stop.id}
         number={numberOf.get(stop.id)}
@@ -95,9 +103,10 @@ export function StopList({ stops, online, newestFirst = false }) {
         audioUrl={stop.urls?.audio}
         status="pending"
         statusText={online ? "Uploading…" : "Saved on this phone. Will upload when you're online."}
+        onSelect={select}
       />
     ) : (
-      <CloudStop key={stop.id} stop={stop} number={numberOf.get(stop.id)} />
-    )
-  );
+      <CloudStop key={stop.id} stop={stop} number={numberOf.get(stop.id)} onSelect={select} />
+    );
+  });
 }

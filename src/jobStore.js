@@ -64,6 +64,10 @@ export function reopenJob(uid, jobId, openJobs = []) {
   batch.commit().catch(warn('Reopen job'));
 }
 
+export function renameJob(uid, jobId, name) {
+  updateDoc(jobRef(uid, jobId), { name: name.trim().slice(0, 200) }).catch(warn('Rename job'));
+}
+
 /** Record that a stop was just saved to this job. */
 export function touchJob(uid, jobId, at = Date.now()) {
   updateDoc(jobRef(uid, jobId), { lastStopAt: at }).catch(warn('Update job'));

@@ -32,6 +32,8 @@ The client-generated UUID is the Firestore doc id, which is how `App.jsx` de-dup
 
 **Jobs** — `src/jobStore.js`. A job groups stops: `users/{uid}/jobs/{jobId}` with `name, address, lat, lng, status ('open'|'finished'), startedAt, endedAt, lastStopAt` (times are client ms numbers). At most one job is open; it's the one new stops go into, and `startJob()` finishes any others in the same batch. Every stop carries `jobId`. Job writes aren't awaited (Firestore's local cache makes them show up offline). Stops from before jobs existed are moved once into a finished job with the fixed id `earlier` ("Earlier stops") by `migrateEarlierStops()`, which runs on sign-in and sets a localStorage flag when done.
 
+**Moving/deleting stops** — `moveStop()` / `deleteStop()` in stopStore handle both queued (IndexedDB) and uploaded stops. Moving works offline; deleting an uploaded stop requires signal so its Storage files are removed along with the doc (no orphaned files). UI for jobs lives in `src/JobsScreen.jsx` (My Jobs list, job page, rename, reopen); stop cards are shared via `StopList` in `src/StopCards.jsx`.
+
 **Auth** — anonymous only (`startSession()` in `src/firebase.js`). Firestore uses `persistentLocalCache`.
 
 **Transcription** — `functions/index.js` `transcribeStop` (v2 `onDocumentCreated` on `users/{uid}/stops/{stopId}`, CommonJS, Node 24) downloads the audio from Storage, sends it to Deepgram `nova-3` with a list of trade keyterms (brands like Verkada/Avigilon, terms like PoE/IDF/MDF), and writes `transcript` + `status` back. Deepgram key is a Functions secret: `DEEPGRAM_API_KEY`.

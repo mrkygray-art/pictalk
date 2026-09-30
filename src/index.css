@@ -402,6 +402,81 @@ button:focus-visible {
   vertical-align: 3px;
 }
 
+.stop-more {
+  align-self: flex-start;
+  margin-top: 8px;
+  min-height: 44px;
+  padding: 8px 14px;
+  background: var(--surface-2);
+  color: var(--blue);
+  border: none;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hint {
+  font-size: 17px;
+  color: var(--muted);
+  margin: -4px 0 12px;
+}
+
+.job-name {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.name-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.name-box .meta {
+  margin: 0;
+}
+
+.name-box input {
+  width: 100%;
+  padding: 16px;
+  font-family: inherit;
+  font-size: 22px;
+  color: var(--text);
+  background: var(--surface);
+  border: 3px solid var(--blue);
+  border-radius: 16px;
+}
+
+.name-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.name-actions .big-btn {
+  min-height: 60px;
+  font-size: 20px;
+}
+
+.plain-btn.is-danger {
+  color: var(--red);
+}
+
+.sheet-photo {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 18px;
+}
+
+.sheet .job-card {
+  background: var(--surface-2);
+  margin-bottom: 0;
+}
+
 .sheet-shade {
   position: fixed;
   inset: 0;

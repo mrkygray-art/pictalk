@@ -31,14 +31,14 @@ function JobCard({ job, stops, isActive, onOpen }) {
   );
 }
 
-function JobDetail({ job, stops, isActive, online, onBack, onCamera, onReopen }) {
+function JobDetail({ job, stops, isActive, online, onBack, onCamera, onReopen, onRename, onStopSelect }) {
   return (
     <>
       <button className="link-btn" onClick={onBack}>
         <BackIcon />
         My Jobs
       </button>
-      <h1 className="page-title">{job.name}</h1>
+      <JobName job={job} onRename={onRename} />
       {job.address && <p className="meta">Location: {job.address}</p>}
       <p className="meta">
         Started {day(job.startedAt)} at {clock(job.startedAt)}
@@ -61,15 +61,72 @@ function JobDetail({ job, stops, isActive, online, onBack, onCamera, onReopen })
         {stops.length === 0 ? (
           <p className="empty">This job has no stops.</p>
         ) : (
-          <StopList stops={stops} online={online} />
+          <>
+            <p className="hint">Tap Move or Delete on a stop to put it in a different job.</p>
+            <StopList stops={stops} online={online} onSelect={onStopSelect} />
+          </>
         )}
       </section>
     </>
   );
 }
 
+// Job name as a heading, with an Edit name button that swaps in a text box
+function JobName({ job, onRename }) {
+  const [draft, setDraft] = useState(null); // null = not editing
+
+  const save = () => {
+    const name = draft.trim();
+    if (name && name !== job.name) onRename(job, name);
+    setDraft(null);
+  };
+
+  if (draft === null) {
+    return (
+      <div className="job-name">
+        <h1 className="page-title">{job.name}</h1>
+        <button className="link-btn" onClick={() => setDraft(job.name)}>
+          Edit name
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="name-box"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      <label htmlFor="job-name-input" className="meta">
+        Job name
+      </label>
+      <input
+        id="job-name-input"
+        value={draft}
+        maxLength={200}
+        autoComplete="off"
+        autoFocus
+        onFocus={(e) => e.target.select()}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => e.key === "Escape" && setDraft(null)}
+      />
+      <div className="name-actions">
+        <button type="submit" className="save-btn" disabled={!draft.trim()}>
+          Save
+        </button>
+        <button type="button" className="big-btn plain-btn" onClick={() => setDraft(null)}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 /** My Jobs list, and the page for one job. */
-export default function JobsScreen({ jobs, stops, activeJobId, online, onClose, onReopen }) {
+export default function JobsScreen({ jobs, stops, activeJobId, online, onClose, onReopen, onRename, onStopSelect }) {
   const [openId, setOpenId] = useState(null);
   const stopsOf = (id) => stops.filter((s) => s.jobId === id);
   const go = (id) => {
@@ -88,6 +145,8 @@ export default function JobsScreen({ jobs, stops, activeJobId, online, onClose, 
         onBack={() => go(null)}
         onCamera={onClose}
         onReopen={onReopen}
+        onRename={onRename}
+        onStopSelect={onStopSelect}
       />
     );
   }

@@ -2,8 +2,10 @@
 // Offline-first: every stop is saved to IndexedDB first, then synced to
 // Firebase Storage (photo + voice) and Firestore (the stop record).
 import { get, set, del, keys } from 'idb-keyval';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, setDoc, serverTimestamp, collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import {
+  doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, collection, query, orderBy, onSnapshot,
+} from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db, storage } from './firebase';
 
@@ -55,12 +57,45 @@ export async function getPendingStops() {
   return items.filter(Boolean).sort((a, b) => b.clientCreatedAt - a.clientCreatedAt);
 }
 
-/** Change a stop still waiting on this phone (no-op if it already uploaded). */
+/** Change a stop still waiting on this phone. Returns false if it already uploaded. */
 export async function updatePendingStop(id, patch) {
   const stop = await get(QUEUE_PREFIX + id);
-  if (!stop) return;
+  if (!stop) return false;
   await set(QUEUE_PREFIX + id, { ...stop, ...patch });
   notify();
+  return true;
+}
+
+// ---------- moving and deleting ----------
+/** Put a stop into a different job. Works offline. */
+export async function moveStop(uid, stop, jobId) {
+  if (stop.isPending && (await updatePendingStop(stop.id, { jobId }))) return;
+  // Not awaited: the local cache updates right away and syncs when online
+  updateDoc(doc(db, 'users', uid, 'stops', stop.id), { jobId })
+    .catch((err) => console.warn('Move stop failed:', err));
+}
+
+/**
+ * Delete a stop and its photo and voice files for good.
+ * An uploaded stop needs signal, so its files are never left behind.
+ */
+export async function deleteStop(uid, stop) {
+  if (stop.isPending && (await get(QUEUE_PREFIX + stop.id))) {
+    await del(QUEUE_PREFIX + stop.id);
+    notify();
+    return;
+  }
+  if (!navigator.onLine) throw new Error('offline');
+  const stopRef = doc(db, 'users', uid, 'stops', stop.id);
+  // Read the file paths from the record (the stop may have finished uploading just now)
+  const saved = (await getDoc(stopRef)).data() ?? stop;
+  const removeFile = (path) =>
+    path &&
+    deleteObject(ref(storage, path)).catch((err) => {
+      if (err?.code !== 'storage/object-not-found') throw err; // voice notes expire after 5 days
+    });
+  await Promise.all([removeFile(saved.photoPath), removeFile(saved.audioPath)]);
+  await deleteDoc(stopRef);
 }
 
 // ---------- sync ----------

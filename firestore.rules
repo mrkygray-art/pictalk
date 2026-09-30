@@ -1,20 +1,48 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{uid}/stops/{stopId} {
+    match /users/{uid} {
       function isOwner() {
         return request.auth != null && request.auth.uid == uid;
       }
-      function validStop() {
-        let d = request.resource.data;
-        return d.keys().hasOnly(['photoPath', 'audioPath', 'audioType', 'audioExpiresAt',
-                                 'note', 'transcript', 'status', 'clientCreatedAt', 'createdAt'])
-          && d.note is string && d.note.size() < 2000
-          && (d.photoPath == null || d.photoPath is string)
-          && (d.audioPath == null || d.audioPath is string);
+
+      match /stops/{stopId} {
+        // Includes the fields the transcribeStop function adds, so the app can
+        // still update a stop (e.g. its jobId) after it has been transcribed.
+        function validStop() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['jobId', 'photoPath', 'audioPath', 'audioType', 'audioExpiresAt',
+                                   'note', 'transcript', 'status', 'clientCreatedAt', 'createdAt',
+                                   'transcriptConfidence', 'audioSeconds', 'transcriptModel',
+                                   'transcribedAt', 'transcriptError'])
+            && d.note is string && d.note.size() < 2000
+            && (d.get('jobId', null) == null || (d.jobId is string && d.jobId.size() <= 64))
+            && (d.photoPath == null || d.photoPath is string)
+            && (d.audioPath == null || d.audioPath is string);
+        }
+        allow read, delete: if isOwner();
+        allow create, update: if isOwner() && validStop();
       }
-      allow read, delete: if isOwner();
-      allow create, update: if isOwner() && validStop();
+
+      match /jobs/{jobId} {
+        function optNumber(d, k) {
+          return d.get(k, null) == null || d.get(k, null) is number;
+        }
+        function validJob() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['name', 'address', 'lat', 'lng', 'status',
+                                   'startedAt', 'endedAt', 'lastStopAt'])
+            && d.name is string && d.name.size() > 0 && d.name.size() <= 200
+            && d.status in ['open', 'finished']
+            && d.startedAt is number
+            && (d.get('address', null) == null
+                || (d.address is string && d.address.size() <= 300))
+            && optNumber(d, 'lat') && optNumber(d, 'lng')
+            && optNumber(d, 'endedAt') && optNumber(d, 'lastStopAt');
+        }
+        allow read, delete: if isOwner();
+        allow create, update: if isOwner() && validJob();
+      }
     }
   }
 }

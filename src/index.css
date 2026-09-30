@@ -1,28 +1,22 @@
+/* Always dark: black background, whatever the phone's light/dark setting */
 :root {
-  --bg: #f2f2f7;
-  --surface: #ffffff;
-  --text: #1c1c1e;
-  --muted: #636366;
-  --blue: #0066d6;
-  --red: #d70015;
-  --green: #1f7a37;
+  color-scheme: dark;
+  --bg: #000000;
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --text: #f2f2f7;
+  --muted: #aeaeb2;
+  --blue: #0a84ff;
+  --red: #ff453a;
+  --green: #1e8e3e; /* button fill: dark enough for white text */
+  --live: #30d158; /* bright green for text, dots and outlines on black */
+  --orange: #ff9f0a;
+  --shade: rgba(0, 0, 0, 0.7);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #000000;
-    --surface: #1c1c1e;
-    --text: #f2f2f7;
-    --muted: #aeaeb2;
-    --blue: #0a84ff;
-    --red: #ff453a;
-    --green: #30d158;
-  }
 }
 
 * {
@@ -211,27 +205,202 @@ button:focus-visible {
   margin-top: 6px;
 }
 
+/* ---------- jobs ---------- */
+
+.job-bar {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 2px solid var(--live);
+  border-radius: 18px;
+  padding: 12px 16px;
+  box-shadow: 0 -12px 0 8px var(--bg); /* hides the list scrolling behind it */
+}
+
+.job-bar.is-idle {
+  border-color: var(--surface-2);
+}
+
+.job-bar-dot {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--live);
+}
+
+.job-bar.is-idle .job-bar-dot {
+  background: transparent;
+  border: 2px solid var(--muted);
+}
+
+.job-bar small {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.job-bar strong {
+  display: block;
+  font-size: 21px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.saved h2 .count {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-left: 6px;
+}
+
+.empty {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 18px;
+  font-size: 18px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.start-btn {
+  background: var(--surface);
+  color: var(--text);
+  border: 3px solid transparent;
+  min-height: 72px;
+  margin-top: 8px;
+}
+
+.end-btn {
+  background: transparent;
+  color: var(--red);
+  border: 3px solid var(--red);
+  min-height: 64px;
+  font-size: 22px;
+  margin-top: 8px;
+}
+
+.danger-btn {
+  background: var(--red);
+  color: #ffffff;
+  border: 3px solid var(--red);
+}
+
+.plain-btn {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 3px solid transparent;
+  min-height: 64px;
+}
+
+.text-btn {
+  display: block;
+  margin: 0 auto;
+  padding: 12px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 18px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.sheet-shade {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: var(--shade);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 480px;
+  max-height: 92vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: 26px 26px 0 0;
+  padding: 26px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: sheet-up 0.22s ease-out;
+}
+
+.sheet h2 {
+  font-size: 26px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.sheet p {
+  font-size: 18px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(40px);
+    opacity: 0.4;
+  }
+}
+
+.toast-slot {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  display: flex;
+  justify-content: center;
+  padding: 0 16px;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 14px 22px;
+  border-radius: 16px;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  animation: sheet-up 0.2s ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .talk-btn.is-recording {
+  .talk-btn.is-recording,
+  .sheet,
+  .toast {
     animation: none;
   }
   .big-btn {
     transition: none;
   }
 }
-.stop-status { font-size: 0.85rem; color: #6e6e73; }
-.stop-status.is-pending { color: #b25000; }
-.stop-status.is-saved { color: #1a7f37; }
-.stop-note { font-size: 0.85rem; color: #6e6e73; font-style: italic; }
-.stop-status.is-working { color: #0066cc; }
-.stop-status.is-problem { color: #b3261e; }
+.stop-info .stop-status { font-size: 0.85rem; color: var(--muted); }
+.stop-info .stop-status.is-pending { color: var(--orange); }
+.stop-info .stop-status.is-saved { color: var(--live); }
+.stop-info .stop-note { font-size: 0.85rem; color: var(--muted); font-style: italic; }
+.stop-info .stop-status.is-working { color: var(--blue); }
+.stop-info .stop-status.is-problem { color: var(--red); }
 .stop-transcript {
   margin: 6px 0 2px;
   padding: 10px 12px;
   font-size: 0.95rem;
   line-height: 1.4;
-  color: #1d1d1f;
-  background: #f5f5f7;
+  color: var(--text);
+  background: var(--surface-2);
   border-radius: 10px;
   white-space: pre-wrap;
 }

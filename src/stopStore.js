@@ -9,6 +9,7 @@ import { auth, db, storage } from './firebase';
 
 const QUEUE_PREFIX = 'pending-stop:';
 const VOICE_DAYS = 5; // matches the Storage lifecycle rule on voice/
+export const EARLIER_JOB_ID = 'earlier'; // job for stops saved before jobs existed
 
 const baseType = (t) => (t || 'application/octet-stream').split(';')[0];
 function extFor(type = '') {
@@ -31,9 +32,10 @@ const notify = () => listeners.forEach((fn) => fn());
 
 // ---------- local queue ----------
 /** Save a stop locally (instant, survives refresh/offline), then try to sync. */
-export async function queueStop({ photoBlob, audioBlob, note = '' }) {
+export async function queueStop({ photoBlob, audioBlob, note = '', jobId }) {
   const stop = {
     id: crypto.randomUUID(),
+    jobId,
     photoBlob: photoBlob || null,
     audioBlob: audioBlob || null,
     note,
@@ -51,6 +53,14 @@ export async function getPendingStops() {
   const ids = (await keys()).filter((k) => typeof k === 'string' && k.startsWith(QUEUE_PREFIX));
   const items = await Promise.all(ids.map((k) => get(k)));
   return items.filter(Boolean).sort((a, b) => b.clientCreatedAt - a.clientCreatedAt);
+}
+
+/** Change a stop still waiting on this phone (no-op if it already uploaded). */
+export async function updatePendingStop(id, patch) {
+  const stop = await get(QUEUE_PREFIX + id);
+  if (!stop) return;
+  await set(QUEUE_PREFIX + id, { ...stop, ...patch });
+  notify();
 }
 
 // ---------- sync ----------
@@ -101,6 +111,7 @@ async function uploadStop(uid, stop) {
 
   // Written last, so a Firestore doc only exists once its files are uploaded.
   await setDoc(doc(db, 'users', uid, 'stops', stop.id), {
+    jobId: stop.jobId || EARLIER_JOB_ID, // saved on this phone before jobs existed
     photoPath,
     audioPath,
     audioType,

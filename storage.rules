@@ -10,6 +10,14 @@ service firebase.storage {
         && request.resource.size < 15 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }
+    // Exported PDF reports, one per job (re-exporting replaces it). Stored so the
+    // download link sends the file name, which some phone browsers otherwise ignore.
+    match /exports/{uid}/{jobId}/{file} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.size < 25 * 1024 * 1024
+        && request.resource.contentType == 'application/pdf';
+    }
     match /voice/{uid}/{file} {
       allow read, delete: if isOwner(uid);
       allow create, update: if isOwner(uid)

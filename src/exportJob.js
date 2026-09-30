@@ -4,7 +4,8 @@
 import {
   doc, getDoc, getDocs, getDocFromCache, getDocsFromCache, collection, query, where, updateDoc, increment,
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { ref, uploadBytes, getDownloadURL, listAll, deleteObject } from 'firebase/storage';
+import { db, storage } from './firebase';
 import { getPendingStops, urlFor } from './stopStore';
 import { jobTitle } from './jobStore';
 
@@ -235,6 +236,32 @@ export function exportFileName(data) {
   return ['PicTalk', ...(who.length ? who : ['Job']), date, time].join('_') + '.pdf';
 }
 
+/**
+ * Upload the PDF so its download link carries the file name from the server
+ * (Content-Disposition). Some phone browsers, such as DuckDuckGo on Android, ignore a
+ * name set in the page and save the file under a random ID instead. The stored file is
+ * itself named like the download, because Storage also sends the stored name
+ * (filename*), which some browsers prefer. One file per job: older copies are removed.
+ * Returns the download link.
+ */
+export async function uploadExport(uid, jobId, file) {
+  const folder = ref(storage, `exports/${uid}/${jobId}`);
+  const pdfRef = ref(storage, `exports/${uid}/${jobId}/${file.name}`);
+  await withTimeout(
+    uploadBytes(pdfRef, file, {
+      contentType: 'application/pdf',
+      contentDisposition: `attachment; filename="${file.name}"`, // names are ASCII-only (see exportFileName)
+    }),
+    30000
+  );
+  const url = await withTimeout(getDownloadURL(pdfRef), 15000);
+  // Tidy up earlier exports of this job (e.g. before the customer name changed)
+  listAll(folder)
+    .then(({ items }) => Promise.all(items.filter((i) => i.name !== file.name).map((i) => deleteObject(i))))
+    .catch((err) => console.warn('Removing old PDF copies failed:', err));
+  return url;
+}
+
 /** True when this phone can hand the PDF to the share sheet (text, email, save…). */
 export function canShareFile(file) {
   try {
@@ -244,8 +271,11 @@ export function canShareFile(file) {
   }
 }
 
-/** Must be called directly from a tap. Falls back to a download if sharing fails. */
-export async function deliverFile(file, title) {
+/**
+ * Must be called directly from a tap. Shares when the phone can; otherwise downloads,
+ * from the uploaded copy when there is one (keeps the file name) or from the page.
+ */
+export async function deliverFile(file, title, remoteUrl) {
   if (canShareFile(file)) {
     try {
       await navigator.share({ files: [file], title });
@@ -254,6 +284,15 @@ export async function deliverFile(file, title) {
       if (err?.name === 'AbortError') return 'cancelled'; // the user closed the share sheet
       console.warn('Share failed, downloading instead:', err);
     }
+  }
+  if (remoteUrl) {
+    const a = document.createElement('a');
+    a.href = remoteUrl; // the server sends "attachment; filename=…"
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return 'downloaded';
   }
   const url = URL.createObjectURL(file);
   const a = document.createElement('a');

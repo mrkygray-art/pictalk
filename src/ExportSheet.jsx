@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Sheet from "./Sheet";
 import { jobTitle } from "./jobStore";
 import {
-  buildJobExport, loadPhotos, recordExport, exportFileName, canShareFile, deliverFile,
+  buildJobExport, loadPhotos, recordExport, exportFileName, canShareFile, deliverFile, uploadExport,
   getSavedInitials, saveInitials, cleanInitials, PhotoLoadError, ANONYMOUS_NAME,
 } from "./exportJob";
 import { renderJobPdf } from "./renderJobPdf";
@@ -16,6 +16,8 @@ export default function ExportSheet({ job, uid, onClose, onDone }) {
   const [initials, setInitials] = useState(saved ?? "");
   const [progress, setProgress] = useState(null); // { done, total }
   const [file, setFile] = useState(null);
+  const [remoteUrl, setRemoteUrl] = useState(null); // uploaded copy, so downloads keep their name
+  const [preparing, setPreparing] = useState(false);
   const [problem, setProblem] = useState("");
   useEffect(() => {
     if (step !== "building") return;
@@ -27,10 +29,24 @@ export default function ExportSheet({ job, uid, onClose, onDone }) {
         const blob = await renderJobPdf(data, photos);
         if (stop) return; // closed or restarted while building
         recordExport(uid, job.id);
-        setFile(new File([blob], exportFileName(data), { type: "application/pdf" }));
+        const pdf = new File([blob], exportFileName(data), { type: "application/pdf" });
+        // Phones that can't share get the PDF through an uploaded copy, so the name sticks
+        let url = null;
+        if (!canShareFile(pdf) && navigator.onLine) {
+          setPreparing(true);
+          url = await uploadExport(uid, job.id, pdf).catch((err) => {
+            console.warn("PDF upload failed; downloading from the page instead:", err);
+            return null;
+          });
+          if (stop) return;
+          setPreparing(false);
+        }
+        setRemoteUrl(url);
+        setFile(pdf);
         setStep("ready");
       } catch (err) {
         if (stop) return;
+        setPreparing(false);
         console.error("Export failed:", err);
         setProblem(
           err instanceof PhotoLoadError
@@ -88,9 +104,11 @@ export default function ExportSheet({ job, uid, onClose, onDone }) {
     return (
       <Sheet title="Building PDF…" onClose={onClose}>
         <p className="progress-text" role="status" aria-live="polite">
-          {progress && progress.total > 0
-            ? `Building PDF… ${progress.done} of ${progress.total} photos`
-            : "Getting the job ready…"}
+          {preparing
+            ? "Getting the download ready…"
+            : progress && progress.total > 0
+              ? `Building PDF… ${progress.done} of ${progress.total} photos`
+              : "Getting the job ready…"}
         </p>
         <div className="progress-bar" aria-hidden="true">
           <span style={{ width: `${progress?.total ? (progress.done / progress.total) * 100 : 5}%` }} />
@@ -124,7 +142,7 @@ export default function ExportSheet({ job, uid, onClose, onDone }) {
       <button
         className="big-btn photo-btn"
         onClick={async () => {
-          const how = await deliverFile(file, title);
+          const how = await deliverFile(file, title, remoteUrl);
           if (how !== "cancelled") onDone(how);
         }}
       >

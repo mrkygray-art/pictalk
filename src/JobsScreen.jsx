@@ -31,7 +31,7 @@ function JobCard({ job, stops, isActive, onOpen }) {
   );
 }
 
-function JobDetail({ job, stops, isActive, online, onBack, onCamera }) {
+function JobDetail({ job, stops, isActive, online, onBack, onCamera, onReopen }) {
   return (
     <>
       <button className="link-btn" onClick={onBack}>
@@ -49,6 +49,11 @@ function JobDetail({ job, stops, isActive, online, onBack, onCamera }) {
           Back to Camera
         </button>
       )}
+      {job.status !== "open" && (
+        <button className="big-btn plain-btn" onClick={() => onReopen(job)}>
+          Reopen This Job
+        </button>
+      )}
       <section className="saved" aria-label="Stops in this job">
         <h2>
           Stops <span className="count">{plural(stops.length, "stop")}</span>
@@ -63,8 +68,8 @@ function JobDetail({ job, stops, isActive, online, onBack, onCamera }) {
   );
 }
 
-/** My Jobs list, and the page for one job. View only for now. */
-export default function JobsScreen({ jobs, stops, activeJobId, online, onClose }) {
+/** My Jobs list, and the page for one job. */
+export default function JobsScreen({ jobs, stops, activeJobId, online, onClose, onReopen }) {
   const [openId, setOpenId] = useState(null);
   const stopsOf = (id) => stops.filter((s) => s.jobId === id);
   const go = (id) => {
@@ -82,6 +87,7 @@ export default function JobsScreen({ jobs, stops, activeJobId, online, onClose }
         online={online}
         onBack={() => go(null)}
         onCamera={onClose}
+        onReopen={onReopen}
       />
     );
   }

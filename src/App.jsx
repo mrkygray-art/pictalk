@@ -8,7 +8,7 @@ import {
   startAutoSync,
   onQueueChange,
 } from "./stopStore";
-import { watchJobs, startJob, endJob, touchJob, migrateEarlierStops } from "./jobStore";
+import { watchJobs, startJob, endJob, reopenJob, touchJob, migrateEarlierStops } from "./jobStore";
 import { StopList } from "./StopCards";
 import JobsScreen from "./JobsScreen";
 
@@ -334,6 +334,21 @@ export default function App() {
     window.scrollTo(0, 0);
   };
 
+  // Reopening a job while a different one is open asks first
+  const requestReopen = (job) => {
+    if (activeJob && activeJob.id !== job.id) return setSheet({ type: "reopen", job });
+    doReopen(job);
+  };
+
+  const doReopen = (job) => {
+    if (!uid) return;
+    reopenJob(uid, job.id, jobs.filter((j) => j.status === "open"));
+    clearDraft(); // an unsaved photo belonged to the job that was open
+    setSheet(null);
+    showView("camera");
+    showToast(`Reopened ${job.name}`);
+  };
+
   return (
     <main className="app">
       <JobBar job={activeJob} />
@@ -345,6 +360,7 @@ export default function App() {
           activeJobId={activeJob?.id}
           online={online}
           onClose={() => showView("camera")}
+          onReopen={requestReopen}
         />
       ) : (
         <>
@@ -457,6 +473,21 @@ export default function App() {
           </button>
           <button className="big-btn plain-btn" onClick={() => setSheet(null)}>
             Keep Going
+          </button>
+        </Sheet>
+      )}
+
+      {sheet?.type === "reopen" && (
+        <Sheet title={`Reopen ${sheet.job.name}?`} onClose={() => setSheet(null)}>
+          <p>
+            {activeJob ? `${activeJob.name} is open right now. It will be finished so new stops go to the reopened job.` : ""}
+            {photo || audio ? " Your unsaved photo and voice note will be thrown away." : ""}
+          </p>
+          <button className="big-btn photo-btn" onClick={() => doReopen(sheet.job)}>
+            Reopen Job
+          </button>
+          <button className="big-btn plain-btn" onClick={() => setSheet(null)}>
+            Cancel
           </button>
         </Sheet>
       )}

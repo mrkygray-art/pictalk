@@ -53,6 +53,17 @@ export function endJob(uid, jobId) {
   updateDoc(jobRef(uid, jobId), { status: 'finished', endedAt: Date.now() }).catch(warn('End job'));
 }
 
+/** Make a finished job the open one again, finishing any other open job in the same write. */
+export function reopenJob(uid, jobId, openJobs = []) {
+  const now = Date.now();
+  const batch = writeBatch(db);
+  openJobs
+    .filter((j) => j.id !== jobId)
+    .forEach((j) => batch.update(jobRef(uid, j.id), { status: 'finished', endedAt: now }));
+  batch.update(jobRef(uid, jobId), { status: 'open', endedAt: null });
+  batch.commit().catch(warn('Reopen job'));
+}
+
 /** Record that a stop was just saved to this job. */
 export function touchJob(uid, jobId, at = Date.now()) {
   updateDoc(jobRef(uid, jobId), { lastStopAt: at }).catch(warn('Update job'));

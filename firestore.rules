@@ -28,17 +28,24 @@ service cloud.firestore {
         function optNumber(d, k) {
           return d.get(k, null) == null || d.get(k, null) is number;
         }
+        function optText(d, k) {
+          return d.get(k, null) == null
+            || (d.get(k, null) is string && d.get(k, null).size() <= 100);
+        }
         function validJob() {
           let d = request.resource.data;
           return d.keys().hasOnly(['name', 'address', 'lat', 'lng', 'status',
-                                   'startedAt', 'endedAt', 'lastStopAt'])
+                                   'startedAt', 'endedAt', 'lastStopAt',
+                                   'customer', 'location', 'exportCount'])
             && d.name is string && d.name.size() > 0 && d.name.size() <= 200
             && d.status in ['open', 'finished']
             && d.startedAt is number
             && (d.get('address', null) == null
                 || (d.address is string && d.address.size() <= 300))
             && optNumber(d, 'lat') && optNumber(d, 'lng')
-            && optNumber(d, 'endedAt') && optNumber(d, 'lastStopAt');
+            && optNumber(d, 'endedAt') && optNumber(d, 'lastStopAt')
+            && optText(d, 'customer') && optText(d, 'location')
+            && (d.get('exportCount', 0) is int && d.get('exportCount', 0) >= 0);
         }
         allow read, delete: if isOwner();
         allow create, update: if isOwner() && validJob();

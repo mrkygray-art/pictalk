@@ -12,6 +12,7 @@
   "dependencies": {
     "firebase": "^12.19.0",
     "idb-keyval": "^6.3.0",
+    "jspdf": "^3.0.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

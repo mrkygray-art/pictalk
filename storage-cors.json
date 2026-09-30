@@ -1,0 +1,11 @@
+[
+  {
+    "origin": [
+      "https://pictalk-6cbff.web.app",
+      "https://pictalk-6cbff.firebaseapp.com",
+      "http://localhost:5173"
+    ],
+    "method": ["GET"],
+    "maxAgeSeconds": 3600
+  }
+]

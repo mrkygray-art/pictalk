@@ -11,10 +11,13 @@ import {
   deleteStop,
 } from "./stopStore";
 import {
-  watchJobs, startJob, endJob, reopenJob, renameJob, touchJob, migrateEarlierStops,
+  watchJobs, startJob, endJob, reopenJob, setJobDetails, touchJob, migrateEarlierStops, jobTitle,
 } from "./jobStore";
 import { StopList } from "./StopCards";
 import JobsScreen from "./JobsScreen";
+import JobDetailsFields from "./JobDetailsFields";
+import Sheet from "./Sheet";
+import ExportSheet from "./ExportSheet";
 
 // Pick an audio format this phone's browser can record (iPhone uses mp4, Android/Chrome uses webm)
 function pickAudioType() {
@@ -89,33 +92,42 @@ function JobBar({ job }) {
       <span className="job-bar-dot" aria-hidden="true" />
       <div>
         <small>{job ? "Saving to" : "Nothing is being saved"}</small>
-        <strong>{job ? job.name : "No job open"}</strong>
+        <strong>{job ? jobTitle(job) : "No job open"}</strong>
       </div>
     </div>
   );
 }
 
-// Bottom sheet for questions. Tap outside or press Escape to close.
-function Sheet({ title, onClose, children }) {
-  const sheet = useRef(null);
-  const close = useRef(onClose);
-  useEffect(() => {
-    close.current = onClose;
-  });
-  useEffect(() => {
-    sheet.current?.querySelector("button:not([disabled])")?.focus({ preventScroll: true });
-    const onKey = (e) => e.key === "Escape" && close.current();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, []);
+// Demo limit: keeps storage and transcription costs small while PicTalk is a public demo
+const STOP_LIMIT = 10;
 
+// End Job: optional Customer and Location, then finish
+function EndJobSheet({ job, hasDraft, onFinish, onClose }) {
+  const [details, setDetails] = useState({ customer: job.customer || "", location: job.location || "" });
   return (
-    <div className="sheet-shade" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="sheet" ref={sheet} role="dialog" aria-modal="true" aria-label={title}>
-        <h2>{title}</h2>
-        {children}
-      </div>
-    </div>
+    <Sheet title={`Finish ${jobTitle(job)}?`} onClose={onClose}>
+      <form
+        className="sheet-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onFinish(details);
+        }}
+      >
+        <p>Add who and where this job was for. Both are optional.</p>
+        <JobDetailsFields customer={details.customer} location={details.location} onChange={setDetails} />
+        <p>
+          {hasDraft ? "Your unsaved photo and voice note will be thrown away. " : ""}
+          The stops you saved stay saved.
+        </p>
+        <button type="submit" className="big-btn danger-btn">
+          <FlagIcon />
+          Save &amp; Finish Job
+        </button>
+        <button type="button" className="big-btn plain-btn" onClick={onClose}>
+          Keep Going
+        </button>
+      </form>
+    </Sheet>
   );
 }
 
@@ -272,19 +284,21 @@ export default function App() {
     }
     setError("");
     const job = startJob(uid, jobs.filter((j) => j.status === "open"));
-    showToast(`Started ${job.name}`);
+    showToast(`Started ${jobTitle(job)}`);
     return job;
   };
 
   // Photo and voice both need a job to go into; ask to start one if none is open
   const takePhoto = () => {
     if (!activeJob) return setSheet({ type: "nojob", next: "photo" });
+    if (jobFull) return setError(fullMessage);
     fileInput.current.click();
   };
 
   const talk = () => {
     if (recording) return stopRecording();
     if (!activeJob) return setSheet({ type: "nojob", next: "talk" });
+    if (jobFull) return setError(fullMessage);
     startRecording();
   };
 
@@ -297,17 +311,18 @@ export default function App() {
     if (next === "talk") startRecording();
   };
 
-  const finishJob = () => {
-    endJob(uid, activeJob.id);
+  const finishJob = (details) => {
+    endJob(uid, activeJob.id, details);
     clearDraft();
     setSheet(null);
-    showToast(`Finished ${activeJob.name}`);
+    showToast(`Finished ${jobTitle({ ...activeJob, ...details })}`);
   };
 
   const canSave = activeJob && (photo || audio) && !recording && !saving;
 
   const saveStop = async () => {
     if (!canSave) return;
+    if (jobFull) return setError(fullMessage);
     setSaving(true);
     setError("");
     try {
@@ -315,7 +330,7 @@ export default function App() {
       await queueStop({ photoBlob: photo?.file, audioBlob: audio?.blob, jobId: activeJob.id });
       touchJob(uid, activeJob.id);
       clearDraft();
-      showToast(`Stop saved to ${activeJob.name}`);
+      showToast(`Stop saved to ${jobTitle(activeJob)}`);
     } catch (err) {
       console.error("Save failed:", err);
       setError("Couldn't save this stop. Please try again.");
@@ -331,6 +346,9 @@ export default function App() {
     ...synced,
   ];
   const jobStops = activeJob ? allStops.filter((s) => s.jobId === activeJob.id) : [];
+  const stopsInJob = (id) => allStops.filter((s) => s.jobId === id).length;
+  const jobFull = jobStops.length >= STOP_LIMIT;
+  const fullMessage = `This demo allows ${STOP_LIMIT} stops per job. End this job to start a new one.`;
 
   const stopCount = `${jobStops.length} stop${jobStops.length === 1 ? "" : "s"}`;
 
@@ -351,12 +369,12 @@ export default function App() {
     clearDraft(); // an unsaved photo belonged to the job that was open
     setSheet(null);
     showView("camera");
-    showToast(`Reopened ${job.name}`);
+    showToast(`Reopened ${jobTitle(job)}`);
   };
 
-  const rename = (job, name) => {
-    renameJob(uid, job.id, name);
-    showToast("Name saved");
+  const saveDetails = (job, details) => {
+    setJobDetails(uid, job.id, details);
+    showToast("Customer and location saved");
   };
 
   // Stop options: move to another job, or delete
@@ -364,9 +382,12 @@ export default function App() {
 
   const moveTo = async (stop, job) => {
     setSheet(null);
+    if (stopsInJob(job.id) >= STOP_LIMIT) {
+      return setError(`${jobTitle(job)} already has ${STOP_LIMIT} stops, the most this demo allows per job.`);
+    }
     try {
       await moveStop(uid, stop, job.id);
-      showToast(`Moved to ${job.name}`);
+      showToast(`Moved to ${jobTitle(job)}`);
     } catch (err) {
       console.error("Move failed:", err);
       setError("Couldn't move this stop. Please try again.");
@@ -392,7 +413,7 @@ export default function App() {
     }
   };
 
-  const jobName = (id) => jobs.find((j) => j.id === id)?.name ?? "a job";
+  const jobName = (id) => jobTitle(jobs.find((j) => j.id === id)) || "a job";
   const clockOf = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
   return (
@@ -407,7 +428,8 @@ export default function App() {
           online={online}
           onClose={() => showView("camera")}
           onReopen={requestReopen}
-          onRename={rename}
+          onSaveDetails={saveDetails}
+          onExport={(job) => setSheet({ type: "export", job })}
           onStopSelect={selectStop}
         />
       ) : (
@@ -427,6 +449,9 @@ export default function App() {
                   ? "Take a picture, then say what you see."
                   : `${stopCount} saved`}
             </p>
+            <p className="demo-note">
+              Demo app · Up to {STOP_LIMIT} stops per job · Voice notes are deleted after 5 days
+            </p>
           </header>
 
           {error && (
@@ -435,45 +460,53 @@ export default function App() {
             </p>
           )}
 
-          <section className="current" aria-label="Current stop">
-            {photo ? (
-              <img src={photo.url} alt="Photo for this stop" className="preview" />
-            ) : (
-              <div className="placeholder">Your photo will show here</div>
-            )}
-            {audio && !recording && <audio controls src={audio.url} className="player" />}
-          </section>
+          {jobFull ? (
+            <p className="limit-note" role="status">
+              {fullMessage}
+            </p>
+          ) : (
+            <>
+            <section className="current" aria-label="Current stop">
+              {photo ? (
+                <img src={photo.url} alt="Photo for this stop" className="preview" />
+              ) : (
+                <div className="placeholder">Your photo will show here</div>
+              )}
+              {audio && !recording && <audio controls src={audio.url} className="player" />}
+            </section>
 
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            hidden
-            onChange={handlePhoto}
-          />
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              hidden
+              onChange={handlePhoto}
+            />
 
-          <button
-            className="big-btn photo-btn"
-            onClick={takePhoto}
-            disabled={recording}
-          >
-            <CameraIcon />
-            {photo ? "Retake Photo" : "Take Photo"}
-          </button>
+            <button
+              className="big-btn photo-btn"
+              onClick={takePhoto}
+              disabled={recording}
+            >
+              <CameraIcon />
+              {photo ? "Retake Photo" : "Take Photo"}
+            </button>
 
-          <button
-            className={`big-btn talk-btn${recording ? " is-recording" : ""}`}
-            onClick={talk}
-            aria-pressed={recording}
-          >
-            {recording ? <StopIcon /> : <MicIcon />}
-            {recording ? `Stop  ${formatTime(seconds)}` : audio ? "Talk Again" : "Tap to Talk"}
-          </button>
+            <button
+              className={`big-btn talk-btn${recording ? " is-recording" : ""}`}
+              onClick={talk}
+              aria-pressed={recording}
+            >
+              {recording ? <StopIcon /> : <MicIcon />}
+              {recording ? `Stop  ${formatTime(seconds)}` : audio ? "Talk Again" : "Tap to Talk"}
+            </button>
 
-          <button className="save-btn" onClick={saveStop} disabled={!canSave}>
-            {saving ? "Saving…" : "Save This Stop"}
-          </button>
+            <button className="save-btn" onClick={saveStop} disabled={!canSave}>
+              {saving ? "Saving…" : "Save This Stop"}
+            </button>
+            </>
+          )}
 
           {activeJob ? (
             <section className="saved" aria-label="Saved stops">
@@ -510,25 +543,13 @@ export default function App() {
       )}
 
       {sheet?.type === "end" && activeJob && (
-        <Sheet title={`Finish ${activeJob.name}?`} onClose={() => setSheet(null)}>
-          <p>
-            {photo || audio ? "Your unsaved photo and voice note will be thrown away. " : ""}
-            The stops you saved stay saved.
-          </p>
-          <button className="big-btn danger-btn" onClick={finishJob}>
-            <FlagIcon />
-            Yes, Finish Job
-          </button>
-          <button className="big-btn plain-btn" onClick={() => setSheet(null)}>
-            Keep Going
-          </button>
-        </Sheet>
+        <EndJobSheet job={activeJob} hasDraft={!!(photo || audio)} onFinish={finishJob} onClose={() => setSheet(null)} />
       )}
 
       {sheet?.type === "reopen" && (
-        <Sheet title={`Reopen ${sheet.job.name}?`} onClose={() => setSheet(null)}>
+        <Sheet title={`Reopen ${jobTitle(sheet.job)}?`} onClose={() => setSheet(null)}>
           <p>
-            {activeJob ? `${activeJob.name} is open right now. It will be finished so new stops go to the reopened job.` : ""}
+            {activeJob ? `${jobTitle(activeJob)} is open right now. It will be finished so new stops go to the reopened job.` : ""}
             {photo || audio ? " Your unsaved photo and voice note will be thrown away." : ""}
           </p>
           <button className="big-btn photo-btn" onClick={() => doReopen(sheet.job)}>
@@ -564,9 +585,17 @@ export default function App() {
           {jobs
             .filter((j) => j.id !== sheet.stop.jobId)
             .map((j) => (
-              <button key={j.id} className="job-card" onClick={() => moveTo(sheet.stop, j)}>
-                <strong>{j.name}</strong>
-                <span>{j.status === "open" ? "Open" : "Finished"}</span>
+              <button
+                key={j.id}
+                className="job-card"
+                onClick={() => moveTo(sheet.stop, j)}
+                disabled={stopsInJob(j.id) >= STOP_LIMIT}
+              >
+                <strong>{jobTitle(j)}</strong>
+                <span>
+                  {j.status === "open" ? "Open" : "Finished"}
+                  {stopsInJob(j.id) >= STOP_LIMIT ? ` · Full (${STOP_LIMIT} stops)` : ""}
+                </span>
               </button>
             ))}
           <button className="text-btn" onClick={() => setSheet(null)}>
@@ -585,6 +614,18 @@ export default function App() {
             Keep It
           </button>
         </Sheet>
+      )}
+
+      {sheet?.type === "export" && (
+        <ExportSheet
+          job={jobs.find((j) => j.id === sheet.job.id) || sheet.job}
+          uid={uid}
+          onClose={() => setSheet(null)}
+          onDone={(how) => {
+            setSheet(null);
+            showToast(how === "shared" ? "PDF shared" : "PDF downloaded");
+          }}
+        />
       )}
 
       <div className="toast-slot" role="status" aria-live="polite">

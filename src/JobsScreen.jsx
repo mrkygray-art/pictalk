@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { StopList } from "./StopCards";
+import JobDetailsFields from "./JobDetailsFields";
+import { jobTitle } from "./jobStore";
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const day = (t) => new Date(t).toLocaleDateString([], { month: "short", day: "numeric" });
@@ -13,12 +15,21 @@ function BackIcon() {
   );
 }
 
+function PdfIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5M12 12v6M9.5 15.5 12 18l2.5-2.5" />
+    </svg>
+  );
+}
+
 function JobCard({ job, stops, isActive, onOpen }) {
   const voiceNotes = stops.filter((s) => s.audioPath || s.audioBlob).length;
   return (
     <button className={`job-card${isActive ? " is-live" : ""}`} onClick={onOpen}>
       <strong>
-        {job.name}
+        {jobTitle(job)}
         {isActive && <span className="pill">Open now</span>}
       </strong>
       <span>
@@ -31,15 +42,14 @@ function JobCard({ job, stops, isActive, onOpen }) {
   );
 }
 
-function JobDetail({ job, stops, isActive, online, onBack, onCamera, onReopen, onRename, onStopSelect }) {
+function JobDetail({ job, stops, isActive, online, onBack, onCamera, onReopen, onSaveDetails, onStopSelect, onExport }) {
   return (
     <>
       <button className="link-btn" onClick={onBack}>
         <BackIcon />
         My Jobs
       </button>
-      <JobName job={job} onRename={onRename} />
-      {job.address && <p className="meta">Location: {job.address}</p>}
+      <JobHeading job={job} onSaveDetails={onSaveDetails} />
       <p className="meta">
         Started {day(job.startedAt)} at {clock(job.startedAt)}
         {job.endedAt ? `. Finished ${day(job.endedAt)} at ${clock(job.endedAt)}` : ""}
@@ -54,6 +64,10 @@ function JobDetail({ job, stops, isActive, online, onBack, onCamera, onReopen, o
           Reopen This Job
         </button>
       )}
+      <button className="big-btn plain-btn" onClick={() => onExport(job)} disabled={stops.length === 0}>
+        <PdfIcon />
+        Export PDF
+      </button>
       <section className="saved" aria-label="Stops in this job">
         <h2>
           Stops <span className="count">{plural(stops.length, "stop")}</span>
@@ -71,22 +85,21 @@ function JobDetail({ job, stops, isActive, online, onBack, onCamera, onReopen, o
   );
 }
 
-// Job name as a heading, with an Edit name button that swaps in a text box
-function JobName({ job, onRename }) {
+// Job name, its Customer and Location, and an "Edit customer & location" form
+function JobHeading({ job, onSaveDetails }) {
   const [draft, setDraft] = useState(null); // null = not editing
-
-  const save = () => {
-    const name = draft.trim();
-    if (name && name !== job.name) onRename(job, name);
-    setDraft(null);
-  };
 
   if (draft === null) {
     return (
       <div className="job-name">
-        <h1 className="page-title">{job.name}</h1>
-        <button className="link-btn" onClick={() => setDraft(job.name)}>
-          Edit name
+        <h1 className="page-title">{jobTitle(job)}</h1>
+        {job.customer && <p className="meta">Customer: {job.customer}</p>}
+        {job.location && <p className="meta">Location: {job.location}</p>}
+        <button
+          className="link-btn"
+          onClick={() => setDraft({ customer: job.customer || "", location: job.location || "" })}
+        >
+          Edit customer &amp; location
         </button>
       </div>
     );
@@ -97,24 +110,15 @@ function JobName({ job, onRename }) {
       className="name-box"
       onSubmit={(e) => {
         e.preventDefault();
-        save();
+        onSaveDetails(job, draft);
+        setDraft(null);
       }}
+      onKeyDown={(e) => e.key === "Escape" && setDraft(null)}
     >
-      <label htmlFor="job-name-input" className="meta">
-        Job name
-      </label>
-      <input
-        id="job-name-input"
-        value={draft}
-        maxLength={200}
-        autoComplete="off"
-        autoFocus
-        onFocus={(e) => e.target.select()}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => e.key === "Escape" && setDraft(null)}
-      />
+      <h1 className="page-title">{jobTitle(job)}</h1>
+      <JobDetailsFields customer={draft.customer} location={draft.location} onChange={setDraft} />
       <div className="name-actions">
-        <button type="submit" className="save-btn" disabled={!draft.trim()}>
+        <button type="submit" className="save-btn">
           Save
         </button>
         <button type="button" className="big-btn plain-btn" onClick={() => setDraft(null)}>
@@ -126,7 +130,7 @@ function JobName({ job, onRename }) {
 }
 
 /** My Jobs list, and the page for one job. */
-export default function JobsScreen({ jobs, stops, activeJobId, online, onClose, onReopen, onRename, onStopSelect }) {
+export default function JobsScreen({ jobs, stops, activeJobId, online, onClose, onReopen, onSaveDetails, onStopSelect, onExport }) {
   const [openId, setOpenId] = useState(null);
   const stopsOf = (id) => stops.filter((s) => s.jobId === id);
   const go = (id) => {
@@ -145,8 +149,9 @@ export default function JobsScreen({ jobs, stops, activeJobId, online, onClose, 
         onBack={() => go(null)}
         onCamera={onClose}
         onReopen={onReopen}
-        onRename={onRename}
+        onSaveDetails={onSaveDetails}
         onStopSelect={onStopSelect}
+        onExport={onExport}
       />
     );
   }

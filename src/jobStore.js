@@ -22,6 +22,29 @@ export function defaultJobName(t = Date.now()) {
   return `Job · ${day}, ${time}`;
 }
 
+/** "Sep 30, 2026 2:14 PM" */
+export function formatJobStart(t) {
+  const d = new Date(t);
+  const day = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return `${day} ${time}`;
+}
+
+/**
+ * The name shown everywhere for a job: "Customer – Location – Sep 30, 2026 2:14 PM",
+ * leaving out blank parts. Jobs with neither field keep their stored name
+ * (e.g. "Job · Sep 29, 2:14 PM" or "Earlier stops").
+ */
+export function jobTitle(job) {
+  if (!job) return '';
+  const parts = [job.customer, job.location].map((v) => (v || '').trim()).filter(Boolean);
+  if (!parts.length) return job.name || defaultJobName(job.startedAt);
+  return [...parts, formatJobStart(job.startedAt)].join(' – ');
+}
+
+const DETAIL_MAX = 100;
+const cleanDetail = (v) => (v || '').trim().slice(0, DETAIL_MAX) || null;
+
 /** Live list of this user's jobs, newest first. Returns an unsubscribe fn. */
 export function watchJobs(uid, callback) {
   const q = query(collection(db, 'users', uid, 'jobs'), orderBy('startedAt', 'desc'));
@@ -49,8 +72,22 @@ export function startJob(uid, openJobs = [], fields = {}) {
   return { id, ...job };
 }
 
-export function endJob(uid, jobId) {
-  updateDoc(jobRef(uid, jobId), { status: 'finished', endedAt: Date.now() }).catch(warn('End job'));
+/** Finish a job, saving the optional Customer and Location typed at End Job. */
+export function endJob(uid, jobId, details = {}) {
+  updateDoc(jobRef(uid, jobId), {
+    status: 'finished',
+    endedAt: Date.now(),
+    customer: cleanDetail(details.customer),
+    location: cleanDetail(details.location),
+  }).catch(warn('End job'));
+}
+
+/** Change a job's Customer and Location later (either may be blank). */
+export function setJobDetails(uid, jobId, details) {
+  updateDoc(jobRef(uid, jobId), {
+    customer: cleanDetail(details.customer),
+    location: cleanDetail(details.location),
+  }).catch(warn('Update job details'));
 }
 
 /** Make a finished job the open one again, finishing any other open job in the same write. */
@@ -62,10 +99,6 @@ export function reopenJob(uid, jobId, openJobs = []) {
     .forEach((j) => batch.update(jobRef(uid, j.id), { status: 'finished', endedAt: now }));
   batch.update(jobRef(uid, jobId), { status: 'open', endedAt: null });
   batch.commit().catch(warn('Reopen job'));
-}
-
-export function renameJob(uid, jobId, name) {
-  updateDoc(jobRef(uid, jobId), { name: name.trim().slice(0, 200) }).catch(warn('Rename job'));
 }
 
 /** Record that a stop was just saved to this job. */

@@ -35,7 +35,9 @@ export async function requestSummary(jobId) {
   } catch (err) {
     const code = String(err?.code || '').replace('functions/', '');
     // These carry a message written for the user by the function
-    if (['resource-exhausted', 'failed-precondition', 'not-found'].includes(code)) throw new Error(err.message, { cause: err });
+    // Drop any status code the SDK adds, e.g. "… [400]" or "… (functions/not-found)"
+    const message = String(err.message || '').replace(/\s*[[(][^\])]*[\])]\s*$/, '');
+    if (['resource-exhausted', 'failed-precondition', 'not-found'].includes(code)) throw new Error(message, { cause: err });
     if (code === 'unavailable' || code === 'deadline-exceeded') {
       throw new Error("The summary took too long or the connection dropped. Please try again.", { cause: err });
     }

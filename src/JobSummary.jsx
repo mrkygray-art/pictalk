@@ -100,7 +100,8 @@ export default function JobSummary({ uid, job, stops, online, autoStart, onJumpT
 
   const numberOf = new Map(stops.map((s, i) => [s.id, i + 1]));
   const waiting = stops.filter((s) => isTranscriptPending(s, now)).length;
-  const hasVoice = stops.some((s) => (s.transcript || "").trim() || s.audioBlob || s.audioPath);
+  // The summary is written from speech; stops without it (photo only, no speech heard) add nothing
+  const hasSpeech = stops.some((s) => (s.transcript || "").trim());
   const used = summaryDoc?.generationCount || 0;
   const left = Math.max(0, PER_JOB_LIMIT - used);
 
@@ -175,9 +176,10 @@ export default function JobSummary({ uid, job, stops, online, autoStart, onJumpT
   if (!hasSummary(summaryDoc)) {
     let status = null;
     if (busy) status = "Building summary… this can take up to a minute.";
-    else if (!hasVoice) status = "Add voice notes to this job to get an AI summary.";
     else if (waiting) status = `Waiting for ${waiting} voice note${waiting === 1 ? "" : "s"} to upload and be written down…`;
-    else if (!online) status = "Building a summary needs signal.";
+    else if (!hasSpeech) {
+      status = "No summary for this job: the AI summary is written from what you say at each stop, and none of these stops have spoken notes.";
+    } else if (!online) status = "Building a summary needs signal.";
     return (
       <section className="summary-card" aria-label="AI summary">
         <h2>AI summary</h2>
@@ -187,7 +189,7 @@ export default function JobSummary({ uid, job, stops, online, autoStart, onJumpT
           </p>
         )}
         {error && <p className="summary-error" role="alert">{error}</p>}
-        {!busy && hasVoice && !waiting && (
+        {!busy && hasSpeech && !waiting && (
           <button className="big-btn photo-btn" onClick={build} disabled={!online || left === 0}>
             Build Summary
           </button>

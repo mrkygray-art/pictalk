@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PicTalk – Jobs prototype</title>
+<style>
+:root{
+  --bg:#000000;--card:#1C1C1E;--card2:#2C2C2E;--ink:#FFFFFF;--muted:#9A9AA0;--line:#3A3A3C;
+  --blue:#0A84FF;--blue-ink:#FFFFFF;--green:#1E8E3E;--green-off:#0F4A20;--green-off-ink:#4E4E52;
+  --red:#FF453A;--live:#30D158;--shade:rgba(0,0,0,.7);
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+:root[data-theme="light"]{--bg:#F2F2F7;--card:#FFFFFF;--card2:#E5E5EA;--ink:#000;--muted:#6C6C70;--line:#D1D1D6;--blue:#007AFF;--green:#248A3D;--green-off:#C7E3CF;--green-off-ink:#7C9A84;--red:#D70015;--live:#248A3D;--shade:rgba(0,0,0,.4)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000}}
+:root[data-theme="dark"]{--bg:#000}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:19px;line-height:1.35;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
+svg{display:block}
+.phone{max-width:460px;margin:0 auto;padding:0 20px 36px}
+
+.banner{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;margin:0 -20px;padding:12px 20px;background:var(--bg);}
+.banner .in{background:var(--card);border-radius:20px;padding:12px 16px;display:flex;gap:12px;align-items:center;border:2px solid var(--live)}
+.banner.idle .in{border-color:var(--line)}
+.banner .dot{flex:none;width:14px;height:14px;border-radius:50%;background:var(--live)}
+.banner.idle .dot{background:transparent;border:2px solid var(--muted)}
+.banner small{display:block;font-size:15px;color:var(--muted);font-weight:600}
+.banner strong{display:block;font-size:22px;line-height:1.2}
+
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:6px 0 14px}
+.brand{font-weight:700;font-size:24px}
+.link{background:var(--card);border:0;border-radius:16px;padding:10px 16px;font-weight:700;font-size:18px;color:var(--blue);display:flex;gap:8px;align-items:center}
+.link svg{width:20px;height:20px}
+
+.preview{background:var(--card);border-radius:30px;aspect-ratio:4/3;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:22px;text-align:center;padding:16px}
+.preview.has{padding:0}
+.preview svg.scene{width:100%;height:100%}
+.preview .loc{position:absolute;left:12px;bottom:12px;background:rgba(0,0,0,.6);color:#fff;border-radius:12px;padding:5px 10px 5px 7px;font-size:15px;display:flex;gap:5px;align-items:center}
+.preview .loc svg{width:16px;height:16px}
+
+.btn{display:flex;align-items:center;justify-content:center;gap:16px;width:100%;min-height:96px;border-radius:30px;border:0;
+  font-weight:700;font-size:30px;padding:14px 20px;margin-top:18px}
+.btn svg{width:40px;height:40px;flex:none}
+.blue{background:var(--blue);color:var(--blue-ink)}
+.outline{background:var(--card);color:var(--blue);border:4px solid var(--blue)}
+.green{background:var(--green);color:#fff;min-height:68px;border-radius:22px;font-size:28px}
+.green[disabled]{background:var(--green-off);color:var(--green-off-ink)}
+.red{background:var(--red);color:#fff}
+.red-line{background:transparent;color:var(--red);border:3px solid var(--red);min-height:68px;border-radius:22px;font-size:26px}
+.gray{background:var(--card);color:var(--ink);min-height:68px;border-radius:22px;font-size:24px}
+.btn.rec{background:var(--red);color:#fff;border-color:var(--red)}
+.recdot{width:16px;height:16px;border-radius:50%;background:#fff;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:.2}}
+.said{background:var(--card);border-radius:18px;padding:12px 16px;margin-top:14px;font-size:18px}
+.said small{display:block;color:var(--muted);font-weight:700;font-size:14px;margin-bottom:2px}
+.textlink{background:none;border:0;color:var(--muted);text-decoration:underline;font-size:18px;padding:12px;display:block;margin:4px auto 0}
+
+h2.sec{font-size:28px;margin:34px 0 14px}
+h2.sec span{font-size:18px;color:var(--muted);font-weight:600;margin-left:8px}
+.stop{display:grid;grid-template-columns:120px 1fr;gap:16px;background:var(--card);border-radius:28px;padding:18px;margin-bottom:14px;width:100%;border:0;text-align:left}
+.stop .pic{width:120px;height:120px;border-radius:18px;overflow:hidden}
+.stop .pic svg{width:100%;height:100%}
+.stop b{display:block;font-size:22px}
+.stop .t{color:var(--muted);font-size:20px}
+.stop .tx{font-size:16px;color:var(--muted);margin-top:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.player{display:flex;align-items:center;gap:14px;margin-top:8px}
+.play{width:44px;height:44px;border:0;background:none;padding:0;display:flex;align-items:center;justify-content:center}
+.play svg{width:30px;height:30px}
+.player .time{font-size:20px;min-width:44px}
+.bar{flex:1;height:5px;border-radius:3px;background:var(--card2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--blue);width:0}
+.empty{color:var(--muted);font-size:19px;background:var(--card);border-radius:24px;padding:20px}
+
+h1.page{font-size:32px;line-height:1.15;margin:4px 0 6px}
+.jcard{display:block;width:100%;text-align:left;background:var(--card);border:0;border-radius:24px;padding:18px 20px;margin-bottom:12px}
+.jcard.live{box-shadow:inset 0 0 0 3px var(--live)}
+.jcard b{display:block;font-size:22px}
+.jcard span{display:block;color:var(--muted);font-size:17px;margin-top:2px}
+.pill{display:inline-block;background:var(--live);color:#000;font-size:14px;font-weight:700;border-radius:8px;padding:2px 8px;margin-left:8px;vertical-align:3px}
+.meta{color:var(--muted);font-size:18px;margin:2px 0 0}
+.namebox{display:flex;flex-direction:column;gap:10px;margin:8px 0}
+.namebox input{font:inherit;font-size:24px;padding:16px;border-radius:18px;border:3px solid var(--blue);background:var(--card);color:var(--ink);width:100%}
+.row{display:flex;gap:10px}.row .btn{margin-top:0}
+.hint{color:var(--muted);font-size:17px;margin:-6px 0 14px}
+
+.shade{position:fixed;inset:0;background:var(--shade);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--card);width:100%;max-width:460px;border-radius:30px 30px 0 0;padding:28px 20px calc(24px + env(safe-area-inset-bottom,0px));max-height:92vh;overflow-y:auto;animation:up .22s ease-out}
+.sheet .btn.gray{background:var(--card2)}
+.sheet .jcard{background:var(--card2)}
+@keyframes up{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+.sheet h2{font-size:28px;line-height:1.2;margin:0 0 8px}
+.sheet p{margin:0 0 6px;color:var(--muted)}
+.sheet .pic{border-radius:22px;overflow:hidden;aspect-ratio:4/3;margin-bottom:10px}
+.sheet .pic svg{width:100%;height:100%}
+.twin{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px}
+.twin .btn{min-height:130px;font-size:32px;margin:0;flex-direction:column;gap:8px}
+
+.toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:30;
+  background:var(--card2);color:var(--ink);padding:14px 22px;border-radius:18px;font-size:18px;font-weight:600;max-width:92vw;text-align:center;display:none;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.toast.show{display:block;animation:up .2s ease-out}
+
+details.demo{margin-top:36px;border:2px dashed var(--line);border-radius:22px;padding:14px 16px}
+details.demo summary{font-weight:700;color:var(--muted);font-size:17px;cursor:pointer}
+details.demo p{font-size:16px;color:var(--muted);margin:8px 0 0}
+details.demo .btn{min-height:56px;font-size:19px;margin-top:10px;border-radius:18px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<div class="phone" id="app"></div>
+<div id="modal"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+const I={
+  cam:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M3 7.5h3.5L8.5 4.5h7l2 3H21V19H3z"/><circle cx="12" cy="13" r="3.6"/></svg>',
+  mic:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
+  list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.3" fill="currentColor"/><circle cx="4.5" cy="12" r="1.3" fill="currentColor"/><circle cx="4.5" cy="18" r="1.3" fill="currentColor"/></svg>',
+  pin:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>',
+  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5l5 5L19.5 7"/></svg>',
+  flag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M5 21V4M5 4h12l-2.5 4L17 12H5"/></svg>',
+  back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12.5-7.5z"/></svg>',
+  pause:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4.5" width="4.2" height="15" rx="1"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1"/></svg>'
+};
+const PLACES=["1420 Main St","88 Pier Ave","305 Rosecrans Ave","2210 El Segundo Blvd","4700 W 120th St","915 Aviation Blvd"];
+const NOTES=[
+  "Front door needs a card reader. The old wire here looks worn out.",
+  "Two cameras at the loading dock, about 80 feet back to the network closet.",
+  "Back gate. Customer wants an intercom with a button for deliveries.",
+  "Hallway ceiling is drop tile, so running cable should be easy.",
+  "Parking lot light pole. Could mount a camera on top facing the entrance.",
+  "Network closet has room on the rack and one open outlet.",
+  "Side door is propped open a lot. Suggest a door alarm here."
+];
+const KEY='pictalk-jobs-proto-v2';
+const fresh=()=>({jobs:[],stops:[],active:null,place:0,offset:0,seq:0});
+let S;try{S=JSON.parse(localStorage.getItem(KEY))||fresh()}catch(e){S=fresh()}
+const blankDraft=()=>({photo:null,note:null,sec:0});
+let UI={view:'camera',jobId:null,editing:false,modal:null,draft:blankDraft(),rec:'idle',pending:null,playing:null};
+let recTimer=null,playTimer=null;
+
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const now=()=>Date.now()+S.offset;
+const job=id=>S.jobs.find(j=>j.id===id);
+const stopsOf=id=>S.stops.filter(c=>c.jobId===id).sort((a,b)=>a.at-b.at);
+const esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const day=t=>new Date(t).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+const time=t=>new Date(t).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+const rnd=n=>Math.floor(Math.random()*n);
+const plural=(n,w)=>n+' '+w+(n===1?'':'s');
+const mmss=s=>Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+const draftEmpty=()=>!UI.draft.photo&&!UI.draft.note&&UI.rec==='idle';
+
+function scene(p,cls='scene'){
+  const g=190+(p.h%40),k=p.k,id='s'+p.h+'_'+k;
+  const wall=`<defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${g},6%,58%)"/><stop offset="1" stop-color="hsl(${g},8%,32%)"/></linearGradient></defs><rect width="160" height="120" fill="url(#${id})"/><rect y="88" width="160" height="32" fill="hsl(${g},5%,24%)"/>`;
+  const obj=k===0
+    ?`<rect x="60" y="26" width="40" height="62" fill="hsl(${g},8%,22%)"/><rect x="63" y="29" width="34" height="59" fill="none" stroke="hsl(${g},6%,40%)"/><rect x="104" y="48" width="7" height="12" rx="1" fill="#2A2F35"/><rect x="106" y="51" width="3" height="3" fill="#30D158"/>`
+    :k===1
+    ?`<rect x="0" y="14" width="160" height="6" fill="hsl(${g},5%,28%)"/><path d="M80 20v8" stroke="#D5D9DD" stroke-width="3"/><rect x="66" y="28" width="28" height="14" rx="2" fill="#D5D9DD"/><circle cx="80" cy="47" r="8" fill="#1A1D21"/><circle cx="82" cy="45" r="1.6" fill="#8FB3D9"/>`
+    :`<rect x="46" y="18" width="68" height="76" fill="hsl(${g},6%,14%)"/><g fill="hsl(${g},5%,30%)"><rect x="52" y="24" width="56" height="8"/><rect x="52" y="36" width="56" height="8"/><rect x="52" y="48" width="56" height="8"/><rect x="52" y="60" width="56" height="8"/></g><g fill="#30D158"><rect x="55" y="27" width="2" height="2"/><rect x="59" y="27" width="2" height="2"/><rect x="55" y="39" width="2" height="2"/></g>`;
+  return `<svg class="${cls}" viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${wall}${obj}</svg>`;
+}
+
+function newJob(){
+  const t=now(),p=PLACES[S.place];
+  const j={id:'j'+(++S.seq),place:p,name:p+', '+day(t),start:t,last:t,anchor:S.place,status:'open'};
+  S.jobs.unshift(j);S.active=j.id;save();return j;
+}
+function finish(id){const j=job(id);if(!j)return;j.status='finished';j.end=now();if(S.active===id)S.active=null;save();}
+function needsCheck(j){if(j.anchor!==S.place)return 'moved';if(now()-j.last>30*60*1000)return 'time';return null;}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.remove('show');void t.offsetWidth;t.classList.add('show');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('show'),2600);}
+
+function banner(){
+  const a=job(S.active);
+  return a?`<header class="banner"><div class="in"><span class="dot"></span><div><small>Saving to</small><strong>${esc(a.name)}</strong></div></div></header>`
+    :`<header class="banner idle"><div class="in"><span class="dot"></span><div><small>Nothing is being saved</small><strong>No job open</strong></div></div></header>`;
+}
+
+function stopCard(c,n){
+  const pl=UI.playing&&UI.playing.id===c.id;
+  return `<div class="stop" data-a="stop" data-id="${c.id}" role="button" tabindex="0" aria-label="Stop ${n} options">
+    <div class="pic">${scene(c.p)}</div>
+    <div><b>Stop ${n}</b><div class="t">${time(c.at)}</div>
+    ${c.note?`<div class="player"><button class="play" data-a="play" data-id="${c.id}" aria-label="${pl?'Pause':'Play'} voice note">${pl?I.pause:I.play}</button>
+      <span class="time" id="pt-${c.id}">${mmss(pl?UI.playing.t:0)}</span><span class="bar"><i id="pb-${c.id}" style="width:${pl?UI.playing.t/c.sec*100:0}%"></i></span></div>
+      <div class="tx">${esc(c.note)}</div>`:`<div class="tx">No voice note</div>`}</div></div>`;
+}
+
+function viewCamera(){
+  const a=job(S.active),d=UI.draft,stops=a?stopsOf(a.id):[];
+  let h=banner()+`<div class="topbar"><span class="brand">PicTalk</span><button class="link" data-a="jobs">${I.list}My Jobs${S.jobs.length?' ('+S.jobs.length+')':''}</button></div>`;
+  h+=d.photo?`<div class="preview has">${scene(d.photo)}<span class="loc">${I.pin}${esc(PLACES[S.place])}</span></div>`
+            :`<div class="preview">Your photo will show here</div>`;
+  h+=`<button class="btn blue" data-a="shoot">${I.cam}${d.photo?'Retake Photo':'Take Photo'}</button>`;
+  if(UI.rec==='rec')h+=`<button class="btn outline rec" data-a="talk"><span class="recdot"></span>Tap to Stop <span id="rt">${mmss(d.sec)}</span></button>`;
+  else if(UI.rec==='writing')h+=`<button class="btn outline" disabled>Writing it down…</button>`;
+  else h+=`<button class="btn outline" data-a="talk">${I.mic}${d.note?'Talk Again':'Tap to Talk'}</button>`;
+  if(d.note)h+=`<div class="said"><small>What you said</small>${esc(d.note)}</div>`;
+  h+=`<button class="btn green" data-a="save" ${d.photo&&UI.rec==='idle'?'':'disabled'}>Save This Stop</button>`;
+  if(!draftEmpty()&&UI.rec==='idle')h+=`<button class="textlink" data-a="clear">Clear and start over</button>`;
+  if(a){
+    h+=`<h2 class="sec">Saved stops<span>${plural(stops.length,'stop')}</span></h2>`;
+    h+=stops.length?stops.slice().reverse().map(c=>stopCard(c,stops.indexOf(c)+1)).join(''):`<p class="empty">No stops yet in this job.</p>`;
+    h+=`<button class="btn red-line" data-a="end">${I.flag}End Job</button>`;
+  }else{
+    h+=`<button class="btn gray" data-a="start" style="margin-top:28px">${I.plus}Start New Job</button>`;
+  }
+  return h+demo();
+}
+
+function viewJobs(){
+  const open=S.jobs.filter(j=>j.status==='open'),done=S.jobs.filter(j=>j.status==='finished');
+  const card=j=>{const c=stopsOf(j.id),v=c.filter(x=>x.note).length;
+    return `<button class="jcard ${j.id===S.active?'live':''}" data-a="openjob" data-id="${j.id}"><b>${esc(j.name)}${j.id===S.active?'<span class="pill">Open now</span>':''}</b>
+    <span>${plural(c.length,'stop')}, ${plural(v,'voice note')}</span><span>Started ${day(j.start)} at ${time(j.start)}</span></button>`;};
+  let h=banner()+`<div class="topbar"><button class="link" data-a="camera">${I.back}Camera</button></div><h1 class="page">My Jobs</h1>`;
+  if(!S.jobs.length)h+=`<p class="empty">No jobs yet. Go back and tap Start New Job.</p>`;
+  if(open.length)h+=`<h2 class="sec">Open</h2>`+open.map(card).join('');
+  if(done.length)h+=`<h2 class="sec">Finished</h2>`+done.map(card).join('');
+  return h;
+}
+
+function viewJob(){
+  const j=job(UI.jobId);if(!j){UI.view='jobs';return viewJobs();}
+  const stops=stopsOf(j.id);
+  let h=banner()+`<div class="topbar"><button class="link" data-a="jobs">${I.back}My Jobs</button></div>`;
+  h+=UI.editing?`<div class="namebox"><label for="nm" class="meta">Job name</label><input id="nm" value="${esc(j.name)}" autocomplete="off">
+      <div class="row"><button class="btn green" data-a="save-name">Save</button><button class="btn gray" data-a="cancel-name">Cancel</button></div></div>`
+    :`<h1 class="page">${esc(j.name)}</h1><button class="link" data-a="edit-name" style="margin:6px 0 8px">Edit name</button>`;
+  h+=`<p class="meta">Location: ${esc(j.place)}</p><p class="meta">Started ${day(j.start)} at ${time(j.start)}${j.end?`. Finished at ${time(j.end)}`:''}</p>`;
+  h+=j.status==='open'?(j.id===S.active?`<button class="btn blue" data-a="camera" style="min-height:72px;font-size:26px">${I.cam}Back to Camera</button>`:'')
+    :`<button class="btn gray" data-a="reopen" data-id="${j.id}">Reopen This Job</button>`;
+  h+=`<h2 class="sec">Stops<span>${plural(stops.length,'stop')}</span></h2>`;
+  h+=stops.length?`<p class="hint">Tap a stop to move it to a different job.</p>`+stops.map((c,i)=>stopCard(c,i+1)).join(''):`<p class="empty">This job has no stops.</p>`;
+  return h;
+}
+
+function demo(){
+  return `<details class="demo"><summary>Demo controls (for testing only)</summary>
+  <p>These fake the phone's GPS and clock so you can try the safety net.</p>
+  <button class="btn gray" data-a="walk">Walk to a different address</button>
+  <button class="btn gray" data-a="wait">Let 31 minutes pass</button>
+  <button class="btn gray" data-a="reset">Erase everything</button>
+  <button class="btn gray" data-a="theme">Switch light / dark</button></details>`;
+}
+
+function modal(){
+  const m=UI.modal;if(!m)return '';const a=job(S.active);let b='';
+  if(m.type==='nojob')b=`<h2>Start a new job here?</h2><p>You're at ${esc(PLACES[S.place])}. Your stops need a job to go into.</p>
+      <button class="btn blue" data-a="nojob-start">${I.plus}Start New Job</button><button class="textlink" data-a="close">Not now</button>`;
+  else if(m.type==='still')b=`<h2>Are you still at ${esc(a.place)}?</h2><p>${m.reason==='moved'?`It looks like you've moved to ${esc(PLACES[S.place])}.`:`It's been over 30 minutes since your last stop.`}</p>
+      <div class="twin"><button class="btn green" data-a="still-yes">${I.check}Yes</button><button class="btn blue" data-a="still-new">${I.plus}New Job</button></div>`;
+  else if(m.type==='end')b=`<h2>Finish ${esc(a.name)}?</h2><p>${draftEmpty()?'':'Your unsaved photo will be thrown away. '}You can reopen it later from My Jobs.</p>
+      <button class="btn red" data-a="end-yes">${I.flag}Yes, Finish Job</button><button class="btn gray" data-a="close">Keep Going</button>`;
+  else if(m.type==='stop'){const c=S.stops.find(x=>x.id===m.id),j=job(c.jobId),n=stopsOf(j.id).indexOf(c)+1;
+    b=`<div class="pic">${scene(c.p)}</div><h2>Stop ${n}</h2><p>In ${esc(j.name)}, saved at ${time(c.at)}</p>
+      <button class="btn blue" data-a="move" data-id="${c.id}" style="min-height:72px;font-size:26px">Move to a Different Job</button>
+      <button class="btn gray" data-a="del" data-id="${c.id}" style="color:var(--red)">Delete Stop</button><button class="textlink" data-a="close">Close</button>`;}
+  else if(m.type==='move'){const c=S.stops.find(x=>x.id===m.id),others=S.jobs.filter(j=>j.id!==c.jobId);
+    b=`<h2>Move this stop to…</h2>`+(others.length?others.map(j=>`<button class="jcard" data-a="move-to" data-id="${c.id}" data-to="${j.id}"><b>${esc(j.name)}</b><span>${j.status==='open'?'Open':'Finished'}</span></button>`).join(''):`<p>There are no other jobs yet.</p>`)+`<button class="textlink" data-a="close">Cancel</button>`;}
+  else if(m.type==='del')b=`<h2>Delete this stop?</h2><p>The photo and voice note will be gone for good.</p>
+      <button class="btn red" data-a="del-yes" data-id="${m.id}">Delete Stop</button><button class="btn gray" data-a="close">Keep It</button>`;
+  else if(m.type==='reopen')b=`<h2>Reopen ${esc(job(m.id).name)}?</h2><p>${esc(a.name)} is open right now. It will be finished so new stops go to the reopened job.</p>
+      <button class="btn blue" data-a="reopen-yes" data-id="${m.id}">Reopen Job</button><button class="btn gray" data-a="close">Cancel</button>`;
+  return `<div class="shade" data-a="shade"><div class="sheet" role="dialog" aria-modal="true">${b}</div></div>`;
+}
+
+function render(){
+  const app=document.getElementById('app');
+  app.innerHTML=UI.view==='jobs'?viewJobs():UI.view==='job'?viewJob():viewCamera();
+  const mEl=document.getElementById('modal'),had=mEl.innerHTML!=='';mEl.innerHTML=modal();
+  if(UI.modal&&!had){const f=mEl.querySelector('button:not([disabled])');f&&f.focus({preventScroll:true});}
+  if(UI.editing){const i=document.getElementById('nm');if(i&&document.activeElement!==i){i.focus();i.select();}}
+}
+
+function stopPlay(){clearInterval(playTimer);UI.playing=null;}
+function doCapture(kind){
+  if(kind==='shoot'){UI.draft.photo={h:rnd(360),k:rnd(3)};}
+  else{UI.rec='rec';UI.draft.sec=0;recTimer=setInterval(()=>{UI.draft.sec++;const e=document.getElementById('rt');if(e)e.textContent=mmss(UI.draft.sec);},1000);}
+}
+function gate(kind){
+  const cur=job(S.active);
+  if(!cur){UI.modal={type:'nojob'};UI.pending=kind;return;}
+  if(draftEmpty()){const r=needsCheck(cur);if(r){UI.modal={type:'still',reason:r};UI.pending=kind;return;}}
+  doCapture(kind);
+}
+function reopen(id){const j=job(id);j.status='open';delete j.end;j.anchor=S.place;j.last=now();S.active=id;save();toast('Reopened '+j.name);UI.view='camera';}
+
+function act(a,d){
+  const cur=job(S.active);
+  switch(a){
+    case 'close':UI.modal=null;UI.pending=null;break;
+    case 'start':{const j=newJob();toast('Started '+j.name);break;}
+    case 'shoot':gate('shoot');break;
+    case 'talk':
+      if(UI.rec==='rec'){clearInterval(recTimer);UI.rec='writing';render();
+        setTimeout(()=>{UI.draft.note=NOTES[rnd(NOTES.length)];UI.draft.sec=Math.max(UI.draft.sec,4);UI.rec='idle';render();},900);return;}
+      gate('talk');break;
+    case 'nojob-start':{const j=newJob();UI.modal=null;toast('Started '+j.name);doCapture(UI.pending);UI.pending=null;break;}
+    case 'still-yes':cur.anchor=S.place;cur.last=now();save();UI.modal=null;doCapture(UI.pending);UI.pending=null;break;
+    case 'still-new':{const old=cur.name;finish(cur.id);newJob();UI.modal=null;toast('Finished '+old+'. New job started.');doCapture(UI.pending);UI.pending=null;break;}
+    case 'save':{const dr=UI.draft;S.stops.push({id:'c'+(++S.seq),jobId:cur.id,p:dr.photo,note:dr.note,sec:dr.sec||0,at:now(),place:PLACES[S.place]});
+      cur.last=now();save();UI.draft=blankDraft();toast('Stop saved to '+cur.name);break;}
+    case 'clear':UI.draft=blankDraft();break;
+    case 'end':UI.modal={type:'end'};break;
+    case 'end-yes':{const n=cur.name;clearInterval(recTimer);UI.rec='idle';UI.draft=blankDraft();finish(cur.id);UI.modal=null;toast('Finished '+n);break;}
+    case 'play':{
+      if(UI.playing&&UI.playing.id===d.id){stopPlay();break;}
+      stopPlay();const c=S.stops.find(x=>x.id===d.id);UI.playing={id:c.id,t:0};
+      playTimer=setInterval(()=>{UI.playing.t++;if(UI.playing.t>c.sec){stopPlay();render();return;}
+        const pt=document.getElementById('pt-'+c.id),pb=document.getElementById('pb-'+c.id);
+        if(pt)pt.textContent=mmss(UI.playing.t);if(pb)pb.style.width=(UI.playing.t/c.sec*100)+'%';},1000);break;}
+    case 'jobs':stopPlay();UI.view='jobs';UI.editing=false;window.scrollTo(0,0);break;
+    case 'camera':stopPlay();UI.view='camera';window.scrollTo(0,0);break;
+    case 'openjob':UI.view='job';UI.jobId=d.id;UI.editing=false;window.scrollTo(0,0);break;
+    case 'edit-name':UI.editing=true;break;
+    case 'cancel-name':UI.editing=false;break;
+    case 'save-name':{const v=document.getElementById('nm').value.trim();if(v){job(UI.jobId).name=v;save();toast('Name saved');}UI.editing=false;break;}
+    case 'reopen':if(S.active&&S.active!==d.id)UI.modal={type:'reopen',id:d.id};else reopen(d.id);break;
+    case 'reopen-yes':finish(S.active);UI.modal=null;UI.draft=blankDraft();reopen(d.id);break;
+    case 'stop':UI.modal={type:'stop',id:d.id};break;
+    case 'move':UI.modal={type:'move',id:d.id};break;
+    case 'move-to':{const c=S.stops.find(x=>x.id===d.id);c.jobId=d.to;save();UI.modal=null;toast('Moved to '+job(d.to).name);break;}
+    case 'del':UI.modal={type:'del',id:d.id};break;
+    case 'del-yes':stopPlay();S.stops=S.stops.filter(x=>x.id!==d.id);save();UI.modal=null;toast('Stop deleted');break;
+    case 'walk':S.place=(S.place+1)%PLACES.length;save();toast('You walked to '+PLACES[S.place]);break;
+    case 'wait':S.offset+=31*60*1000;save();toast('31 minutes have passed');break;
+    case 'theme':{const r=document.documentElement;const cur2=r.getAttribute('data-theme');r.setAttribute('data-theme',cur2==='light'?'dark':'light');break;}
+    case 'reset':clearInterval(recTimer);stopPlay();S=fresh();save();UI={view:'camera',jobId:null,editing:false,modal:null,draft:blankDraft(),rec:'idle',pending:null,playing:null};toast('Everything erased');break;
+  }
+  render();
+}
+
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-a]');if(!el)return;
+  if(el.dataset.a==='shade'){if(e.target===el&&UI.modal&&UI.modal.type!=='still'){UI.modal=null;UI.pending=null;render();}return;}
+  if(el.disabled)return;act(el.dataset.a,el.dataset);
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&e.target.id==='nm')act('save-name',{});
+  if(e.key==='Enter'&&e.target.classList&&e.target.classList.contains('stop'))act('stop',e.target.dataset);
+  if(e.key==='Escape'&&UI.modal&&UI.modal.type!=='still'){UI.modal=null;UI.pending=null;render();}
+});
+render();
+</script>
+</body>
+</html>

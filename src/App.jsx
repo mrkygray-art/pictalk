@@ -7,9 +7,10 @@ import {
   watchStops,
   startAutoSync,
   onQueueChange,
-  urlFor,
 } from "./stopStore";
 import { watchJobs, startJob, endJob, touchJob, migrateEarlierStops } from "./jobStore";
+import { StopList } from "./StopCards";
+import JobsScreen from "./JobsScreen";
 
 // Pick an audio format this phone's browser can record (iPhone uses mp4, Android/Chrome uses webm)
 function pickAudioType() {
@@ -54,6 +55,17 @@ function PlusIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
       <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function ListIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+      <path d="M9 6h11M9 12h11M9 18h11" />
+      <circle cx="4.5" cy="6" r="1.3" fill="currentColor" />
+      <circle cx="4.5" cy="12" r="1.3" fill="currentColor" />
+      <circle cx="4.5" cy="18" r="1.3" fill="currentColor" />
     </svg>
   );
 }
@@ -103,76 +115,6 @@ function Sheet({ title, onClose, children }) {
   );
 }
 
-// One row in the Saved stops list
-function StopCard({ number, time, photoUrl, audioUrl, audioExpired, status, statusText, transcript }) {
-  return (
-    <article className="stop">
-      {photoUrl && <img src={photoUrl} alt="" className="thumb" />}
-      <div className="stop-info">
-        <strong>Stop {number}</strong>
-        <span>{time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
-        <span className={`stop-status is-${status}`}>{statusText}</span>
-        {transcript && <p className="stop-transcript">{transcript}</p>}
-        {audioUrl && <audio controls src={audioUrl} />}
-        {audioExpired && <span className="stop-note">Voice note expired</span>}
-      </div>
-    </article>
-  );
-}
-
-// Turn the stop's cloud status into what the user sees
-function describeStatus(stop) {
-  switch (stop.status) {
-    case "transcribed":
-      return { status: "saved", text: "Saved ✓" };
-    case "transcribing":
-      return { status: "working", text: "Writing it down…" };
-    case "no_speech":
-      return { status: "saved", text: "Saved ✓ · No speech heard" };
-    case "transcription_failed":
-      return { status: "problem", text: "Saved ✓ · Couldn't write out the voice note" };
-    default: {
-      // "uploaded": a brand-new stop is about to be transcribed;
-      // older ones were saved before transcription existed
-      const createdMs = stop.createdAt?.toMillis?.() ?? stop.clientCreatedAt;
-      const isFresh = stop.audioPath && Date.now() - createdMs < 2 * 60 * 1000;
-      return isFresh
-        ? { status: "working", text: "Writing it down…" }
-        : { status: "saved", text: "Saved ✓" };
-    }
-  }
-}
-
-// A stop that's already in the cloud: look up its photo/voice download links
-function CloudStop({ stop, number }) {
-  const [urls, setUrls] = useState({ photo: null, audio: null, loaded: false });
-
-  useEffect(() => {
-    let alive = true;
-    Promise.all([urlFor(stop.photoPath), urlFor(stop.audioPath)]).then(([photo, audio]) => {
-      if (alive) setUrls({ photo, audio, loaded: true });
-    });
-    return () => {
-      alive = false;
-    };
-  }, [stop.photoPath, stop.audioPath]);
-
-  const s = describeStatus(stop);
-
-  return (
-    <StopCard
-      number={number}
-      time={new Date(stop.clientCreatedAt)}
-      photoUrl={urls.photo}
-      audioUrl={urls.audio}
-      audioExpired={urls.loaded && stop.audioPath && !urls.audio}
-      status={s.status}
-      statusText={s.text}
-      transcript={stop.transcript}
-    />
-  );
-}
-
 export default function App() {
   const [pending, setPending] = useState([]); // saved on this phone, not uploaded yet
   const [synced, setSynced] = useState([]); // safely in the cloud
@@ -187,6 +129,7 @@ export default function App() {
   const [jobs, setJobs] = useState([]); // newest first
   const [sheet, setSheet] = useState(null); // { type: "nojob", next } | { type: "end" }
   const [toast, setToast] = useState(null);
+  const [view, setView] = useState("camera"); // "camera" | "jobs"
 
   const fileInput = useRef(null);
   const recorder = useRef(null);
@@ -376,111 +319,117 @@ export default function App() {
     }
   };
 
-  // Combine: phone-only stops + cloud stops (skip duplicates mid-upload), newest first,
-  // then keep only the open job's stops
+  // Combine: phone-only stops + cloud stops (skip duplicates mid-upload)
   const syncedIds = new Set(synced.map((s) => s.id));
-  const jobStops = [
+  const allStops = [
     ...pending.filter((p) => !syncedIds.has(p.id)).map((p) => ({ ...p, isPending: true })),
     ...synced,
-  ]
-    .filter((s) => activeJob && s.jobId === activeJob.id)
-    .sort((a, b) => b.clientCreatedAt - a.clientCreatedAt);
+  ];
+  const jobStops = activeJob ? allStops.filter((s) => s.jobId === activeJob.id) : [];
 
   const stopCount = `${jobStops.length} stop${jobStops.length === 1 ? "" : "s"}`;
+
+  const showView = (v) => {
+    setView(v);
+    window.scrollTo(0, 0);
+  };
 
   return (
     <main className="app">
       <JobBar job={activeJob} />
 
-      <header className="header">
-        <h1>PicTalk</h1>
-        <p className="subtitle">
-          {!activeJob
-            ? "Start a job, then take a picture and say what you see."
-            : jobStops.length === 0
-              ? "Take a picture, then say what you see."
-              : `${stopCount} saved`}
-        </p>
-      </header>
-
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-
-      <section className="current" aria-label="Current stop">
-        {photo ? (
-          <img src={photo.url} alt="Photo for this stop" className="preview" />
-        ) : (
-          <div className="placeholder">Your photo will show here</div>
-        )}
-        {audio && !recording && <audio controls src={audio.url} className="player" />}
-      </section>
-
-      <input
-        ref={fileInput}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        hidden
-        onChange={handlePhoto}
-      />
-
-      <button
-        className="big-btn photo-btn"
-        onClick={takePhoto}
-        disabled={recording}
-      >
-        <CameraIcon />
-        {photo ? "Retake Photo" : "Take Photo"}
-      </button>
-
-      <button
-        className={`big-btn talk-btn${recording ? " is-recording" : ""}`}
-        onClick={talk}
-        aria-pressed={recording}
-      >
-        {recording ? <StopIcon /> : <MicIcon />}
-        {recording ? `Stop  ${formatTime(seconds)}` : audio ? "Talk Again" : "Tap to Talk"}
-      </button>
-
-      <button className="save-btn" onClick={saveStop} disabled={!canSave}>
-        {saving ? "Saving…" : "Save This Stop"}
-      </button>
-
-      {activeJob ? (
-        <section className="saved" aria-label="Saved stops">
-          <h2>
-            Saved stops <span className="count">{stopCount}</span>
-          </h2>
-          {jobStops.length === 0 && <p className="empty">No stops yet in this job.</p>}
-          {jobStops.map((stop, i) => {
-            const number = jobStops.length - i;
-            return stop.isPending ? (
-              <StopCard
-                key={stop.id}
-                number={number}
-                time={new Date(stop.clientCreatedAt)}
-                photoUrl={stop.urls?.photo}
-                audioUrl={stop.urls?.audio}
-                status="pending"
-                statusText={online ? "Uploading…" : "Saved on this phone. Will upload when you're online."}
-              />
-            ) : (
-              <CloudStop key={stop.id} stop={stop} number={number} />
-            );
-          })}
-          <button className="big-btn end-btn" onClick={() => setSheet({ type: "end" })} disabled={recording}>
-            <FlagIcon />
-            End Job
-          </button>
-        </section>
+      {view === "jobs" ? (
+        <JobsScreen
+          jobs={jobs}
+          stops={allStops}
+          activeJobId={activeJob?.id}
+          online={online}
+          onClose={() => showView("camera")}
+        />
       ) : (
-        <button className="big-btn start-btn" onClick={beginJob}>
-          <PlusIcon />
-          Start New Job
-        </button>
+        <>
+          <header className="header">
+            <div className="header-row">
+              <h1>PicTalk</h1>
+              <button className="link-btn" onClick={() => showView("jobs")} disabled={recording}>
+                <ListIcon />
+                My Jobs{jobs.length ? ` (${jobs.length})` : ""}
+              </button>
+            </div>
+            <p className="subtitle">
+              {!activeJob
+                ? "Start a job, then take a picture and say what you see."
+                : jobStops.length === 0
+                  ? "Take a picture, then say what you see."
+                  : `${stopCount} saved`}
+            </p>
+          </header>
+
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
+
+          <section className="current" aria-label="Current stop">
+            {photo ? (
+              <img src={photo.url} alt="Photo for this stop" className="preview" />
+            ) : (
+              <div className="placeholder">Your photo will show here</div>
+            )}
+            {audio && !recording && <audio controls src={audio.url} className="player" />}
+          </section>
+
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            onChange={handlePhoto}
+          />
+
+          <button
+            className="big-btn photo-btn"
+            onClick={takePhoto}
+            disabled={recording}
+          >
+            <CameraIcon />
+            {photo ? "Retake Photo" : "Take Photo"}
+          </button>
+
+          <button
+            className={`big-btn talk-btn${recording ? " is-recording" : ""}`}
+            onClick={talk}
+            aria-pressed={recording}
+          >
+            {recording ? <StopIcon /> : <MicIcon />}
+            {recording ? `Stop  ${formatTime(seconds)}` : audio ? "Talk Again" : "Tap to Talk"}
+          </button>
+
+          <button className="save-btn" onClick={saveStop} disabled={!canSave}>
+            {saving ? "Saving…" : "Save This Stop"}
+          </button>
+
+          {activeJob ? (
+            <section className="saved" aria-label="Saved stops">
+              <h2>
+                Saved stops <span className="count">{stopCount}</span>
+              </h2>
+              {jobStops.length === 0 && <p className="empty">No stops yet in this job.</p>}
+              <StopList stops={jobStops} online={online} newestFirst />
+              <button className="big-btn end-btn" onClick={() => setSheet({ type: "end" })} disabled={recording}>
+                <FlagIcon />
+                End Job
+              </button>
+            </section>
+          ) : (
+            <button className="big-btn start-btn" onClick={beginJob}>
+              <PlusIcon />
+              Start New Job
+            </button>
+          )}
+        </>
       )}
 
       {sheet?.type === "nojob" && (

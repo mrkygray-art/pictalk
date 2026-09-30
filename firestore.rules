@@ -49,6 +49,29 @@ service cloud.firestore {
         }
         allow read, delete: if isOwner();
         allow create, update: if isOwner() && validJob();
+
+        // AI draft summary. Only the generateJobSummary function creates it (Admin SDK);
+        // the owner can read it and edit the text, items, and approval fields.
+        // model, generatedAt, and generationCount stay function-only.
+        match /ai/{docId} {
+          function validSummaryEdit() {
+            let d = request.resource.data;
+            return docId == 'summary'
+              && d.diff(resource.data).affectedKeys().hasOnly([
+                   'summary', 'action_items', 'open_questions', 'status',
+                   'approvedAt', 'approvedBy', 'approvedByUid', 'editedAt'])
+              && d.summary is string && d.summary.size() <= 4000
+              && d.action_items is list && d.action_items.size() <= 50
+              && d.open_questions is list && d.open_questions.size() <= 50
+              && d.status in ['draft', 'approved']
+              && optNumber(d, 'approvedAt') && optNumber(d, 'editedAt')
+              && (d.get('approvedBy', null) == null
+                  || (d.approvedBy is string && d.approvedBy.size() <= 20))
+              && (d.get('approvedByUid', null) == null || d.approvedByUid == uid);
+          }
+          allow read: if isOwner();
+          allow update: if isOwner() && validSummaryEdit();
+        }
       }
     }
   }

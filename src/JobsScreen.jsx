@@ -2,6 +2,7 @@ import { useState } from "react";
 import { StopList } from "./StopCards";
 import JobDetailsFields from "./JobDetailsFields";
 import { jobTitle } from "./jobStore";
+import JobSummary from "./JobSummary";
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const day = (t) => new Date(t).toLocaleDateString([], { month: "short", day: "numeric" });
@@ -42,7 +43,18 @@ function JobCard({ job, stops, isActive, onOpen }) {
   );
 }
 
-function JobDetail({ job, stops, isActive, online, onBack, onCamera, onReopen, onSaveDetails, onStopSelect, onExport }) {
+// Scroll to a stop card and flash it (used by summary items)
+function jumpToStop(id) {
+  const el = document.getElementById(`stop-${id}`);
+  if (!el) return false;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.remove("is-flash");
+  void el.offsetWidth; // restart the animation
+  el.classList.add("is-flash");
+  return true;
+}
+
+function JobDetail({ uid, job, stops, isActive, online, autoSummary, onBack, onCamera, onReopen, onSaveDetails, onStopSelect, onExport, onNotice }) {
   return (
     <>
       <button className="link-btn" onClick={onBack}>
@@ -68,6 +80,16 @@ function JobDetail({ job, stops, isActive, online, onBack, onCamera, onReopen, o
         <PdfIcon />
         Export PDF
       </button>
+      {job.status !== "open" && (
+        <JobSummary
+          uid={uid}
+          job={job}
+          stops={[...stops].sort((a, b) => a.clientCreatedAt - b.clientCreatedAt)}
+          online={online}
+          autoStart={autoSummary}
+          onJumpToStop={(id) => jumpToStop(id) || onNotice("That stop is no longer in this job.")}
+        />
+      )}
       <section className="saved" aria-label="Stops in this job">
         <h2>
           Stops <span className="count">{plural(stops.length, "stop")}</span>
@@ -130,8 +152,11 @@ function JobHeading({ job, onSaveDetails }) {
 }
 
 /** My Jobs list, and the page for one job. */
-export default function JobsScreen({ jobs, stops, activeJobId, online, onClose, onReopen, onSaveDetails, onStopSelect, onExport }) {
-  const [openId, setOpenId] = useState(null);
+export default function JobsScreen({
+  uid, jobs, stops, activeJobId, online, initialJobId, autoSummaryJobId,
+  onClose, onReopen, onSaveDetails, onStopSelect, onExport, onNotice,
+}) {
+  const [openId, setOpenId] = useState(initialJobId ?? null);
   const stopsOf = (id) => stops.filter((s) => s.jobId === id);
   const go = (id) => {
     setOpenId(id);
@@ -152,6 +177,9 @@ export default function JobsScreen({ jobs, stops, activeJobId, online, onClose, 
         onSaveDetails={onSaveDetails}
         onStopSelect={onStopSelect}
         onExport={onExport}
+        onNotice={onNotice}
+        uid={uid}
+        autoSummary={job.id === autoSummaryJobId}
       />
     );
   }

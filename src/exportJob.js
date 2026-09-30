@@ -79,6 +79,22 @@ export async function buildJobExport({ uid, jobId, initials }) {
     .map((s) => ({ ...s, isPending: true }));
   const stops = [...cloud, ...pending].sort((a, b) => a.clientCreatedAt - b.clientCreatedAt);
 
+  // Approved AI summary, if any (a draft is left out of the PDF)
+  const summaryRef = doc(db, 'users', uid, 'jobs', jobId, 'ai', 'summary');
+  const summarySnap = await (offline ? getDocFromCache(summaryRef) : getDoc(summaryRef)).catch(() => null);
+  const ai = summarySnap?.exists() ? summarySnap.data() : null;
+  const indexOf = new Map(stops.map((s, i) => [s.id, i + 1]));
+  const stopRefs = (ids) => (ids || []).map((id) => indexOf.get(id)).filter(Boolean);
+  const summary = ai?.status === 'approved' && typeof ai.summary === 'string'
+    ? {
+        text: ai.summary,
+        actionItems: (ai.action_items || []).map((i) => ({ text: i.text, priority: i.priority || 'medium', stops: stopRefs(i.source_stop_ids) })),
+        openQuestions: (ai.open_questions || []).map((i) => ({ text: i.text, stops: stopRefs(i.source_stop_ids) })),
+        approvedBy: ai.approvedBy || ANONYMOUS_NAME,
+        approvedAt: iso(ai.approvedAt),
+      }
+    : null;
+
   const photoSources = new Map();
   for (const s of stops) {
     if (s.isPending && s.photoBlob) photoSources.set(s.id, { blob: s.photoBlob });
@@ -99,6 +115,7 @@ export async function buildJobExport({ uid, jobId, initials }) {
     endedAt: iso(job.endedAt),
     capturedBy: who, // anonymous accounts: jobs only live on the phone that captured them
     stopCount: stops.length,
+    summary, // null unless an AI summary was approved
     stops: stops.map((s, i) => ({
       id: s.id,
       index: i + 1,

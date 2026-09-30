@@ -9,9 +9,9 @@ function whenLabel(time) {
 }
 
 // One row in a list of stops
-function StopCard({ number, time, photoUrl, audioUrl, audioExpired, status, statusText, transcript, onSelect }) {
+function StopCard({ anchor, number, time, photoUrl, audioUrl, audioExpired, status, statusText, transcript, onSelect }) {
   return (
-    <article className="stop">
+    <article className="stop" id={anchor ? `stop-${anchor}` : undefined}>
       {photoUrl && <img src={photoUrl} alt="" className="thumb" />}
       <div className="stop-info">
         <strong>Stop {number}</strong>
@@ -71,6 +71,7 @@ function CloudStop({ stop, number, onSelect }) {
 
   return (
     <StopCard
+      anchor={stop.id}
       number={number}
       time={new Date(stop.clientCreatedAt)}
       photoUrl={urls.photo}
@@ -97,6 +98,7 @@ export function StopList({ stops, online, newestFirst = false, onSelect }) {
     return stop.isPending ? (
       <StopCard
         key={stop.id}
+        anchor={stop.id}
         number={numberOf.get(stop.id)}
         time={new Date(stop.clientCreatedAt)}
         photoUrl={stop.urls?.photo}

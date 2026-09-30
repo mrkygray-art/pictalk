@@ -74,14 +74,14 @@ export async function renderJobPdf(data, photos) {
       y = M;
     }
   };
-  const text = (str, { size = 11, bold = false, color = INK, gap = 4, width = CONTENT_W } = {}) => {
+  const text = (str, { size = 11, bold = false, color = INK, gap = 4, indent = 0, width = CONTENT_W - indent } = {}) => {
     pdf.setFont('helvetica', bold ? 'bold' : 'normal');
     pdf.setFontSize(size);
     pdf.setTextColor(...color);
     const lineH = size * 1.3;
     for (const line of pdf.splitTextToSize(pdfSafe(str), width)) {
       ensure(lineH);
-      pdf.text(line, M, y + size);
+      pdf.text(line, M + indent, y + size);
       y += lineH;
     }
     y += gap;
@@ -119,6 +119,31 @@ export async function renderJobPdf(data, photos) {
   }
   y += 6;
   rule();
+
+  // ---------- approved AI summary (only when approved) ----------
+  const s = data.summary;
+  if (s) {
+    const stopsNote = (nums) => (nums.length ? ` (Stop ${nums.join(', ')})` : '');
+    const heading = (label) => text(label, { size: 13, bold: true, gap: 4 });
+    heading('Summary');
+    text(s.text, { size: 11, gap: 10 });
+    if (s.actionItems.length) {
+      heading('Action items');
+      for (const item of s.actionItems) {
+        text(`${item.priority.toUpperCase()}  ${item.text}${stopsNote(item.stops)}`, { size: 11, gap: 3, indent: 10 });
+      }
+      y += 7;
+    }
+    if (s.openQuestions.length) {
+      heading('Open questions');
+      for (const q of s.openQuestions) {
+        text(`- ${q.text}${stopsNote(q.stops)}`, { size: 11, gap: 3, indent: 10 });
+      }
+      y += 7;
+    }
+    text(`Summary drafted by AI from the voice notes; reviewed and approved by ${s.approvedBy}${s.approvedAt ? ` on ${fmtDateTime(s.approvedAt)}` : ''}.`, { size: 9, color: MUTED, gap: 6 });
+    rule();
+  }
 
   // ---------- one section per stop ----------
   for (const stop of data.stops) {

@@ -22,7 +22,7 @@ Firebase (needs the Firebase CLI):
 Local testing without touching the live project (needs Java; installed at `C:\Program Files\Microsoft\jdk-21.*`):
 - `firebase emulators:start --only auth,firestore,storage` — uses the local `firestore.rules` / `storage.rules`
 - `VITE_USE_EMULATORS=true npm run dev` — the app connects to the emulators (dev builds only; see `src/firebase.js`)
-- Cloud Functions aren't emulated, so stops never get transcribed locally.
+- To include Functions: `firebase emulators:start --only auth,firestore,storage,functions`. Needs `functions/.secret.local` (`ANTHROPIC_API_KEY=…`, `DEEPGRAM_API_KEY=…`; dummy values are fine) and, to use the no-cost stand-in model instead of the real API, `functions/.env.local` with `PICTALK_FAKE_AI=1` (only honored when `FUNCTIONS_EMULATOR` is set). Both files are git-ignored. `transcribeStop` fails locally (no Deepgram), so write transcripts into the emulator to test summaries.
 
 There is no test suite.
 
@@ -40,6 +40,8 @@ The client-generated UUID is the Firestore doc id, which is how `App.jsx` de-dup
 **Moving/deleting stops** — `moveStop()` / `deleteStop()` in stopStore handle both queued (IndexedDB) and uploaded stops. Moving works offline; deleting an uploaded stop requires signal so its Storage files are removed along with the doc (no orphaned files). UI for jobs lives in `src/JobsScreen.jsx` (My Jobs list, job page, rename, reopen); stop cards are shared via `StopList` in `src/StopCards.jsx`.
 
 **PDF export** — `src/exportJob.js` builds a plain, JSON-safe export object (`buildJobExport`) and loads/downscales photos (1600px, JPEG 0.7); `src/renderJobPdf.js` draws it with jsPDF (lazy-loaded, so it isn't in the main bundle). `ExportSheet.jsx` runs the flow: initials (once, stored in localStorage, blank = "PicTalk user") → progress → Share PDF (Web Share) or Download. Each export increments `exportCount` (the PDF's Rev). Loading photos from Firebase Storage needs the bucket CORS config in `storage-cors.json` (apply with `gcloud storage buckets update gs://pictalk-6cbff.firebasestorage.app --cors-file=storage-cors.json`).
+
+**AI summary** — `functions/summary.js` `generateJobSummary` (callable, `us-west2`) sends a finished job's stop transcripts to the Claude API (`claude-opus-5-5`, effort `low`, structured JSON output, `fallbacks: "default"`) and writes a draft to `users/{uid}/jobs/{jobId}/ai/summary` (`status`, `summary`, `action_items[{id,text,priority,source_stop_ids}]`, `open_questions`, `model`, `generatedAt`, `approvedAt/By/ByUid`, `generationCount`). It never writes stops/photos/audio. Ownership is implicit (it only reads the caller's own `users/{uid}`). Limits: 5 generations per job, 20 per account per day (`users/{uid}/aiUsage/{date}`, function-only). Secret: `ANTHROPIC_API_KEY`. App side: `src/summaryStore.js` + `src/JobSummary.jsx` on the job page (auto-builds right after End Job once transcripts are ready; edits save to Firestore; editing an approved summary returns it to draft). Rules let the owner edit only text/items/approval fields. The PDF includes the summary only when approved.
 
 **Demo limit** — `STOP_LIMIT` (10 stops per job) in `App.jsx`, enforced in the UI only (capture, save, and moving stops into a full job).
 

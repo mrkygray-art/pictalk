@@ -146,6 +146,7 @@ export default function App() {
   const [sheet, setSheet] = useState(null); // { type: "nojob", next } | { type: "end" }
   const [toast, setToast] = useState(null);
   const [view, setView] = useState("camera"); // "camera" | "jobs"
+  const [jobsTarget, setJobsTarget] = useState(null); // { jobId, autoSummary, key } when opening a job directly
   const [deleting, setDeleting] = useState(false);
 
   const fileInput = useRef(null);
@@ -316,6 +317,9 @@ export default function App() {
     clearDraft();
     setSheet(null);
     showToast(`Finished ${jobTitle({ ...activeJob, ...details })}`);
+    // Go straight to the finished job's page, where the AI summary gets built
+    setJobsTarget((t) => ({ jobId: activeJob.id, autoSummary: true, key: (t?.key ?? 0) + 1 }));
+    showView("jobs");
   };
 
   const canSave = activeJob && (photo || audio) && !recording && !saving;
@@ -422,6 +426,11 @@ export default function App() {
 
       {view === "jobs" ? (
         <JobsScreen
+          key={jobsTarget?.key ?? 0}
+          uid={uid}
+          initialJobId={jobsTarget?.jobId}
+          autoSummaryJobId={jobsTarget?.autoSummary ? jobsTarget.jobId : null}
+          onNotice={showToast}
           jobs={jobs}
           stops={allStops}
           activeJobId={activeJob?.id}
@@ -437,7 +446,14 @@ export default function App() {
           <header className="header">
             <div className="header-row">
               <h1>PicTalk</h1>
-              <button className="link-btn" onClick={() => showView("jobs")} disabled={recording}>
+              <button
+                className="link-btn"
+                onClick={() => {
+                  setJobsTarget((t) => ({ key: (t?.key ?? 0) + 1 })); // open on the list
+                  showView("jobs");
+                }}
+                disabled={recording}
+              >
                 <ListIcon />
                 My Jobs{jobs.length ? ` (${jobs.length})` : ""}
               </button>

@@ -11,6 +11,9 @@ setGlobalOptions({ region: "us-west2", maxInstances: 10 });
 
 const DEEPGRAM_API_KEY = defineSecret("DEEPGRAM_API_KEY");
 
+// AI summary and action items for a finished job (callable from the app)
+exports.generateJobSummary = require("./summary").generateJobSummary;
+
 exports.transcribeStop = onDocumentCreated(
   {
     document: "users/{uid}/stops/{stopId}",

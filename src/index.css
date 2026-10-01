@@ -1382,3 +1382,54 @@ button:focus-visible {
   outline: none;
   border-color: var(--blue);
 }
+
+/* AI summary shown as text, edited in a sheet */
+.summary-text {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.item-text {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.priority-tag {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  vertical-align: 2px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.priority-tag.is-high {
+  background: var(--red);
+  color: #ffffff;
+}
+
+.priority-tag.is-medium {
+  background: var(--orange);
+  color: #000000;
+}
+
+.item-edit {
+  margin-left: auto;
+}
+
+.regen-link {
+  font-size: 16px;
+  padding: 8px 12px;
+}
+
+.regen-link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

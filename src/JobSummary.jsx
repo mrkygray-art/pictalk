@@ -27,8 +27,6 @@ const tidy = (d) => ({
   action_items: d.action_items.filter((i) => i.text.trim()).map((i) => ({ ...i, text: i.text.trim() })),
   open_questions: d.open_questions.filter((i) => i.text.trim()).map((i) => ({ ...i, text: i.text.trim() })),
 });
-const rowsFor = (text) => Math.max(2, Math.ceil((text || "").length / 34));
-
 function StopLinks({ ids, numberOf, onJump }) {
   if (!ids.length) return null;
   return (
@@ -42,40 +40,103 @@ function StopLinks({ ids, numberOf, onJump }) {
   );
 }
 
-function ItemEditor({ item, kind, numberOf, onText, onBlur, onPriority, onRemove, onJump }) {
+// One action item as plain text, with an Edit button
+function ItemRow({ item, numberOf, onEdit, onJump }) {
   return (
     <li className="summary-item">
-      {kind === "action" && (
+      <p className="item-text">
+        <span className={`priority-tag is-${item.priority}`}>{PRIORITY_LABEL[item.priority] || "Medium"}</span>
+        {item.text}
+      </p>
+      <div className="item-foot">
+        <StopLinks ids={item.source_stop_ids} numberOf={numberOf} onJump={onJump} />
+        <button type="button" className="stop-more item-edit" onClick={onEdit}>
+          Edit
+        </button>
+      </div>
+    </li>
+  );
+}
+
+// Edit the summary paragraph: one text box, Save or Cancel
+function SummarySheet({ text, onSave, onClose }) {
+  const [value, setValue] = useState(text);
+  return (
+    <Sheet title="Edit summary" onClose={onClose}>
+      <form
+        className="sheet-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSave(value);
+        }}
+      >
+        <textarea
+          className="words-field"
+          value={value}
+          rows={8}
+          maxLength={2000}
+          aria-label="Summary"
+          onChange={(e) => setValue(e.target.value)}
+        />
+        <button type="submit" className="save-btn" disabled={!value.trim()}>
+          Save
+        </button>
+        <button type="button" className="big-btn plain-btn" onClick={onClose}>
+          Cancel
+        </button>
+      </form>
+    </Sheet>
+  );
+}
+
+// Edit or add an action item: priority, text, Save / Cancel (and Remove for an existing one)
+function ItemSheet({ item, onSave, onRemove, onClose }) {
+  const [text, setText] = useState(item?.text || "");
+  const [priority, setPriority] = useState(item?.priority || "medium");
+  return (
+    <Sheet title={item ? "Edit action item" : "New action item"} onClose={onClose}>
+      <form
+        className="sheet-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSave({ text, priority });
+        }}
+      >
         <div className="priority-row" role="group" aria-label="Priority">
           {PRIORITIES.map((p) => (
             <button
               key={p}
               type="button"
-              className={`priority-btn is-${p}${item.priority === p ? " is-on" : ""}`}
-              aria-pressed={item.priority === p}
-              onClick={() => onPriority(p)}
+              className={`priority-btn is-${p}${priority === p ? " is-on" : ""}`}
+              aria-pressed={priority === p}
+              onClick={() => setPriority(p)}
             >
               {PRIORITY_LABEL[p]}
             </button>
           ))}
         </div>
-      )}
-      <textarea
-        className="summary-field"
-        value={item.text}
-        rows={rowsFor(item.text)}
-        placeholder={kind === "action" ? "What needs to be done" : "What still needs an answer"}
-        aria-label="Action item"
-        onChange={(e) => onText(e.target.value)}
-        onBlur={onBlur}
-      />
-      <div className="item-foot">
-        <StopLinks ids={item.source_stop_ids} numberOf={numberOf} onJump={onJump} />
-        <button type="button" className="remove-btn" onClick={onRemove}>
-          Remove
+        <textarea
+          className="words-field"
+          value={text}
+          rows={4}
+          maxLength={300}
+          placeholder="What needs to be done"
+          aria-label="Action item"
+          onChange={(e) => setText(e.target.value)}
+        />
+        <button type="submit" className="save-btn" disabled={!text.trim()}>
+          Save
         </button>
-      </div>
-    </li>
+        <button type="button" className="big-btn plain-btn" onClick={onClose}>
+          Cancel
+        </button>
+        {item && (
+          <button type="button" className="big-btn plain-btn is-danger" onClick={onRemove}>
+            Remove This Item
+          </button>
+        )}
+      </form>
+    </Sheet>
   );
 }
 
@@ -90,16 +151,15 @@ export default function JobSummary({ uid, job, stops, online, autoStart, notes, 
   const [error, setError] = useState("");
   const [confirmRegen, setConfirmRegen] = useState(false);
   const [removed, setRemoved] = useState(null); // { list, index, item } for Undo
+  const [editor, setEditor] = useState(null); // "summary" | { index } (index -1 = new item)
   const [now, setNow] = useState(() => Date.now());
-  const dirty = useRef(false);
   const autoTried = useRef(false);
 
   useEffect(() => {
     if (!uid) return;
     return watchSummary(uid, job.id, (data) => {
       setSummaryDoc(data);
-      // Don't overwrite what the user is typing
-      if (hasSummary(data) && !dirty.current) setDraft(toDraft(data));
+      if (hasSummary(data)) setDraft(toDraft(data));
     });
   }, [uid, job.id]);
 
@@ -128,7 +188,6 @@ export default function JobSummary({ uid, job, stops, online, autoStart, notes, 
     setBusy(true);
     try {
       await requestSummary(job.id);
-      dirty.current = false;
     } catch (err) {
       setError(err.message);
     } finally {
@@ -147,17 +206,15 @@ export default function JobSummary({ uid, job, stops, online, autoStart, notes, 
   const commit = (next) => {
     const clean = tidy(next);
     setDraft(clean);
-    dirty.current = false;
     saveSummaryEdits(uid, job.id, clean);
   };
-  const edit = (next) => {
-    dirty.current = true;
-    setDraft(next);
+  const saveItem = (index, { text, priority }) => {
+    const items =
+      index < 0
+        ? [...draft.action_items, { id: `u${Date.now()}`, text, priority, source_stop_ids: [] }]
+        : draft.action_items.map((it, i) => (i === index ? { ...it, text, priority } : it));
+    commit({ ...draft, action_items: items });
   };
-  const setItem = (list, index, patch) => ({
-    ...draft,
-    [list]: draft[list].map((it, i) => (i === index ? { ...it, ...patch } : it)),
-  });
   const removeItem = (list, index) => {
     setRemoved({ list, index, item: draft[list][index] });
     commit({ ...draft, [list]: draft[list].filter((_, i) => i !== index) });
@@ -169,17 +226,9 @@ export default function JobSummary({ uid, job, stops, online, autoStart, notes, 
     setRemoved(null);
     commit({ ...draft, [list]: items });
   };
-  const addItem = (list) => {
-    const item = { id: `u${Date.now()}`, text: "", source_stop_ids: [] };
-    if (list === "action_items") item.priority = "medium";
-    edit({ ...draft, [list]: [...draft[list], item] });
-  };
   const approve = () => {
-    const clean = tidy(draft);
-    const hadEdits = dirty.current;
-    setDraft(clean);
-    dirty.current = false;
-    approveSummary(uid, job.id, clean, getSavedInitials() || ANONYMOUS_NAME, hadEdits);
+    // Edits are saved as they're made, so approving never adds new ones
+    approveSummary(uid, job.id, tidy(draft), getSavedInitials() || ANONYMOUS_NAME);
   };
 
   if (summaryDoc === undefined) return null;
@@ -240,7 +289,7 @@ export default function JobSummary({ uid, job, stops, online, autoStart, notes, 
           Approved by {summaryDoc.approvedBy || ANONYMOUS_NAME} · {when(summaryDoc.approvedAt)}. Editing puts it back to draft.
         </p>
       ) : (
-        <p className="summary-meta">Written by AI from your voice notes. Check it, fix anything wrong, then approve it.</p>
+        <p className="summary-meta">Written by AI from your voice notes. Check it, tap Edit to fix anything wrong, then approve it.</p>
       )}
       {outOfDate && !busy && (
         <div className="summary-stale" role="status">
@@ -253,34 +302,26 @@ export default function JobSummary({ uid, job, stops, online, autoStart, notes, 
       {busy && <p className="summary-status is-busy" role="status">Building a new summary…</p>}
       {error && <p className="summary-error" role="alert">{error}</p>}
 
-      <textarea
-        className="summary-field is-summary"
-        value={draft.summary}
-        rows={rowsFor(draft.summary)}
-        aria-label="Summary"
-        onChange={(e) => edit({ ...draft, summary: e.target.value })}
-        onBlur={() => dirty.current && commit(draft)}
-      />
+      <p className="summary-text">{draft.summary}</p>
+      <button type="button" className="stop-more" onClick={() => setEditor("summary")}>
+        Edit summary
+      </button>
 
       <h3>
         Action items <span className="count">{draft.action_items.length}</span>
       </h3>
       <ul className="summary-list">
         {draft.action_items.map((item, i) => (
-          <ItemEditor
+          <ItemRow
             key={item.id}
             item={item}
-            kind="action"
             numberOf={numberOf}
-            onText={(text) => edit(setItem("action_items", i, { text }))}
-            onBlur={() => dirty.current && commit(draft)}
-            onPriority={(priority) => commit(setItem("action_items", i, { priority }))}
-            onRemove={() => removeItem("action_items", i)}
+            onEdit={() => setEditor({ index: i })}
             onJump={onJumpToStop}
           />
         ))}
       </ul>
-      <button type="button" className="add-btn" onClick={() => addItem("action_items")}>
+      <button type="button" className="add-btn" onClick={() => setEditor({ index: -1 })}>
         + Add action item
       </button>
 
@@ -298,8 +339,8 @@ export default function JobSummary({ uid, job, stops, online, autoStart, notes, 
           Approve Summary
         </button>
       )}
-      <button className="big-btn plain-btn" onClick={() => setConfirmRegen(true)} disabled={busy || !online || left === 0}>
-        Regenerate
+      <button type="button" className="text-btn regen-link" onClick={() => setConfirmRegen(true)} disabled={busy || !online || left === 0}>
+        Regenerate summary
       </button>
       <p className="summary-meta">
         {left === 0
@@ -307,6 +348,31 @@ export default function JobSummary({ uid, job, stops, online, autoStart, notes, 
           : `${left} of ${PER_JOB_LIMIT} summaries left for this job.`}
         {!online && " Regenerating needs signal."}
       </p>
+
+      {editor === "summary" && (
+        <SummarySheet
+          text={draft.summary}
+          onClose={() => setEditor(null)}
+          onSave={(text) => {
+            commit({ ...draft, summary: text });
+            setEditor(null);
+          }}
+        />
+      )}
+      {editor?.index !== undefined && (
+        <ItemSheet
+          item={editor.index < 0 ? null : draft.action_items[editor.index]}
+          onClose={() => setEditor(null)}
+          onSave={(item) => {
+            saveItem(editor.index, item);
+            setEditor(null);
+          }}
+          onRemove={() => {
+            removeItem("action_items", editor.index);
+            setEditor(null);
+          }}
+        />
+      )}
 
       {confirmRegen && (
         <Sheet title={handEdited ? "Regenerate?" : "Regenerate the summary?"} onClose={() => setConfirmRegen(false)}>

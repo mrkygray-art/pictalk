@@ -14,9 +14,12 @@ service cloud.firestore {
           return d.keys().hasOnly(['jobId', 'photoPath', 'audioPath', 'audioType', 'audioExpiresAt',
                                    'note', 'transcript', 'status', 'clientCreatedAt', 'createdAt',
                                    'transcriptConfidence', 'audioSeconds', 'transcriptModel',
-                                   'transcribedAt', 'transcriptError'])
+                                   'transcribedAt', 'transcriptError',
+                                   'editedTranscript', 'transcriptEditedAt'])
             && d.note is string && d.note.size() < 2000
             && (d.get('jobId', null) == null || (d.jobId is string && d.jobId.size() <= 64))
+            && (d.get('editedTranscript', null) == null
+                || (d.editedTranscript is string && d.editedTranscript.size() <= 5000))
             && (d.photoPath == null || d.photoPath is string)
             && (d.audioPath == null || d.audioPath is string);
         }

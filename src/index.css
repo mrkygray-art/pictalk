@@ -1356,3 +1356,29 @@ button:focus-visible {
     animation: none;
   }
 }
+
+/* stop card actions and the edit-words sheet */
+.stop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.words-field {
+  width: 100%;
+  min-height: 160px;
+  padding: 14px 16px;
+  font-family: inherit;
+  font-size: 19px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 3px solid var(--surface-2);
+  border-radius: 16px;
+  resize: vertical;
+}
+
+.words-field:focus {
+  outline: none;
+  border-color: var(--blue);
+}

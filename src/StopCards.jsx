@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { urlFor } from "./stopStore";
+import { urlFor, stopText } from "./stopStore";
 
 // "7:24 PM" for today, "Sep 28, 7:24 PM" for other days
 function whenLabel(time) {
@@ -9,7 +9,7 @@ function whenLabel(time) {
 }
 
 // One row in a list of stops
-function StopCard({ anchor, number, time, photoUrl, audioUrl, audioExpired, status, statusText, transcript, onSelect }) {
+function StopCard({ anchor, number, time, photoUrl, audioUrl, audioExpired, status, statusText, transcript, onSelect, onEdit }) {
   return (
     <article className="stop" id={anchor ? `stop-${anchor}` : undefined}>
       {photoUrl && <img src={photoUrl} alt="" className="thumb" />}
@@ -20,10 +20,19 @@ function StopCard({ anchor, number, time, photoUrl, audioUrl, audioExpired, stat
         {transcript && <p className="stop-transcript">{transcript}</p>}
         {audioUrl && <audio controls src={audioUrl} />}
         {audioExpired && <span className="stop-note">Voice note expired</span>}
-        {onSelect && (
-          <button className="stop-more" onClick={() => onSelect({ number, photoUrl })}>
-            Move or Delete
-          </button>
+        {(onEdit || onSelect) && (
+          <div className="stop-actions">
+            {onEdit && (
+              <button className="stop-more" onClick={onEdit}>
+                Edit words
+              </button>
+            )}
+            {onSelect && (
+              <button className="stop-more" onClick={() => onSelect({ number, photoUrl })}>
+                Move or Delete
+              </button>
+            )}
+          </div>
         )}
       </div>
     </article>
@@ -54,7 +63,7 @@ function describeStatus(stop) {
 }
 
 // A stop that's already in the cloud: look up its photo/voice download links
-function CloudStop({ stop, number, onSelect }) {
+function CloudStop({ stop, number, onSelect, onEdit }) {
   const [urls, setUrls] = useState({ photo: null, audio: null, loaded: false });
 
   useEffect(() => {
@@ -79,8 +88,9 @@ function CloudStop({ stop, number, onSelect }) {
       audioExpired={urls.loaded && stop.audioPath && !urls.audio}
       status={s.status}
       statusText={s.text}
-      transcript={stop.transcript}
+      transcript={stopText(stop)}
       onSelect={onSelect}
+      onEdit={onEdit}
     />
   );
 }
@@ -88,7 +98,7 @@ function CloudStop({ stop, number, onSelect }) {
 // Phone-only and cloud stops together. Stops are numbered in the order they were
 // taken (Stop 1 is the first); newestFirst only changes the display order.
 // onSelect(stop, { number, photoUrl }) adds a "Move or Delete" button to each card.
-export function StopList({ stops, online, newestFirst = false, onSelect }) {
+export function StopList({ stops, online, newestFirst = false, onSelect, onEdit }) {
   const inOrder = [...stops].sort((a, b) => a.clientCreatedAt - b.clientCreatedAt);
   const shown = newestFirst ? [...inOrder].reverse() : inOrder;
   const numberOf = new Map(inOrder.map((s, i) => [s.id, i + 1]));
@@ -108,7 +118,14 @@ export function StopList({ stops, online, newestFirst = false, onSelect }) {
         onSelect={select}
       />
     ) : (
-      <CloudStop key={stop.id} stop={stop} number={numberOf.get(stop.id)} onSelect={select} />
+      <CloudStop
+        key={stop.id}
+        stop={stop}
+        number={numberOf.get(stop.id)}
+        onSelect={select}
+        // Words can be corrected once there's a transcript
+        onEdit={onEdit && (stop.transcript || stop.editedTranscript != null) ? () => onEdit(stop, numberOf.get(stop.id)) : undefined}
+      />
     );
   });
 }

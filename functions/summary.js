@@ -78,6 +78,9 @@ Rules:
 
 const db = () => getFirestore();
 
+// A stop's words: the user's correction if there is one, else the transcript
+const stopWords = (s) => (s.editedTranscript ?? s.transcript ?? "").trim();
+
 /** A stop is still being transcribed if it has audio and hasn't finished yet. */
 function isTranscriptPending(stop, now) {
   if (!stop.audioPath) return false;
@@ -234,7 +237,7 @@ exports.generateJobSummary = onCall(
     if (waiting) {
       throw new HttpsError("failed-precondition", `${waiting} voice note${waiting === 1 ? " is" : "s are"} still being written down. Try again in a minute.`, { waiting });
     }
-    if (!stops.some((s) => (s.transcript || "").trim()) && !noteText("field") && !noteText("customer")) {
+    if (!stops.some((s) => stopWords(s)) && !noteText("field") && !noteText("customer")) {
       throw new HttpsError("failed-precondition", "This job has no voice notes or wrap-up notes to summarize yet.");
     }
 
@@ -251,8 +254,8 @@ exports.generateJobSummary = onCall(
         id: s.id,
         photo: !!s.photoPath,
         timestamp: s.clientCreatedAt ? new Date(s.clientCreatedAt).toISOString() : null,
-        transcript: (s.transcript || "").trim() || null,
-        ...((s.transcript || "").trim() ? {} : { note: "no transcript" }),
+        transcript: stopWords(s) || null,
+        ...(stopWords(s) ? {} : { note: "no transcript" }),
       })),
     };
     // Valid sources for items: the stops, plus whichever wrap-up notes have text
@@ -298,6 +301,7 @@ exports.generateJobSummary = onCall(
         model: result.model,
         generatedAt: Date.now(),
         notesUsed: { field: input.field_notes, customer: input.customer_comments },
+        stopsUsed: Object.fromEntries(stops.map((s) => [s.id, stopWords(s) || null])),
         approvedAt: null,
         approvedBy: null,
         approvedByUid: null,

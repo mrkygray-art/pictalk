@@ -66,6 +66,23 @@ export async function updatePendingStop(id, patch) {
   return true;
 }
 
+// ---------- corrected words ----------
+/** The words for a stop: the user's correction if there is one, else the transcript. */
+export const stopText = (stop) => (stop?.editedTranscript ?? stop?.transcript ?? '').trim();
+
+/**
+ * Save the user's corrected words. The original transcript is kept untouched; the
+ * correction is stored next to it and used everywhere. Works offline (syncs later).
+ */
+export function saveStopText(uid, stop, text) {
+  const words = String(text || '').trim().slice(0, 5000);
+  return updateDoc(doc(db, 'users', uid, 'stops', stop.id), {
+    // Saving the original words again simply clears the correction
+    editedTranscript: words === (stop.transcript || '').trim() ? null : words,
+    transcriptEditedAt: Date.now(),
+  }).catch((err) => console.warn('Saving corrected words failed:', err));
+}
+
 // ---------- moving and deleting ----------
 /** Put a stop into a different job. Works offline. */
 export async function moveStop(uid, stop, jobId) {

@@ -9,6 +9,8 @@ import {
   onQueueChange,
   moveStop,
   deleteStop,
+  saveStopText,
+  stopText,
 } from "./stopStore";
 import {
   watchJobs, startJob, endJob, reopenJob, setJobDetails, touchJob, migrateEarlierStops, jobTitle,
@@ -103,6 +105,37 @@ function JobBar({ job }) {
 
 // Demo limit: keeps storage and transcription costs small while PicTalk is a public demo
 const STOP_LIMIT = 10;
+
+// Correct a stop's words: one text box, Save or Cancel
+function EditWordsSheet({ stop, number, onSave, onClose }) {
+  const [words, setWords] = useState(stopText(stop));
+  return (
+    <Sheet title={`Stop ${number} words`} onClose={onClose}>
+      <form
+        className="sheet-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSave(words);
+        }}
+      >
+        <textarea
+          className="words-field"
+          value={words}
+          rows={6}
+          maxLength={5000}
+          aria-label={`Stop ${number} words`}
+          onChange={(e) => setWords(e.target.value)}
+        />
+        <button type="submit" className="save-btn">
+          Save
+        </button>
+        <button type="button" className="big-btn plain-btn" onClick={onClose}>
+          Cancel
+        </button>
+      </form>
+    </Sheet>
+  );
+}
 
 // End Job: optional Customer and Location, then finish
 function EndJobSheet({ uid, job, hasDraft, online, onFinish, onClose }) {
@@ -393,6 +426,7 @@ export default function App() {
 
   // Stop options: move to another job, or delete
   const selectStop = (stop, { number, photoUrl }) => setSheet({ type: "stop", stop, number, photoUrl });
+  const editWords = (stop, number) => setSheet({ type: "words", stop, number });
 
   const moveTo = async (stop, job) => {
     setSheet(null);
@@ -450,6 +484,7 @@ export default function App() {
           onSaveDetails={saveDetails}
           onExport={(job) => setSheet({ type: "export", job })}
           onStopSelect={selectStop}
+          onStopEdit={editWords}
         />
       ) : (
         <>
@@ -540,7 +575,7 @@ export default function App() {
                 Saved stops <span className="count">{stopCount}</span>
               </h2>
               {jobStops.length === 0 && <p className="empty">No stops yet in this job.</p>}
-              <StopList stops={jobStops} online={online} newestFirst onSelect={selectStop} />
+              <StopList stops={jobStops} online={online} newestFirst onSelect={selectStop} onEdit={editWords} />
               <button className="big-btn end-btn" onClick={() => setSheet({ type: "end" })} disabled={recording}>
                 <FlagIcon />
                 End Job
@@ -585,6 +620,19 @@ export default function App() {
             Cancel
           </button>
         </Sheet>
+      )}
+
+      {sheet?.type === "words" && (
+        <EditWordsSheet
+          stop={sheet.stop}
+          number={sheet.number}
+          onClose={() => setSheet(null)}
+          onSave={(words) => {
+            saveStopText(uid, sheet.stop, words);
+            setSheet(null);
+            showToast("Words saved");
+          }}
+        />
       )}
 
       {sheet?.type === "stop" && (

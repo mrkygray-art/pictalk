@@ -5,6 +5,7 @@ import {
   isTranscriptPending, PRIORITIES,
 } from "./summaryStore";
 import { describeNote } from "./wrapUpStore";
+import { stopText } from "./stopStore";
 
 // Summary items can cite a wrap-up note instead of a stop
 const NOTE_LABEL = { field_notes: "Field notes", customer_comments: "Customer comments" };
@@ -111,7 +112,7 @@ export default function JobSummary({ uid, job, stops, online, autoStart, notes, 
   const notesWaiting = Object.values(noteViews).filter((v) => v.status === "waiting-upload" || v.status === "transcribing").length;
   const waiting = stops.filter((s) => isTranscriptPending(s, now)).length + notesWaiting;
   // The summary is written from speech; stops without it (photo only, no speech heard) add nothing
-  const hasSpeech = stops.some((s) => (s.transcript || "").trim()) || !!noteViews.field.text || !!noteViews.customer.text;
+  const hasSpeech = stops.some((s) => stopText(s)) || !!noteViews.field.text || !!noteViews.customer.text;
   const used = summaryDoc?.generationCount || 0;
   const left = Math.max(0, PER_JOB_LIMIT - used);
 
@@ -213,9 +214,16 @@ export default function JobSummary({ uid, job, stops, online, autoStart, notes, 
   const approved = summaryDoc.status === "approved";
   // Out of date: the wrap-up notes changed since this summary was written
   const notesUsed = summaryDoc.notesUsed || {};
+  // ...or a stop's words were corrected (summaries written before this was tracked skip it)
+  const stopsUsed = summaryDoc.stopsUsed;
+  const stopsChanged =
+    !!stopsUsed &&
+    stops.some((s) => !s.isPending && Object.hasOwn(stopsUsed, s.id) && (stopsUsed[s.id] || "") !== stopText(s));
   const outOfDate =
     !notesWaiting &&
-    ((notesUsed.field || "") !== noteViews.field.text || (notesUsed.customer || "") !== noteViews.customer.text);
+    ((notesUsed.field || "") !== noteViews.field.text ||
+      (notesUsed.customer || "") !== noteViews.customer.text ||
+      stopsChanged);
   const handEdited = !!summaryDoc.editedAt;
   return (
     <section className="summary-card" aria-label="AI summary">
@@ -236,7 +244,7 @@ export default function JobSummary({ uid, job, stops, online, autoStart, notes, 
       )}
       {outOfDate && !busy && (
         <div className="summary-stale" role="status">
-          <p>Wrap-up notes changed since this summary was written.</p>
+          <p>Your notes changed since this summary was written.</p>
           <button className="big-btn photo-btn" onClick={() => setConfirmRegen(true)} disabled={!online || left === 0}>
             Regenerate summary
           </button>

@@ -138,13 +138,6 @@ export async function renderJobPdf(data, photos) {
       }
       y += 7;
     }
-    if (s.openQuestions.length) {
-      heading('Open questions');
-      for (const q of s.openQuestions) {
-        text(`- ${q.text}${stopsNote(q.stops, q.notes)}`, { size: 11, gap: 3, indent: 10 });
-      }
-      y += 7;
-    }
     text(`Summary drafted by AI from the voice notes${s.usedWrapUpNotes ? ' and wrap-up notes' : ''}; reviewed and approved by ${s.approvedBy}${s.approvedAt ? ` on ${fmtDateTime(s.approvedAt)}` : ''}.`, { size: 9, color: MUTED, gap: 6 });
     rule();
   }

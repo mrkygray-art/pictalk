@@ -65,7 +65,7 @@ function ItemEditor({ item, kind, numberOf, onText, onBlur, onPriority, onRemove
         value={item.text}
         rows={rowsFor(item.text)}
         placeholder={kind === "action" ? "What needs to be done" : "What still needs an answer"}
-        aria-label={kind === "action" ? "Action item" : "Open question"}
+        aria-label="Action item"
         onChange={(e) => onText(e.target.value)}
         onBlur={onBlur}
       />
@@ -282,27 +282,6 @@ export default function JobSummary({ uid, job, stops, online, autoStart, notes, 
       </ul>
       <button type="button" className="add-btn" onClick={() => addItem("action_items")}>
         + Add action item
-      </button>
-
-      <h3>
-        Open questions <span className="count">{draft.open_questions.length}</span>
-      </h3>
-      <ul className="summary-list">
-        {draft.open_questions.map((item, i) => (
-          <ItemEditor
-            key={item.id}
-            item={item}
-            kind="question"
-            numberOf={numberOf}
-            onText={(text) => edit(setItem("open_questions", i, { text }))}
-            onBlur={() => dirty.current && commit(draft)}
-            onRemove={() => removeItem("open_questions", i)}
-            onJump={onJumpToStop}
-          />
-        ))}
-      </ul>
-      <button type="button" className="add-btn" onClick={() => addItem("open_questions")}>
-        + Add question
       </button>
 
       {removed && (

@@ -92,7 +92,6 @@ export async function buildJobExport({ uid, jobId, initials }) {
     ? {
         text: ai.summary,
         actionItems: (ai.action_items || []).map((i) => ({ text: i.text, priority: i.priority || 'medium', stops: stopRefs(i.source_stop_ids), notes: noteRefs(i.source_stop_ids) })),
-        openQuestions: (ai.open_questions || []).map((i) => ({ text: i.text, stops: stopRefs(i.source_stop_ids), notes: noteRefs(i.source_stop_ids) })),
         approvedBy: ai.approvedBy || ANONYMOUS_NAME,
         approvedAt: iso(ai.approvedAt),
         usedWrapUpNotes: !!(ai.notesUsed?.field || ai.notesUsed?.customer),

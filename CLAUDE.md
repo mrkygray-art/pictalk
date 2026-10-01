@@ -47,6 +47,8 @@ The client-generated UUID is the Firestore doc id, which is how `App.jsx` de-dup
 
 **Edit words** — each transcribed stop card has an Edit words button (sheet in `App.jsx`). `saveStopText()` writes `editedTranscript` + `transcriptEditedAt` next to the untouched `transcript` (saving the original words again sets it back to null). Always show a stop's words with `stopText(stop)` (edited first); the cards, PDF, and summary use only the final words, with no "edited" label. The summary stores `stopsUsed` so a later edit shows "out of date".
 
+**Microphone choice** — `src/micChoice.js` `openMic()` replaces `getUserMedia({ audio: true })` in both recorders. On computers (`pointer: fine`) with 2+ mics, `MicPicker.jsx` shows "Microphone: … · Change" under Tap to Talk; the choice is kept in localStorage (`pictalk-mic`, id + label) and asked for with `deviceId: { exact }`. If the id fails it's looked up by label, then falls back to the default mic. (Firefox doesn't reliably reuse the mic picked in its permission prompt.)
+
 **Demo limit** — `STOP_LIMIT` (10 stops per job) in `App.jsx`, enforced in the UI only (capture, save, and moving stops into a full job).
 
 **Auth** — anonymous only (`startSession()` in `src/firebase.js`). Firestore uses `persistentLocalCache`.

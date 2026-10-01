@@ -1433,3 +1433,27 @@ button:focus-visible {
   opacity: 0.5;
   cursor: default;
 }
+
+/* microphone choice (computers with more than one mic) */
+.mic-line {
+  margin: -4px 0 0;
+  font-size: 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.mic-line strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.mic-choice {
+  font-size: 18px;
+  text-align: left;
+  padding: 12px 18px;
+}
+
+.mic-choice.is-on {
+  border-color: var(--blue);
+  color: var(--blue);
+}

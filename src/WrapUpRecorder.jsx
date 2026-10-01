@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { NOTE_TYPES, formatDuration } from "./wrapUpStore";
 import { openLiveStream } from "./liveTranscribe";
+import { openMic } from "./micChoice";
 
 // Same format choice as stops: iPhone records mp4, Android/Chrome records webm/opus
 function pickAudioType() {
@@ -188,7 +189,7 @@ export default function WrapUpRecorder({ type, jobLabel, mode, initialText, cons
   const startNew = async () => {
     setError("");
     try {
-      stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.current = await openMic();
       const mimeType = pickAudioType();
       const rec = new MediaRecorder(stream.current, mimeType ? { mimeType } : undefined);
       chunks.current = [];

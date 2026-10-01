@@ -22,6 +22,8 @@ import WrapUpNotes from "./WrapUpNotes";
 import useWrapUpNotes from "./useWrapUpNotes";
 import { startNoteAutoSync } from "./wrapUpStore";
 import Sheet from "./Sheet";
+import MicPicker from "./MicPicker";
+import { openMic } from "./micChoice";
 import ExportSheet from "./ExportSheet";
 
 // Pick an audio format this phone's browser can record (iPhone uses mp4, Android/Chrome uses webm)
@@ -275,7 +277,7 @@ export default function App() {
   const startRecording = async () => {
     setError("");
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await openMic();
       const mimeType = pickAudioType();
       const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       chunks.current = [];
@@ -562,6 +564,7 @@ export default function App() {
               {recording ? <StopIcon /> : <MicIcon />}
               {recording ? `Stop  ${formatTime(seconds)}` : audio ? "Talk Again" : "Tap to Talk"}
             </button>
+            <MicPicker disabled={recording} />
 
             <button className="save-btn" onClick={saveStop} disabled={!canSave}>
               {saving ? "Saving…" : "Save This Stop"}

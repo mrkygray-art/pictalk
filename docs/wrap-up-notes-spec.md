@@ -30,7 +30,7 @@ Each note is its own recording. While recording, the user sees a **live transcri
 
 ## 2. Out of scope (for this spec)
 
-- AI summary generation itself (separate spec) — this spec only stores the notes in a shape the summary can use
+- Rebuilding the AI summary. **PicTalk already has a working AI summary** (summary text, action items, open questions, Draft/Approved status, PDF job report). Keep it exactly as it works today; this spec only feeds wrap-up notes into it (see §7)
 - Voice commands / hands-free Live mode for stops
 - Speaker diarization (each note is one recording, one label)
 - Customer share link
@@ -184,22 +184,34 @@ Site walks often have poor signal (basements, mechanical rooms, parking structur
 
 ---
 
-## 7. Summary integration (for the future AI summary spec)
+## 7. Integrate with the EXISTING AI summary (do not rebuild it)
 
-When the summary is built, it must:
-- Treat wrap-up notes as the **highest-priority input**, stop transcripts as supporting detail
-- Work when the job has **only** wrap-up notes and no stop audio
-- Label where each point came from: `From field notes`, `From customer comments`, `From Stop 3`
-- Keep customer comments distinct from the user's own judgments
+PicTalk already generates an AI summary after End Job, with: summary text, Action items (+ Add action item), Open questions, an editable summary box, Draft → Approved status ("Approved by KG · date. Editing puts it back to draft."), and a PDF job report ("Summary drafted by AI from the voice notes; reviewed and approved by …"). **Keep all of this working as-is.** Before changing anything, Claude Code must find and summarize how the current summary is generated (prompt, inputs, where it's stored, when it runs).
 
-No summary code in this spec — just make sure the data above supports it.
+Changes:
+
+1. **Add wrap-up notes as inputs** to the existing summary prompt, alongside stop transcripts:
+   - Wrap-up notes are the **highest-priority input**; stop transcripts are supporting detail
+   - Label inputs in the prompt so the model can attribute points: `FIELD NOTES`, `CUSTOMER COMMENTS`, `STOP 1 (photo count, transcript)`, etc.
+   - The summary must still work when the job has **only** wrap-up notes and no stop audio
+   - Keep customer statements distinct from the user's own judgments (e.g. "Customer requested…" vs. "Field notes flag…")
+   - Action items and open questions should draw from wrap-up notes first
+
+2. **Never overwrite an edited or approved summary silently.**
+   - If a wrap-up note is added, edited, or deleted after the summary exists, mark the summary as **out of date** and show a **Regenerate summary** button
+   - Regenerating an **Approved** summary returns it to **Draft** (matches the existing "editing puts it back to draft" rule)
+   - If the user has hand-edited the summary text, confirm before regenerating: "Regenerate? Your edits to the summary will be replaced."
+
+3. **PDF job report:** add a **Wrap-up notes** section after Summary / Open questions, with `Field notes` and `Customer comments` as labeled sub-sections (text only; note that original audio is kept in PicTalk). Keep the existing header table and the AI/approval footer line.
+
+4. **Approval footer wording:** when wrap-up notes were used, the footer can read "Summary drafted by AI from the voice notes and wrap-up notes; reviewed and approved by …".
 
 ---
 
 ## 8. Build milestones (ship each one before starting the next)
 
 **M1 — UI + batch only (no streaming)**
-Screens 1–4, data model, Storage upload, existing batch transcription on Done, edit/pause/continue, discard/delete confirms, consent card. Fully usable on its own.
+Screens 1–4, data model, Storage upload, existing batch transcription on Done, edit/pause/continue, discard/delete confirms, consent card, and §7 integration with the existing AI summary and PDF report. Fully usable on its own.
 
 **M2 — Live streaming**
 Token Cloud Function, WebSocket streaming, interim/final rendering, pause/continue reconnect logic, Wake Lock.
@@ -224,6 +236,10 @@ Quiet prompt chips under the transcript: `Next steps`, `Who follows up`, `Open q
 - [ ] Re-opening a note appends to it rather than creating a duplicate
 - [ ] Deepgram API key is not present anywhere in client code or network responses
 - [ ] Works on iPhone Safari and Android Chrome
+- [ ] Existing AI summary, action items, open questions, Draft/Approved flow, and PDF report still work exactly as before on jobs with no wrap-up notes
+- [ ] A job with only wrap-up notes (no stop audio) produces a useful summary with action items
+- [ ] Adding/editing a wrap-up note after approval flags the summary as out of date; regenerating returns it to Draft
+- [ ] PDF report includes a Wrap-up notes section when notes exist
 
 ## 10. Test plan
 

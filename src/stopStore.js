@@ -10,11 +10,11 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db, storage } from './firebase';
 
 const QUEUE_PREFIX = 'pending-stop:';
-const VOICE_DAYS = 5; // matches the Storage lifecycle rule on voice/
+export const VOICE_DAYS = 5; // matches the Storage lifecycle rule on voice/
 export const EARLIER_JOB_ID = 'earlier'; // job for stops saved before jobs existed
 
-const baseType = (t) => (t || 'application/octet-stream').split(';')[0];
-function extFor(type = '') {
+export const baseType = (t) => (t || 'application/octet-stream').split(';')[0];
+export function extFor(type = '') {
   if (type.includes('jpeg') || type.includes('jpg')) return 'jpg';
   if (type.includes('png')) return 'png';
   if (type.includes('heic')) return 'heic';

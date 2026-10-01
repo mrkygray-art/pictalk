@@ -4,6 +4,10 @@ import {
   watchSummary, hasSummary, requestSummary, saveSummaryEdits, approveSummary,
   isTranscriptPending, PRIORITIES,
 } from "./summaryStore";
+import { describeNote } from "./wrapUpStore";
+
+// Summary items can cite a wrap-up note instead of a stop
+const NOTE_LABEL = { field_notes: "Field notes", customer_comments: "Customer comments" };
 import { getSavedInitials, ANONYMOUS_NAME } from "./exportJob";
 
 const PER_JOB_LIMIT = 5; // matches the Cloud Function
@@ -30,7 +34,7 @@ function StopLinks({ ids, numberOf, onJump }) {
     <div className="stop-links">
       {ids.map((id) => (
         <button key={id} type="button" className="stop-link" onClick={() => onJump(id)}>
-          {numberOf.has(id) ? `Stop ${numberOf.get(id)}` : "Stop removed"} ›
+          {NOTE_LABEL[id] || (numberOf.has(id) ? `Stop ${numberOf.get(id)}` : "Stop removed")} ›
         </button>
       ))}
     </div>
@@ -78,7 +82,7 @@ function ItemEditor({ item, kind, numberOf, onText, onBlur, onPriority, onRemove
  * Summary section on a finished job's page: builds the AI draft (automatically right
  * after End Job, otherwise with a button), then lets the user edit and approve it.
  */
-export default function JobSummary({ uid, job, stops, online, autoStart, onJumpToStop }) {
+export default function JobSummary({ uid, job, stops, online, autoStart, notes, onJumpToStop }) {
   const [summaryDoc, setSummaryDoc] = useState(undefined); // undefined = loading, null = none
   const [draft, setDraft] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -99,9 +103,15 @@ export default function JobSummary({ uid, job, stops, online, autoStart, onJumpT
   }, [uid, job.id]);
 
   const numberOf = new Map(stops.map((s, i) => [s.id, i + 1]));
-  const waiting = stops.filter((s) => isTranscriptPending(s, now)).length;
+  // Wrap-up notes count as input too (their words, or still being written down)
+  const noteViews = {
+    field: describeNote(notes?.notes.field, notes?.pending.field),
+    customer: describeNote(notes?.notes.customer, notes?.pending.customer),
+  };
+  const notesWaiting = Object.values(noteViews).filter((v) => v.status === "waiting-upload" || v.status === "transcribing").length;
+  const waiting = stops.filter((s) => isTranscriptPending(s, now)).length + notesWaiting;
   // The summary is written from speech; stops without it (photo only, no speech heard) add nothing
-  const hasSpeech = stops.some((s) => (s.transcript || "").trim());
+  const hasSpeech = stops.some((s) => (s.transcript || "").trim()) || !!noteViews.field.text || !!noteViews.customer.text;
   const used = summaryDoc?.generationCount || 0;
   const left = Math.max(0, PER_JOB_LIMIT - used);
 
@@ -128,7 +138,7 @@ export default function JobSummary({ uid, job, stops, online, autoStart, onJumpT
   // Right after End Job: build automatically once everything is ready
   useEffect(() => {
     if (!autoStart || autoTried.current || summaryDoc !== null || busy) return;
-    if (waiting || !online || !stops.some((s) => (s.transcript || "").trim())) return;
+    if (waiting || !online || !hasSpeech) return;
     autoTried.current = true;
     Promise.resolve().then(build);
   });
@@ -165,9 +175,10 @@ export default function JobSummary({ uid, job, stops, online, autoStart, onJumpT
   };
   const approve = () => {
     const clean = tidy(draft);
+    const hadEdits = dirty.current;
     setDraft(clean);
     dirty.current = false;
-    approveSummary(uid, job.id, clean, getSavedInitials() || ANONYMOUS_NAME);
+    approveSummary(uid, job.id, clean, getSavedInitials() || ANONYMOUS_NAME, hadEdits);
   };
 
   if (summaryDoc === undefined) return null;
@@ -178,7 +189,7 @@ export default function JobSummary({ uid, job, stops, online, autoStart, onJumpT
     if (busy) status = "Building summary… this can take up to a minute.";
     else if (waiting) status = `Waiting for ${waiting} voice note${waiting === 1 ? "" : "s"} to upload and be written down…`;
     else if (!hasSpeech) {
-      status = "No summary for this job: the AI summary is written from what you say at each stop, and none of these stops have spoken notes.";
+      status = "No summary for this job: the AI summary is written from what you say at each stop or in wrap-up notes, and this job has none.";
     } else if (!online) status = "Building a summary needs signal.";
     return (
       <section className="summary-card" aria-label="AI summary">
@@ -200,6 +211,12 @@ export default function JobSummary({ uid, job, stops, online, autoStart, onJumpT
 
   // ---------- review and edit ----------
   const approved = summaryDoc.status === "approved";
+  // Out of date: the wrap-up notes changed since this summary was written
+  const notesUsed = summaryDoc.notesUsed || {};
+  const outOfDate =
+    !notesWaiting &&
+    ((notesUsed.field || "") !== noteViews.field.text || (notesUsed.customer || "") !== noteViews.customer.text);
+  const handEdited = !!summaryDoc.editedAt;
   return (
     <section className="summary-card" aria-label="AI summary">
       <div className="summary-head">
@@ -216,6 +233,14 @@ export default function JobSummary({ uid, job, stops, online, autoStart, onJumpT
         </p>
       ) : (
         <p className="summary-meta">Written by AI from your voice notes. Check it, fix anything wrong, then approve it.</p>
+      )}
+      {outOfDate && !busy && (
+        <div className="summary-stale" role="status">
+          <p>Wrap-up notes changed since this summary was written.</p>
+          <button className="big-btn photo-btn" onClick={() => setConfirmRegen(true)} disabled={!online || left === 0}>
+            Regenerate summary
+          </button>
+        </div>
       )}
       {busy && <p className="summary-status is-busy" role="status">Building a new summary…</p>}
       {error && <p className="summary-error" role="alert">{error}</p>}
@@ -297,10 +322,13 @@ export default function JobSummary({ uid, job, stops, online, autoStart, onJumpT
       </p>
 
       {confirmRegen && (
-        <Sheet title="Regenerate the summary?" onClose={() => setConfirmRegen(false)}>
+        <Sheet title={handEdited ? "Regenerate?" : "Regenerate the summary?"} onClose={() => setConfirmRegen(false)}>
           <p>
-            The AI writes a new draft from your voice notes. It replaces the current summary
-            {approved ? ", which will need approving again" : ", including any edits you made"}.
+            {handEdited
+              ? "Your edits to the summary will be replaced."
+              : "The AI writes a new draft from your voice notes and wrap-up notes. It replaces the current summary"}
+            {handEdited ? "" : "."}
+            {approved ? " It will go back to draft and need approving again." : ""}
           </p>
           <button
             className="big-btn danger-btn"

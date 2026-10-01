@@ -63,13 +63,16 @@ export function saveSummaryEdits(uid, jobId, { summary, action_items, open_quest
   }).catch((err) => console.warn('Saving summary edits failed:', err));
 }
 
-/** Approve the summary as currently written (saves any unsaved edits in the same write). */
-export function approveSummary(uid, jobId, { summary, action_items, open_questions }, approvedBy) {
+/**
+ * Approve the summary as currently written (saves any unsaved edits in the same write).
+ * editedAt is only set when there were edits, so "hand-edited" stays accurate.
+ */
+export function approveSummary(uid, jobId, { summary, action_items, open_questions }, approvedBy, hadEdits = false) {
   return updateDoc(summaryRef(uid, jobId), {
     summary,
     action_items,
     open_questions,
-    editedAt: Date.now(),
+    ...(hadEdits ? { editedAt: Date.now() } : {}),
     status: 'approved',
     approvedAt: Date.now(),
     approvedBy,

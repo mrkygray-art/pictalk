@@ -72,6 +72,29 @@ service cloud.firestore {
           allow read: if isOwner();
           allow update: if isOwner() && validSummaryEdit();
         }
+
+        // Wrap-up notes: one per type ("field" / "customer"), owner only like the job.
+        // The app adds audio pieces and the user's text; transcribeWrapUpNote (Admin SDK)
+        // fills in transcripts.
+        match /wrapUpNotes/{noteType} {
+          function validNote() {
+            let d = request.resource.data;
+            return noteType in ['field', 'customer']
+              && d.keys().hasOnly(['type', 'segments', 'durationSec', 'liveTranscript',
+                                   'batchTranscript', 'text', 'transcriptSource', 'edited',
+                                   'consentShown', 'createdBy', 'createdAt', 'updatedAt'])
+              && d.type == noteType
+              && (d.get('segments', []) is list && d.get('segments', []).size() <= 20)
+              && (d.get('text', '') is string && d.get('text', '').size() <= 20000)
+              && (d.get('edited', false) is bool)
+              && (d.get('consentShown', false) is bool)
+              && (d.get('durationSec', 0) is number)
+              && (d.get('createdBy', uid) == uid)
+              && optNumber(d, 'createdAt') && optNumber(d, 'updatedAt');
+          }
+          allow read, delete: if isOwner();
+          allow create, update: if isOwner() && validNote();
+        }
       }
     }
   }

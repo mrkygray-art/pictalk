@@ -86,15 +86,24 @@ export async function buildJobExport({ uid, jobId, initials }) {
   const ai = summarySnap?.exists() ? summarySnap.data() : null;
   const indexOf = new Map(stops.map((s, i) => [s.id, i + 1]));
   const stopRefs = (ids) => (ids || []).map((id) => indexOf.get(id)).filter(Boolean);
+  const NOTE_LABELS = { field_notes: 'Field notes', customer_comments: 'Customer comments' };
+  const noteRefs = (ids) => (ids || []).map((id) => NOTE_LABELS[id]).filter(Boolean);
   const summary = ai?.status === 'approved' && typeof ai.summary === 'string'
     ? {
         text: ai.summary,
-        actionItems: (ai.action_items || []).map((i) => ({ text: i.text, priority: i.priority || 'medium', stops: stopRefs(i.source_stop_ids) })),
-        openQuestions: (ai.open_questions || []).map((i) => ({ text: i.text, stops: stopRefs(i.source_stop_ids) })),
+        actionItems: (ai.action_items || []).map((i) => ({ text: i.text, priority: i.priority || 'medium', stops: stopRefs(i.source_stop_ids), notes: noteRefs(i.source_stop_ids) })),
+        openQuestions: (ai.open_questions || []).map((i) => ({ text: i.text, stops: stopRefs(i.source_stop_ids), notes: noteRefs(i.source_stop_ids) })),
         approvedBy: ai.approvedBy || ANONYMOUS_NAME,
         approvedAt: iso(ai.approvedAt),
+        usedWrapUpNotes: !!(ai.notesUsed?.field || ai.notesUsed?.customer),
       }
     : null;
+
+  // Wrap-up notes (text only; the audio stays in PicTalk)
+  const notesCol = collection(db, 'users', uid, 'jobs', jobId, 'wrapUpNotes');
+  const notesSnap = await (offline ? getDocsFromCache(notesCol) : getDocs(notesCol)).catch(() => null);
+  const noteText = (type) => ((notesSnap?.docs.find((d) => d.id === type)?.data().text) || '').trim() || null;
+  const wrapUpNotes = { field: noteText('field'), customer: noteText('customer') };
 
   const photoSources = new Map();
   for (const s of stops) {
@@ -117,6 +126,7 @@ export async function buildJobExport({ uid, jobId, initials }) {
     capturedBy: who, // anonymous accounts: jobs only live on the phone that captured them
     stopCount: stops.length,
     summary, // null unless an AI summary was approved
+    wrapUpNotes: wrapUpNotes.field || wrapUpNotes.customer ? wrapUpNotes : null,
     stops: stops.map((s, i) => ({
       id: s.id,
       index: i + 1,

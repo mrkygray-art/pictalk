@@ -16,6 +16,9 @@ import {
 import { StopList } from "./StopCards";
 import JobsScreen from "./JobsScreen";
 import JobDetailsFields from "./JobDetailsFields";
+import WrapUpNotes from "./WrapUpNotes";
+import useWrapUpNotes from "./useWrapUpNotes";
+import { startNoteAutoSync } from "./wrapUpStore";
 import Sheet from "./Sheet";
 import ExportSheet from "./ExportSheet";
 
@@ -102,8 +105,12 @@ function JobBar({ job }) {
 const STOP_LIMIT = 10;
 
 // End Job: optional Customer and Location, then finish
-function EndJobSheet({ job, hasDraft, onFinish, onClose }) {
+function EndJobSheet({ uid, job, hasDraft, online, onFinish, onClose }) {
   const [details, setDetails] = useState({ customer: job.customer || "", location: job.location || "" });
+  const notes = useWrapUpNotes(uid, job.id);
+  const hasNotes = !!(notes.notes.field || notes.notes.customer || notes.pending.field.length || notes.pending.customer.length);
+  // The recorder shows "Customer – Location" as typed so far
+  const jobLabel = [details.customer.trim(), details.location.trim()].filter(Boolean).join(" – ") || jobTitle(job);
   return (
     <Sheet title={`Finish ${jobTitle(job)}?`} onClose={onClose}>
       <form
@@ -115,9 +122,10 @@ function EndJobSheet({ job, hasDraft, onFinish, onClose }) {
       >
         <p>Add who and where this job was for. Both are optional.</p>
         <JobDetailsFields customer={details.customer} location={details.location} onChange={setDetails} />
+        <WrapUpNotes uid={uid} job={job} jobLabel={jobLabel} data={notes} online={online} />
         <p>
           {hasDraft ? "Your unsaved photo and voice note will be thrown away. " : ""}
-          The stops you saved stay saved.
+          The stops you saved stay saved.{hasNotes ? " Wrap-up notes go into the job summary." : ""}
         </p>
         <button type="submit" className="big-btn danger-btn">
           <FlagIcon />
@@ -161,6 +169,7 @@ export default function App() {
 
     // Keep retrying uploads (on reconnect, app reopen, every minute)
     const stopAutoSync = startAutoSync();
+    const stopNoteSync = startNoteAutoSync(); // wrap-up notes recorded on this phone
 
     // Reload the "on this phone" list whenever the queue changes
     const refreshPending = async () => {
@@ -212,6 +221,7 @@ export default function App() {
     return () => {
       clearInterval(timer.current);
       stopAutoSync();
+      stopNoteSync();
       stopQueueWatch();
       stopAuthWatch();
       stopCloudWatch();
@@ -559,7 +569,7 @@ export default function App() {
       )}
 
       {sheet?.type === "end" && activeJob && (
-        <EndJobSheet job={activeJob} hasDraft={!!(photo || audio)} onFinish={finishJob} onClose={() => setSheet(null)} />
+        <EndJobSheet uid={uid} job={activeJob} hasDraft={!!(photo || audio)} online={online} onFinish={finishJob} onClose={() => setSheet(null)} />
       )}
 
       {sheet?.type === "reopen" && (

@@ -123,25 +123,42 @@ export async function renderJobPdf(data, photos) {
   // ---------- approved AI summary (only when approved) ----------
   const s = data.summary;
   if (s) {
-    const stopsNote = (nums) => (nums.length ? ` (Stop ${nums.join(', ')})` : '');
+    // Where an item came from: " (Stop 1, 3, Field notes)"
+    const stopsNote = (nums, notes = []) => {
+      const parts = [...(nums.length ? [`Stop ${nums.join(', ')}`] : []), ...notes];
+      return parts.length ? ` (${parts.join(', ')})` : '';
+    };
     const heading = (label) => text(label, { size: 13, bold: true, gap: 4 });
     heading('Summary');
     text(s.text, { size: 11, gap: 10 });
     if (s.actionItems.length) {
       heading('Action items');
       for (const item of s.actionItems) {
-        text(`${item.priority.toUpperCase()}  ${item.text}${stopsNote(item.stops)}`, { size: 11, gap: 3, indent: 10 });
+        text(`${item.priority.toUpperCase()}  ${item.text}${stopsNote(item.stops, item.notes)}`, { size: 11, gap: 3, indent: 10 });
       }
       y += 7;
     }
     if (s.openQuestions.length) {
       heading('Open questions');
       for (const q of s.openQuestions) {
-        text(`- ${q.text}${stopsNote(q.stops)}`, { size: 11, gap: 3, indent: 10 });
+        text(`- ${q.text}${stopsNote(q.stops, q.notes)}`, { size: 11, gap: 3, indent: 10 });
       }
       y += 7;
     }
-    text(`Summary drafted by AI from the voice notes; reviewed and approved by ${s.approvedBy}${s.approvedAt ? ` on ${fmtDateTime(s.approvedAt)}` : ''}.`, { size: 9, color: MUTED, gap: 6 });
+    text(`Summary drafted by AI from the voice notes${s.usedWrapUpNotes ? ' and wrap-up notes' : ''}; reviewed and approved by ${s.approvedBy}${s.approvedAt ? ` on ${fmtDateTime(s.approvedAt)}` : ''}.`, { size: 9, color: MUTED, gap: 6 });
+    rule();
+  }
+
+  // ---------- wrap-up notes (when the job has any) ----------
+  const w = data.wrapUpNotes;
+  if (w) {
+    text('Wrap-up notes', { size: 13, bold: true, gap: 4 });
+    for (const [label, body] of [['Field notes', w.field], ['Customer comments', w.customer]]) {
+      if (!body) continue;
+      text(label, { size: 11, bold: true, color: MUTED, gap: 2 });
+      text(body, { size: 11, gap: 8 });
+    }
+    text('Text only. The original audio is kept in PicTalk for 5 days.', { size: 9, color: MUTED, gap: 6 });
     rule();
   }
 

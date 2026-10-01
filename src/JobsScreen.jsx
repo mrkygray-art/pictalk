@@ -3,6 +3,8 @@ import { StopList } from "./StopCards";
 import JobDetailsFields from "./JobDetailsFields";
 import { jobTitle } from "./jobStore";
 import JobSummary from "./JobSummary";
+import WrapUpNotes from "./WrapUpNotes";
+import useWrapUpNotes from "./useWrapUpNotes";
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const day = (t) => new Date(t).toLocaleDateString([], { month: "short", day: "numeric" });
@@ -43,9 +45,12 @@ function JobCard({ job, stops, isActive, onOpen }) {
   );
 }
 
-// Scroll to a stop card and flash it (used by summary items)
+// Summary items can cite a wrap-up note instead of a stop
+const NOTE_SOURCES = { field_notes: "wrapup-field", customer_comments: "wrapup-customer" };
+
+// Scroll to a stop card (or wrap-up note card) and flash it (used by summary items)
 function jumpToStop(id) {
-  const el = document.getElementById(`stop-${id}`);
+  const el = document.getElementById(NOTE_SOURCES[id] || `stop-${id}`);
   if (!el) return false;
   el.scrollIntoView({ behavior: "smooth", block: "center" });
   el.classList.remove("is-flash");
@@ -55,6 +60,8 @@ function jumpToStop(id) {
 }
 
 function JobDetail({ uid, job, stops, isActive, online, autoSummary, onBack, onCamera, onReopen, onSaveDetails, onStopSelect, onExport, onNotice }) {
+  const notes = useWrapUpNotes(uid, job.id);
+  const hasNotes = !!(notes.notes.field || notes.notes.customer || notes.pending.field.length || notes.pending.customer.length);
   return (
     <>
       <button className="link-btn" onClick={onBack}>
@@ -76,7 +83,7 @@ function JobDetail({ uid, job, stops, isActive, online, autoSummary, onBack, onC
           Reopen This Job
         </button>
       )}
-      <button className="big-btn plain-btn" onClick={() => onExport(job)} disabled={stops.length === 0}>
+      <button className="big-btn plain-btn" onClick={() => onExport(job)} disabled={stops.length === 0 && !hasNotes}>
         <PdfIcon />
         Export PDF
       </button>
@@ -87,9 +94,18 @@ function JobDetail({ uid, job, stops, isActive, online, autoSummary, onBack, onC
           stops={[...stops].sort((a, b) => a.clientCreatedAt - b.clientCreatedAt)}
           online={online}
           autoStart={autoSummary}
-          onJumpToStop={(id) => jumpToStop(id) || onNotice("That stop is no longer in this job.")}
+          notes={notes}
+          onJumpToStop={(id) => jumpToStop(id) || onNotice("That stop or note is no longer in this job.")}
         />
       )}
+      <WrapUpNotes
+        uid={uid}
+        job={job}
+        jobLabel={jobTitle(job)}
+        data={notes}
+        online={online}
+        helper={hasNotes ? "Wrap-up notes go into the job summary." : null}
+      />
       <section className="saved" aria-label="Stops in this job">
         <h2>
           Stops <span className="count">{plural(stops.length, "stop")}</span>

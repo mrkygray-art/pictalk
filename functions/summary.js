@@ -228,7 +228,7 @@ exports.generateJobSummary = onCall(
     const noteText = (type) => (notes[type]?.text || "").trim() || null;
     const now = Date.now();
     const noteWaiting = Object.values(notes).filter((n) =>
-      (n.segments || []).some((seg) => ["uploaded", "transcribing"].includes(seg.status) && now - (seg.createdAt || 0) < 5 * 60 * 1000)
+      (n.segments || []).some((seg) => ["uploaded", "live", "transcribing"].includes(seg.status) && now - (seg.createdAt || 0) < 5 * 60 * 1000)
     ).length;
     const waiting = stops.filter((s) => isTranscriptPending(s, now)).length + noteWaiting;
     if (waiting) {

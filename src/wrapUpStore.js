@@ -52,7 +52,7 @@ export async function getPendingPieces(jobId) {
 }
 
 /** Save a finished recording session on the phone (instant), then try to upload it. */
-export async function queuePiece({ jobId, type, blob, durationSec, consentShown }) {
+export async function queuePiece({ jobId, type, blob, durationSec, consentShown, liveTranscript = '', streamOk = false, textIncluded = false }) {
   const piece = {
     id: crypto.randomUUID(),
     jobId,
@@ -61,6 +61,9 @@ export async function queuePiece({ jobId, type, blob, durationSec, consentShown 
     audioType: baseType(blob.type || 'audio/webm'),
     durationSec: Math.max(0, Math.round(durationSec)),
     consentShown: !!consentShown,
+    liveTranscript: String(liveTranscript || '').slice(0, 20000),
+    streamOk: !!streamOk,
+    textIncluded: !!textIncluded,
     createdAt: Date.now(),
     attempts: 0,
   };
@@ -113,7 +116,11 @@ async function uploadPiece(uid, piece) {
         audioType: piece.audioType,
         durationSec: piece.durationSec,
         audioExpiresAt: piece.createdAt + VOICE_DAYS * 86400000,
-        status: 'uploaded', // the Cloud Function picks it up from here
+        // "live": the live stream stayed connected, so its words are the transcript.
+        // "uploaded": the Cloud Function transcribes the full audio (batch fallback).
+        status: piece.streamOk && (piece.liveTranscript || '').trim() ? 'live' : 'uploaded',
+        liveTranscript: piece.liveTranscript || '',
+        textIncluded: !!piece.textIncluded,
         transcript: null,
         createdAt: piece.createdAt,
       }),
@@ -192,7 +199,7 @@ export function describeNote(note, pending = []) {
   let status = 'ready';
   if (!segments.length && !pending.length && !text) status = 'empty';
   else if (pending.length) status = 'waiting-upload';
-  else if (segments.some((s) => s.status === 'uploaded' || s.status === 'transcribing')) status = 'transcribing';
+  else if (segments.some((s) => ['uploaded', 'live', 'transcribing'].includes(s.status))) status = 'transcribing';
   else if (!text && segments.length && segments.every((s) => s.status === 'no_speech')) status = 'no-speech';
   else if (!text && segments.some((s) => s.status === 'transcription_failed')) status = 'failed';
   return { text, durationSec, status, edited: !!note?.edited, exists: !!note || pending.length > 0 };

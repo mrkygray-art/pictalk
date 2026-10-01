@@ -1324,3 +1324,35 @@ button:focus-visible {
   font-size: 18px;
   color: var(--muted);
 }
+
+/* live transcription */
+.rec-pill.is-live {
+  background: rgba(48, 209, 88, 0.18);
+  color: #30d158;
+}
+
+.rec-interim {
+  color: #8e8e93;
+}
+
+.rec-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  margin-left: 3px;
+  vertical-align: text-bottom;
+  background: #64a8ff;
+  animation: rec-blink 1s steps(2, start) infinite;
+}
+
+@keyframes rec-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rec-caret {
+    animation: none;
+  }
+}

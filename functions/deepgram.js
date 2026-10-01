@@ -45,4 +45,4 @@ async function transcribeAudio(audio, contentType) {
   };
 }
 
-module.exports = { DEEPGRAM_API_KEY, KEYTERMS, transcribeAudio };
+module.exports = { DEEPGRAM_API_KEY, KEYTERMS, MODEL, transcribeAudio };

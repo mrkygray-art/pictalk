@@ -130,10 +130,20 @@ export default function WrapUpNotes({ uid, job, jobLabel, data, online, helper }
 
   const finish = async (type, result) => {
     setRecorder(null);
-    // Text first, so a new recording's words are appended after what the user typed
-    if (result.textChanged) await saveNoteText(uid, job.id, type, result.text);
+    // If the user typed, their text (which already holds this session's live words) is
+    // saved first; otherwise the server builds the text from the transcripts.
+    if (result.userEdited) await saveNoteText(uid, job.id, type, result.text);
     if (result.blob) {
-      await queuePiece({ jobId: job.id, type, blob: result.blob, durationSec: result.durationSec, consentShown: result.consentShown });
+      await queuePiece({
+        jobId: job.id,
+        type,
+        blob: result.blob,
+        durationSec: result.durationSec,
+        consentShown: result.consentShown,
+        liveTranscript: result.liveTranscript,
+        streamOk: result.streamOk,
+        textIncluded: result.userEdited,
+      });
     }
   };
 

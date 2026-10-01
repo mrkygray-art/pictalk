@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { NOTE_TYPES, formatDuration } from "./wrapUpStore";
+import { openLiveStream } from "./liveTranscribe";
 
 // Same format choice as stops: iPhone records mp4, Android/Chrome records webm/opus
 function pickAudioType() {
@@ -39,23 +40,42 @@ const Icon = {
  * Full-screen recorder for one wrap-up note.
  * mode "record": consent card first (customer comments, first time), then recording.
  * mode "edit": opens on the text editor; "Continue recording" starts a new audio piece.
- * onDone({ blob, durationSec, text, textChanged, consentShown }) / onDiscard().
- * M1: no live transcript yet; the words are written down after Done.
+ * While recording, words appear live (Deepgram streaming): finished words in white,
+ * words still being worked out in gray. The full audio is always recorded on the phone,
+ * so if the live connection fails or drops, the words are written down after Done.
+ * onDone({ blob, durationSec, text, userEdited, liveTranscript, streamOk, consentShown }) / onDiscard().
  */
 export default function WrapUpRecorder({ type, jobLabel, mode, initialText, consentNeeded, onDone, onDiscard }) {
   const info = NOTE_TYPES[type];
   const [phase, setPhase] = useState(mode === "edit" ? "editing" : consentNeeded ? "consent" : "starting");
   const [seconds, setSeconds] = useState(0);
   const [text, setText] = useState(initialText || "");
+  const [interim, setInterim] = useState("");
+  const [live, setLive] = useState("idle"); // idle | connecting | live | offline
   const [error, setError] = useState("");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [consentShown, setConsentShown] = useState(false);
   const [hasRecording, setHasRecording] = useState(false); // a recording was started this session
-  const recorder = useRef(null);
+  const [userEdited, setUserEdited] = useState(false);
+  const recorder = useRef(null); // the full recording (kept and uploaded)
   const chunks = useRef([]);
   const stream = useRef(null);
   const wakeLock = useRef(null);
   const textArea = useRef(null);
+  const transcriptBox = useRef(null);
+  // Live transcription
+  const textRef = useRef(initialText || "");
+  const liveWords = useRef(""); // this session's finished live words
+  const newParagraph = useRef(false);
+  const liveConn = useRef(null);
+  const streamRec = useRef(null); // one per live connection, so each starts with a full audio header
+  const everLive = useRef(false);
+  const streamBroken = useRef(false);
+  const phaseRef = useRef(phase);
+  const startedOnce = useRef(false); // the first start must run exactly once
+  useEffect(() => {
+    phaseRef.current = phase;
+  });
 
   const recording = phase === "recording";
 
@@ -81,6 +101,12 @@ export default function WrapUpRecorder({ type, jobLabel, mode, initialText, cons
     };
   }, [recording]);
 
+  // Keep the newest words in view
+  useEffect(() => {
+    const box = transcriptBox.current;
+    if (box) box.scrollTop = box.scrollHeight;
+  }, [text, interim]);
+
   // Escape shouldn't reach the End Job sheet underneath
   useEffect(() => {
     const onKey = (e) => {
@@ -92,11 +118,72 @@ export default function WrapUpRecorder({ type, jobLabel, mode, initialText, cons
     return () => document.removeEventListener("keydown", onKey, true);
   }, []);
 
-  // Release the mic if the screen goes away mid-recording
+  // Release the mic and the live connection if the screen goes away mid-recording
   useEffect(() => () => {
+    if (streamRec.current && streamRec.current.state !== "inactive") streamRec.current.stop();
+    liveConn.current?.finish();
     if (recorder.current && recorder.current.state !== "inactive") recorder.current.stop();
     stream.current?.getTracks().forEach((t) => t.stop());
   }, []);
+
+  const appendFinal = (words) => {
+    const base = textRef.current.trimEnd();
+    const sep = !base ? "" : newParagraph.current ? "\n\n" : " ";
+    newParagraph.current = false;
+    textRef.current = base + sep + words;
+    setText(textRef.current);
+    liveWords.current = liveWords.current ? liveWords.current + (sep || " ") + words : words;
+  };
+
+  const stopStreamRecorder = () => {
+    if (streamRec.current && streamRec.current.state !== "inactive") streamRec.current.stop();
+    streamRec.current = null;
+  };
+
+  const startLive = async () => {
+    setLive("connecting");
+    try {
+      const conn = await openLiveStream({
+        onInterim: setInterim,
+        onFinal: appendFinal,
+        onUtteranceEnd: () => {
+          newParagraph.current = true;
+        },
+        onDrop: () => {
+          streamBroken.current = true;
+          stopStreamRecorder();
+          liveConn.current = null;
+          setInterim("");
+          setLive("offline");
+        },
+      });
+      if (phaseRef.current !== "recording" || !stream.current) {
+        await conn.finish(); // paused or finished while connecting
+        return;
+      }
+      liveConn.current = conn;
+      const mimeType = pickAudioType();
+      const sr = new MediaRecorder(stream.current, mimeType ? { mimeType } : undefined);
+      sr.ondataavailable = (e) => conn.send(e.data);
+      sr.start(250); // ~250 ms chunks
+      streamRec.current = sr;
+      everLive.current = true;
+      setLive("live");
+    } catch (err) {
+      console.warn("Live transcription unavailable; recording continues:", err?.message || err);
+      streamBroken.current = true;
+      setLive("offline");
+    }
+  };
+
+  const stopLive = async () => {
+    stopStreamRecorder();
+    const conn = liveConn.current;
+    liveConn.current = null;
+    if (conn) await conn.finish(); // waits briefly for the last finished words
+    setInterim("");
+    setLive((l) => (l === "offline" ? "offline" : "idle"));
+  };
 
   const startNew = async () => {
     setError("");
@@ -106,32 +193,41 @@ export default function WrapUpRecorder({ type, jobLabel, mode, initialText, cons
       const rec = new MediaRecorder(stream.current, mimeType ? { mimeType } : undefined);
       chunks.current = [];
       rec.ondataavailable = (e) => e.data.size && chunks.current.push(e.data);
-      rec.start(250); // small chunks, ready for live streaming later
+      rec.start(250);
       recorder.current = rec;
       setHasRecording(true);
+      phaseRef.current = "recording";
       setPhase("recording");
+      startLive();
     } catch {
       setError("PicTalk needs your microphone. Tap Allow when your phone asks, or turn it on in your browser settings.");
       setPhase(mode === "edit" ? "editing" : "paused");
     }
   };
 
-  // First start (after consent, if needed)
+  // First start (after consent, if needed). Guarded: effects can run more than once,
+  // and a second start would open a second mic recorder and live connection.
   useEffect(() => {
-    if (phase === "starting") Promise.resolve().then(startNew);
+    if (phase !== "starting" || startedOnce.current) return;
+    startedOnce.current = true;
+    Promise.resolve().then(startNew);
   });
 
   const pause = () => {
     if (recorder.current?.state === "recording") recorder.current.pause();
+    phaseRef.current = "paused";
     setPhase("paused");
+    stopLive(); // no open connection while paused: no charge for silence
   };
   const resume = () => {
     if (!recorder.current) return startNew();
     if (recorder.current.state === "paused") recorder.current.resume();
+    phaseRef.current = "recording";
     setPhase("recording");
+    startLive(); // new token, new connection; new words go after the existing text
   };
   const openEditor = () => {
-    pause();
+    if (recording) pause();
     setPhase("editing");
     setTimeout(() => textArea.current?.focus(), 50);
   };
@@ -149,35 +245,51 @@ export default function WrapUpRecorder({ type, jobLabel, mode, initialText, cons
     });
 
   const done = async () => {
+    phaseRef.current = "saving";
     setPhase("saving");
+    await stopLive();
     const blob = await finishAudio();
     recorder.current = null;
     onDone({
       blob: seconds > 0 ? blob : null,
       durationSec: seconds,
-      text,
-      textChanged: text.trim() !== (initialText || "").trim(),
+      text: textRef.current,
+      userEdited,
+      liveTranscript: liveWords.current,
+      // Use the live words only if every live stretch stayed connected
+      streamOk: everLive.current && !streamBroken.current,
       consentShown,
     });
   };
 
   const discard = async () => {
+    phaseRef.current = "saving";
+    await stopLive();
     await finishAudio();
     recorder.current = null;
     onDiscard();
   };
   const askDiscard = () => {
     // Nothing recorded or changed yet: just close
-    if (!hasRecording && seconds === 0 && text.trim() === (initialText || "").trim()) return onDiscard();
+    if (!hasRecording && seconds === 0 && !userEdited) return onDiscard();
     setConfirmDiscard(true);
   };
 
-  const pill =
-    phase === "editing"
-      ? { cls: "is-amber", text: "Paused · editing" }
-      : recording
-        ? { cls: "is-rec", text: "Recording" }
-        : { cls: "is-gray", text: "Paused" };
+  let pill;
+  if (phase === "editing") pill = { cls: "is-amber", text: "Paused · editing" };
+  else if (!recording) pill = { cls: "is-gray", text: "Paused" };
+  else if (live === "live") pill = { cls: "is-live", text: "Live · listening" };
+  else if (live === "connecting") pill = { cls: "is-gray", text: "Connecting…" };
+  else pill = { cls: "is-gray", text: "Recording · offline" };
+
+  let placeholder = "";
+  if (!text.trim() && !interim) {
+    if (phase === "saving") placeholder = "Saving…";
+    else if (!recording) placeholder = "Paused. Tap Continue to keep recording.";
+    else if (live === "live") placeholder = "Listening… start talking.";
+    else if (live === "connecting") placeholder = "Listening…";
+    else placeholder = "Recording. Your words will be written down after you tap Done.";
+  }
 
   let body;
   if (phase === "consent") {
@@ -205,9 +317,13 @@ export default function WrapUpRecorder({ type, jobLabel, mode, initialText, cons
           ref={textArea}
           className="rec-editor"
           value={text}
-          placeholder={hasRecording ? "Your recorded words are added here after you tap Done. You can type too." : "Type your notes here."}
+          placeholder={hasRecording ? "Type to fix or add to your notes." : "Type your notes here."}
           aria-label={`${info.label} text`}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            textRef.current = e.target.value;
+            setText(e.target.value);
+            setUserEdited(true);
+          }}
         />
         <p className="rec-help">Your text edits are saved. The original audio is kept.</p>
         <div className="rec-edit-actions">
@@ -224,15 +340,18 @@ export default function WrapUpRecorder({ type, jobLabel, mode, initialText, cons
   } else {
     body = (
       <>
-        <div className="rec-transcript" aria-live="polite">
-          {text.trim() && <p className="rec-final">{text}</p>}
-          <p className="rec-waiting">
-            {recording
-              ? "Listening… your words are written down after you tap Done."
-              : phase === "saving"
-                ? "Saving…"
-                : "Paused. Tap Continue to keep recording."}
-          </p>
+        <div className="rec-transcript" ref={transcriptBox} aria-live="polite">
+          {(text.trim() || interim) && (
+            <p className="rec-final">
+              {text}
+              {interim && <span className="rec-interim">{text.trim() ? " " : ""}{interim}</span>}
+              {recording && live === "live" && <span className="rec-caret" aria-hidden="true" />}
+            </p>
+          )}
+          {placeholder && <p className="rec-waiting">{placeholder}</p>}
+          {recording && live === "offline" && text.trim() && (
+            <p className="rec-waiting">Live words paused. Recording continues; the rest is written down after you tap Done.</p>
+          )}
         </div>
         <div className="rec-controls">
           <div className="rec-control">

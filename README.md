@@ -20,7 +20,7 @@ PicTalk is designed to capture that information **while the technician is alread
 4. PicTalk saves the stop locally first and synchronizes it to the cloud when connectivity is available.
 5. **Deepgram** converts the technician's voice note into searchable text using terminology relevant to security and low-voltage work.
 6. The technician can review or correct the transcription and add optional end-of-job field/customer notes.
-7. **Claude** uses the approved job context to draft a concise job summary and prioritized action items.
+7. **Claude** uses the job's transcripts and wrap-up notes to draft a concise job summary and prioritized action items.
 8. The technician reviews and edits the AI output before approving it.
 9. PicTalk generates a **PDF job report** containing the approved summary, action items, job details, photos, and field documentation.
 
@@ -55,12 +55,13 @@ PicTalk is designed to capture that information **while the technician is alread
 - Cloud synchronization of photos, audio, jobs, and transcripts
 - **Deepgram Nova-3 speech-to-text** with security/low-voltage terminology
 - Editable transcripts while retaining the original transcription
-- Optional field wrap-up notes and customer comments
+- Optional field wrap-up notes and customer comments, with **words shown live while the technician talks** (Deepgram streaming)
 - **Claude-powered job summaries and action items**
 - Human review and approval before AI-generated content is included in the final report
 - PDF export with job information, photos, findings, summary, and action items
 - Web Share support for sharing completed reports from supported devices
 - Automatic voice-note retention policy designed to reduce unnecessary long-term audio storage
+- **Engineering Mode:** an opt-in inside view of the capture pipeline with real timings, sync status, and AI usage
 
 ## AI with human review
 
@@ -79,6 +80,33 @@ Field technicians cannot assume reliable Wi-Fi or cellular service inside electr
 PicTalk therefore saves a new stop to **IndexedDB first**, including its photo and audio. A synchronization queue uploads pending work to Firebase when connectivity becomes available and retries automatically after network changes, sign-in, application visibility changes, and scheduled retry intervals.
 
 This architecture allows capture to continue even when the cloud is temporarily unavailable.
+
+## Live transcription without exposing the API key
+
+Wrap-up notes show words on screen while the technician talks. A Cloud Function exchanges the server-held Deepgram key for a token that lasts 30 seconds, just long enough for the phone to open a WebSocket to Deepgram's streaming API. The phone streams quarter-second audio chunks; words appear gray while Deepgram is still deciding and white once final. Pausing closes the connection so silence isn't billed. The full recording is always kept and uploaded afterward: if the live connection stayed up, its words become the transcript, and if it dropped, a Cloud Function transcribes the whole recording instead. Text the technician typed is never overwritten.
+
+## Engineering Mode
+
+An offline-first app hides its hardest work: queued uploads, retries, and background transcription. **Engineering Mode** makes that work visible and measurable. A small link at the bottom of the app turns it on. It's off by default, so field technicians never see it, and it only shows each user their own data.
+
+<p>
+  <img src="docs/engineering-panel.webp" alt="Engineering Mode panel: the data path and sync status" width="260">
+  <img src="docs/engineering-stop.webp" alt="A stop with its real timings" width="260">
+  <img src="docs/engineering-offline.webp" alt="Offline: a stop waiting on the phone with its upload tries" width="260">
+</p>
+
+| Area | What it shows | Where the numbers come from |
+| --- | --- | --- |
+| Data path | The 7 steps a stop takes: phone → IndexedDB → Storage → Firestore → Cloud Function → Deepgram → Claude | — |
+| Sync | Online/offline, stops waiting on the phone, upload tries, last error, last sync result, countdown to the next automatic try, **Sync now** | The sync queue, in the browser |
+| Each stop | Time to reach the cloud, upload time per file, transcription time split into **audio download** and **Deepgram**, recording length, speed vs. real time, model, confidence, whether the words were corrected | Browser timings + fields the transcription function saves (`transcribeTimings`) |
+| Live words | Token request time, connection time, time to first words, and why it fell back to after-recording transcription | The browser |
+| AI summary | Model used, generation time, attempts, input/output tokens, summaries used of 5 | Fields the summary function saves (`generation`) |
+| Session log | Each step as it happens: saved on the phone, uploaded, failures | Memory only; never stored |
+
+**Why it matters:** it shows whether a slow stop was the phone's signal, the upload, or the speech-to-text service; whether the retry loop really recovers after a dead zone; and what each AI summary costs in time and tokens.
+
+*The screenshots above were taken in the local Firebase emulator, where speech-to-text and the AI are free stand-ins, so their times show near zero. Upload, sync, and offline timings are real browser measurements.*
 
 ## Technology stack
 
@@ -153,7 +181,7 @@ That includes understanding the realities of field work — intermittent connect
 
 ## Current project status
 
-PicTalk is an actively developed demonstration application. Current functionality includes job organization, offline capture and synchronization, photo and voice stops, transcription, editable field notes, AI-generated summaries and action items, human approval, and PDF job reporting.
+PicTalk is an actively developed demonstration application. Current functionality includes job organization, offline capture and synchronization, photo and voice stops, transcription, live words for wrap-up notes, editable field notes, AI-generated summaries and action items, human approval, PDF job reporting, and Engineering Mode.
 
 The current demo limits a job to 10 stops. Voice recordings are designed to expire after five days.
 

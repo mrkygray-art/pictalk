@@ -65,7 +65,7 @@ PicTalk is designed to capture that information **while the technician is alread
 
 - **Mobile-first PWA** designed for field use
 - **Offline-first capture** using IndexedDB so a technician can save work before cloud connectivity is available
-- Job-based organization with multiple photo/voice stops
+- Job-based organization with multiple photo/voice stops: a My Jobs list, rename and reopen jobs, customer and location names, and moving or deleting stops (moving works offline)
 - Browser microphone selection for field laptops and external microphones
 - Cloud synchronization of photos, audio, jobs, and transcripts
 - **Deepgram Nova-3 speech-to-text** with security/low-voltage terminology
@@ -182,7 +182,7 @@ Audio is intentionally treated as temporary working data. The application is des
 
 ## AI usage controls
 
-To keep AI use predictable, the summary workflow includes generation limits at both the job and account level. AI-generated summaries also preserve metadata needed to distinguish drafts from approved content.
+To keep AI use predictable, the summary function allows 5 summaries per job and 20 per account per day, and the live-words token function allows 60 connections per account per hour. These limits are enforced in Cloud Functions, not in the browser. AI-generated summaries also preserve metadata needed to distinguish drafts from approved content.
 
 The application does not send job photos or audio recordings to the summarization model; the summary is generated from the text context associated with the job.
 
@@ -200,9 +200,27 @@ PicTalk is an actively developed demonstration application. Current functionalit
 
 The current demo limits a job to 10 stops. Voice recordings are designed to expire after five days.
 
+## Run it locally
+
+```bash
+npm install
+npm run dev        # Vite dev server (the service worker only runs in production builds)
+npm run build      # production build into dist/, which Firebase Hosting serves
+npm run lint
+```
+
+To test without touching the live Firebase project, use the emulators (they need Java):
+
+```bash
+firebase emulators:start --only auth,firestore,storage,functions
+VITE_USE_EMULATORS=true npm run dev
+```
+
+The functions read `ANTHROPIC_API_KEY` and `DEEPGRAM_API_KEY` from `functions/.secret.local` in the emulator (dummy values are fine). Put `PICTALK_FAKE_AI=1` and `PICTALK_FAKE_STT=1` in `functions/.env.local` to use free stand-ins for Claude and Deepgram; these only work in the emulator. Both files are git-ignored. Browser test scripts are in `e2e/`.
+
 ## Repository notes
 
-This repository is private because it contains active application implementation and development work. This README is intended to document the architecture, workflow, design decisions, and technologies used in the project without exposing credentials or sensitive configuration.
+This repository is public. API keys for Deepgram and Anthropic are Firebase Functions secrets and never appear in the code. The Firebase web config in the app is public by design: Firestore and Storage security rules (`firestore.rules`, `storage.rules`) are what keep each user's data private to them.
 
 ---
 

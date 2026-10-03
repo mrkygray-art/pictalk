@@ -11,6 +11,16 @@ PicTalk turns a field technician's normal workflow — **take a photo and explai
 
 > **Demo note:** Open it on your phone. No sign-up is needed: take a photo, tap to talk, and save a stop. End the job to see the AI summary and download the PDF. To see the pipeline behind it, tap **Engineering Mode** at the bottom of the main screen. Demo limits: up to 10 stops per job, and voice recordings are deleted after 5 days. Please don't record real customer information.
 
+## Two ways to explore
+
+**Field view (default).** What a technician sees: start a job, photograph each stop, talk, and save. Everything is plain language ("Saved on this phone", "Writing it down…"), and it keeps working with no signal.
+
+**Engineering Mode.** Tap the small **Engineering Mode** link at the bottom of the main screen to see what the app is doing underneath: stops waiting on the phone, upload retries and errors, the next automatic sync, and real timings for each stop (upload per file, then transcription split into audio download and Deepgram time), plus how long each AI summary took and how many tokens it used. It's off by default, so field techs never see it, and it only shows each user their own data. [Full details below.](#engineering-mode)
+
+<p>
+  <img src="docs/engineering-panel.webp" alt="Engineering Mode panel: the data path and sync status" width="260">
+</p>
+
 ## The problem
 
 Field technicians often finish a site walk with useful information scattered across camera rolls, handwritten notes, text messages, and memory. Turning that information into something useful for sales, service, estimating, or project management takes additional office time and can lose important field context.

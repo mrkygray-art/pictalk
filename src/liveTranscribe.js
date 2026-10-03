@@ -5,6 +5,7 @@
 // stretch: Pause closes it (no charge for silence), Continue opens a new one.
 import { httpsCallable } from 'firebase/functions';
 import { functions } from './firebase';
+import { engLog, setLiveInfo, ms } from './engineering';
 
 const getToken = httpsCallable(functions, 'getDeepgramStreamToken', { timeout: 15000 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -19,10 +20,28 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * waits briefly for them. Throws if the connection can't be opened.
  */
 export async function openLiveStream({ onInterim, onFinal, onUtteranceEnd, onDrop }) {
-  if (import.meta.env.DEV && window.__pictalkFailStream) throw new Error('live stream disabled for this test');
-  if (!navigator.onLine) throw new Error('offline');
-  const { data } = await getToken();
-  if (data.fake) return fakeStream({ onInterim, onFinal, onUtteranceEnd });
+  setLiveInfo({ state: 'connecting', tokenMs: null, connectMs: null, firstWordsMs: null, reason: '' });
+  const fail = (reason) => {
+    setLiveInfo({ state: 'offline', reason });
+    engLog('error', 'Live words unavailable; the recording is transcribed after you finish', reason);
+    return new Error(reason);
+  };
+  if (import.meta.env.DEV && window.__pictalkFailStream) throw fail('live stream disabled for this test');
+  if (!navigator.onLine) throw fail('offline');
+  const t0 = performance.now();
+  let data;
+  try {
+    ({ data } = await getToken());
+  } catch (err) {
+    throw fail(`token request failed: ${err?.code || err?.message || err}`);
+  }
+  const tokenMs = performance.now() - t0;
+  setLiveInfo({ tokenMs });
+  if (data.fake) {
+    setLiveInfo({ state: 'live', connectMs: 0 });
+    engLog('live', 'Live words connected (emulator stand-in)', `token ${ms(tokenMs)}`);
+    return fakeStream({ onInterim, onFinal, onUtteranceEnd });
+  }
 
   const params = new URLSearchParams({
     model: data.model,
@@ -35,12 +54,17 @@ export async function openLiveStream({ onInterim, onFinal, onUtteranceEnd, onDro
 
   // Browsers can't set an Authorization header on a WebSocket; the temporary token goes
   // in the Sec-WebSocket-Protocol header instead.
+  const t1 = performance.now();
   const ws = new WebSocket(`wss://api.deepgram.com/v1/listen?${params}`, ['bearer', data.token]);
   await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('connect timeout')), 8000);
+    const timer = setTimeout(() => reject(fail('connect timeout')), 8000);
     ws.onopen = () => { clearTimeout(timer); resolve(); };
-    ws.onerror = () => { clearTimeout(timer); reject(new Error('connect failed')); };
+    ws.onerror = () => { clearTimeout(timer); reject(fail('connect failed')); };
   });
+  const opened = performance.now();
+  setLiveInfo({ state: 'live', connectMs: opened - t1 });
+  engLog('live', 'Live words connected', `token ${ms(tokenMs)} · connection ${ms(opened - t1)} · ${data.model}`);
+  let firstWords = true;
 
   let closing = false;
   let markClosed;
@@ -50,6 +74,10 @@ export async function openLiveStream({ onInterim, onFinal, onUtteranceEnd, onDro
     try { msg = JSON.parse(e.data); } catch { return; }
     if (msg.type === 'Results') {
       const text = msg.channel?.alternatives?.[0]?.transcript || '';
+      if (text && firstWords) {
+        firstWords = false; // from the connection opening, so it includes the time before you spoke
+        setLiveInfo({ firstWordsMs: performance.now() - opened });
+      }
       if (msg.is_final) {
         onInterim('');
         if (text) onFinal(text);
@@ -63,7 +91,11 @@ export async function openLiveStream({ onInterim, onFinal, onUtteranceEnd, onDro
   ws.onerror = () => {};
   ws.onclose = () => {
     markClosed();
-    if (!closing) onDrop();
+    if (!closing) {
+      setLiveInfo({ state: 'offline', reason: 'connection dropped' });
+      engLog('error', 'Live words dropped; the recording is transcribed after you finish');
+      onDrop();
+    }
   };
 
   return {
@@ -77,6 +109,7 @@ export async function openLiveStream({ onInterim, onFinal, onUtteranceEnd, onDro
         await Promise.race([closed, sleep(3000)]);
       }
       try { ws.close(); } catch { /* already closed */ }
+      setLiveInfo({ state: 'idle' });
     },
   };
 }

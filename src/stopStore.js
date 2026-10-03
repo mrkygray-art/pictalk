@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db, storage } from './firebase';
+import { engLog, recordUpload, setSyncInfo, bytes, ms } from './engineering';
 
 const QUEUE_PREFIX = 'pending-stop:';
 export const VOICE_DAYS = 5; // matches the Storage lifecycle rule on voice/
@@ -45,6 +46,7 @@ export async function queueStop({ photoBlob, audioBlob, note = '', jobId }) {
     attempts: 0,
   };
   await set(QUEUE_PREFIX + stop.id, stop);
+  engLog('save', 'Saved on this phone', `IndexedDB · ${[photoBlob && `photo ${bytes(photoBlob.size)}`, audioBlob && `voice ${bytes(audioBlob.size)}`].filter(Boolean).join(', ')}`);
   notify();
   syncQueue(); // fire and forget
   return stop;
@@ -123,13 +125,19 @@ export async function syncQueue() {
   const user = auth.currentUser;
   if (!user) return;
   syncing = true;
+  setSyncInfo({ running: true, lastRunAt: Date.now() });
+  let sent = 0;
+  let failed = 0;
   try {
     const pending = (await getPendingStops()).reverse(); // oldest first
     for (const stop of pending) {
       try {
         await uploadStop(user.uid, stop);
         await del(QUEUE_PREFIX + stop.id);
+        sent++;
       } catch (err) {
+        failed++;
+        engLog('error', 'Upload failed, will retry', String(err?.code || err));
         console.warn('Stop sync failed, will retry:', stop.id, err);
         await set(QUEUE_PREFIX + stop.id, {
           ...stop,
@@ -142,6 +150,7 @@ export async function syncQueue() {
     }
   } finally {
     syncing = false;
+    setSyncInfo({ running: false, lastResult: sent || failed ? `${sent} uploaded, ${failed} failed` : 'Nothing waiting' });
   }
 }
 
@@ -149,16 +158,27 @@ async function uploadStop(uid, stop) {
   let photoPath = null;
   let audioPath = null;
   let audioType = null;
+  const timing = {}; // Engineering Mode: how long each step took on this phone
+  const started = performance.now();
+  let t = started;
+  const lap = () => {
+    const now = performance.now();
+    const took = now - t;
+    t = now;
+    return took;
+  };
 
   if (stop.photoBlob) {
     const type = baseType(stop.photoBlob.type || 'image/jpeg');
     photoPath = `photos/${uid}/${stop.id}.${extFor(type)}`;
     await uploadBytes(ref(storage, photoPath), stop.photoBlob, { contentType: type });
+    Object.assign(timing, { photoBytes: stop.photoBlob.size, photoMs: lap() });
   }
   if (stop.audioBlob) {
     audioType = baseType(stop.audioBlob.type || 'audio/webm');
     audioPath = `voice/${uid}/${stop.id}.${extFor(audioType)}`;
     await uploadBytes(ref(storage, audioPath), stop.audioBlob, { contentType: audioType });
+    Object.assign(timing, { audioBytes: stop.audioBlob.size, audioMs: lap() });
   }
 
   // Written last, so a Firestore doc only exists once its files are uploaded.
@@ -174,16 +194,28 @@ async function uploadStop(uid, stop) {
     clientCreatedAt: stop.clientCreatedAt,
     createdAt: serverTimestamp(),
   });
+  timing.recordMs = lap();
+  recordUpload(stop.id, timing);
+  engLog('upload', 'Stop uploaded', [
+    timing.photoMs != null && `photo ${bytes(timing.photoBytes)} in ${ms(timing.photoMs)}`,
+    timing.audioMs != null && `voice ${bytes(timing.audioBytes)} in ${ms(timing.audioMs)}`,
+    `record ${ms(timing.recordMs)}`,
+  ].filter(Boolean).join(' · '));
 }
 
 /** Call once on app start. Retries on reconnect, app refocus, sign-in, and every 60s. */
 export function startAutoSync() {
   const run = () => syncQueue();
   const onVis = () => document.visibilityState === 'visible' && run();
+  const tick = () => {
+    setSyncInfo({ nextRunAt: Date.now() + 60000 });
+    run();
+  };
   window.addEventListener('online', run);
   document.addEventListener('visibilitychange', onVis);
   const unsubAuth = onAuthStateChanged(auth, (u) => u && run());
-  const timer = setInterval(run, 60000);
+  const timer = setInterval(tick, 60000);
+  setSyncInfo({ nextRunAt: Date.now() + 60000 });
   return () => {
     window.removeEventListener('online', run);
     document.removeEventListener('visibilitychange', onVis);

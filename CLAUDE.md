@@ -49,6 +49,8 @@ The client-generated UUID is the Firestore doc id, which is how `App.jsx` de-dup
 
 **Microphone choice** — `src/micChoice.js` `openMic()` replaces `getUserMedia({ audio: true })` in both recorders. On computers (`pointer: fine`) with 2+ mics, `MicPicker.jsx` shows "Microphone: … · Change" under Tap to Talk; the choice is kept in localStorage (`pictalk-mic`, id + label) and asked for with `deviceId: { exact }`. If the id fails it's looked up by label, then falls back to the default mic. (Firefox doesn't reliably reuse the mic picked in its permission prompt.)
 
+**Engineering Mode** — off by default; the "Engineering Mode" link at the bottom of the main screen turns it on (localStorage `pictalk-eng`). `src/engineering.js` holds the switch, a session log (memory only), per-stop upload timings, sync state, and live-words timings; `src/EngineeringPanel.jsx` has the panel (pipeline, sync, log, Sync now), `StopEngLine` (stop cards), `SummaryEngLine` (job page), and `LiveEngLine` (recorder). Measured in the browser: upload ms per file, token/connect/first-words ms. From records: `createdAt − clientCreatedAt`, `transcribedAt − createdAt`, `transcribeTimings {downloadMs, deepgramMs, audioBytes}` (written by `transcribeStop`, listed in the stop rules), and the summary's `generation {ms, attempts, inputTokens, outputTokens}`. It never shows anything to anyone but the device's own user. (Don't name a file `Engineering.jsx`: on Windows it collides with `engineering.js`.)
+
 **Demo limit** — `STOP_LIMIT` (10 stops per job) in `App.jsx`, enforced in the UI only (capture, save, and moving stops into a full job).
 
 **Auth** — anonymous only (`startSession()` in `src/firebase.js`). Firestore uses `persistentLocalCache`.

@@ -10,6 +10,7 @@ import { stopText } from "./stopStore";
 // Summary items can cite a wrap-up note instead of a stop
 const NOTE_LABEL = { field_notes: "Field notes", customer_comments: "Customer comments" };
 import { getSavedInitials, ANONYMOUS_NAME } from "./exportJob";
+import { SummaryEngLine } from "./EngineeringPanel";
 
 const PER_JOB_LIMIT = 5; // matches the Cloud Function
 const PRIORITY_LABEL = { high: "High", medium: "Medium", low: "Low" };
@@ -348,6 +349,7 @@ export default function JobSummary({ uid, job, stops, online, autoStart, notes, 
           : `${left} of ${PER_JOB_LIMIT} summaries left for this job.`}
         {!online && " Regenerating needs signal."}
       </p>
+      <SummaryEngLine summary={summaryDoc} perJobLimit={PER_JOB_LIMIT} />
 
       {editor === "summary" && (
         <SummarySheet

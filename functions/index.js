@@ -42,11 +42,19 @@ exports.transcribeStop = onDocumentCreated(
 
     try {
       // Pull the recording out of Storage
+      const started = Date.now();
       const [audio] = await getStorage().bucket().file(stop.audioPath).download();
+      const downloaded = Date.now();
 
       // Send it to Deepgram
       const result = await transcribeAudio(audio, stop.audioType);
       const text = result.text;
+      // Engineering Mode: where the time went inside this function
+      const transcribeTimings = {
+        downloadMs: downloaded - started,
+        deepgramMs: Date.now() - downloaded,
+        audioBytes: audio.length,
+      };
 
       // Save the transcript back onto the stop
       await docRef.update({
@@ -54,6 +62,7 @@ exports.transcribeStop = onDocumentCreated(
         transcriptConfidence: result.confidence,
         audioSeconds: result.duration,
         transcriptModel: result.model,
+        transcribeTimings,
         transcribedAt: FieldValue.serverTimestamp(),
         status: text ? "transcribed" : "no_speech",
       });

@@ -254,7 +254,11 @@ exports.generateJobSummary = onCall(
     // Up to two attempts: retry once on malformed output or items without a valid source stop
     let result = null;
     let lastError = null;
+    let attempts = 0;
+    let usage = null;
+    const started = Date.now();
     for (let attempt = 1; attempt <= 2 && !result; attempt++) {
+      attempts = attempt;
       try {
         const out = useFake ? fakeModel(input) : await callModel(client, input);
         const { data, complete } = validate(out.text, stopIds);
@@ -264,6 +268,7 @@ exports.generateJobSummary = onCall(
           continue;
         }
         result = { ...data, model: out.model };
+        usage = out.usage || null;
         logger.info("Summary generated", { uid, jobId, attempt, model: out.model, usage: out.usage });
       } catch (err) {
         lastError = err;
@@ -284,6 +289,13 @@ exports.generateJobSummary = onCall(
         open_questions: result.open_questions,
         model: result.model,
         generatedAt: Date.now(),
+        // Engineering Mode: how this draft was made (function-only, like model)
+        generation: {
+          ms: Date.now() - started,
+          attempts,
+          inputTokens: usage?.input_tokens ?? null,
+          outputTokens: usage?.output_tokens ?? null,
+        },
         notesUsed: { field: input.field_notes, customer: input.customer_comments },
         stopsUsed: Object.fromEntries(stops.map((s) => [s.id, stopWords(s) || null])),
         approvedAt: null,

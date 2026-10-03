@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { NOTE_TYPES, formatDuration } from "./wrapUpStore";
 import { openLiveStream } from "./liveTranscribe";
 import { openMic } from "./micChoice";
+import { LiveEngLine } from "./EngineeringPanel";
 
 // Same format choice as stops: iPhone records mp4, Android/Chrome records webm/opus
 function pickAudioType() {
@@ -354,6 +355,7 @@ export default function WrapUpRecorder({ type, jobLabel, mode, initialText, cons
             <p className="rec-waiting">Live words paused. Recording continues; the rest is written down after you tap Done.</p>
           )}
         </div>
+        <LiveEngLine />
         <div className="rec-controls">
           <div className="rec-control">
             <button className="rec-btn is-edit" onClick={openEditor} disabled={phase === "saving"} aria-label="Edit">

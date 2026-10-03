@@ -1457,3 +1457,60 @@ button:focus-visible {
   border-color: var(--blue);
   color: var(--blue);
 }
+
+/* ---------- Engineering Mode (off by default) ---------- */
+.eng-toggle { font-size: 15px; margin-top: 28px; }
+.eng-panel {
+  background: var(--surface);
+  border: 1px dashed #48484a;
+  border-radius: 18px;
+  padding: 16px;
+  margin: 16px 0;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.eng-panel h2 { margin: 0 0 4px; font-size: 20px; }
+.eng-panel h3 { margin: 16px 0 6px; font-size: 16px; color: var(--muted); }
+.eng-fine { margin: 0; color: var(--muted); font-size: 14px; }
+.eng-pipe { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.eng-pipe li {
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 6px 9px;
+  display: grid;
+  font-size: 13px;
+}
+.eng-pipe li span { color: var(--muted); font-size: 12px; }
+.eng-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
+.eng-grid dt { color: var(--muted); }
+.eng-grid dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.eng-list, .eng-log { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+.eng-log { list-style: none; padding: 0; max-height: 260px; overflow-y: auto; }
+.eng-log li, .eng-list li { overflow-wrap: anywhere; }
+.eng-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.eng-detail { display: block; color: var(--muted); font-size: 13px; }
+.eng-ok { color: var(--live); }
+.eng-warn { color: var(--orange); }
+.eng-btn {
+  margin-top: 10px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid #48484a;
+  border-radius: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+.eng-btn:disabled { opacity: 0.5; cursor: default; }
+.eng-line {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-left: 3px solid #48484a;
+  background: var(--surface-2);
+  border-radius: 6px;
+  font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.eng-live { margin: 8px 0 0; }

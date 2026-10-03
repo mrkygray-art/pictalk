@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { urlFor, stopText } from "./stopStore";
+import { StopEngLine } from "./EngineeringPanel";
 
 // "7:24 PM" for today, "Sep 28, 7:24 PM" for other days
 function whenLabel(time) {
@@ -9,7 +10,7 @@ function whenLabel(time) {
 }
 
 // One row in a list of stops
-function StopCard({ anchor, number, time, photoUrl, audioUrl, audioExpired, status, statusText, transcript, onSelect, onEdit }) {
+function StopCard({ stop, anchor, number, time, photoUrl, audioUrl, audioExpired, status, statusText, transcript, onSelect, onEdit }) {
   return (
     <article className="stop" id={anchor ? `stop-${anchor}` : undefined}>
       {photoUrl && <img src={photoUrl} alt="" className="thumb" />}
@@ -20,6 +21,7 @@ function StopCard({ anchor, number, time, photoUrl, audioUrl, audioExpired, stat
         {transcript && <p className="stop-transcript">{transcript}</p>}
         {audioUrl && <audio controls src={audioUrl} />}
         {audioExpired && <span className="stop-note">Voice note expired</span>}
+        {stop && <StopEngLine stop={stop} />}
         {(onEdit || onSelect) && (
           <div className="stop-actions">
             {onEdit && (
@@ -80,6 +82,7 @@ function CloudStop({ stop, number, onSelect, onEdit }) {
 
   return (
     <StopCard
+      stop={stop}
       anchor={stop.id}
       number={number}
       time={new Date(stop.clientCreatedAt)}
@@ -108,6 +111,7 @@ export function StopList({ stops, online, newestFirst = false, onSelect, onEdit 
     return stop.isPending ? (
       <StopCard
         key={stop.id}
+        stop={stop}
         anchor={stop.id}
         number={numberOf.get(stop.id)}
         time={new Date(stop.clientCreatedAt)}

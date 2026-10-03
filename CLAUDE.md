@@ -74,3 +74,11 @@ The client-generated UUID is the Firestore doc id, which is how `App.jsx` de-dup
 
 - `docs/jobs-prototype.html` — standalone HTML design prototype for the in-progress "jobs" feature (branch `jobs`); a reference, not part of the build.
 - `.agents/skills/` — vendored Firebase agent skills (Firestore, Auth, Hosting, Functions, rules auditing); consult them for Firebase-specific tasks.
+
+## Keeping the public README current
+
+This repo is public (github.com/mrkygray-art/pictalk), and `README.md` is what recruiters read. When a change is something a user would notice or changes how the app works (a feature, a limit, a command, a step in the pipeline, Engineering Mode), update `README.md` in the same commit, and check its "Try it live" demo note, "Two ways to explore", capabilities, "Run it locally", and limits still match the code.
+
+- Every claim must be true to the code. Don't write numbers that drift (test counts, live usage); leave them out or date them.
+- Never put keys, tokens, real customer data, or personal contact details in the README.
+- The same project is described in two other places. If the summary changed, tell the user they may need updating (don't edit them unasked): the PicTalk section of the GitHub profile README (repo `mrkygray-art/mrkygray-art`) and, in `~/projects/ky-gray-portfolio`, the `#pictalk` case study in `index.html` plus the Ask Ky entries `[proj-pictalk*]` in `api/_askky-knowledge.js`.

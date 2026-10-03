@@ -6,6 +6,11 @@ PicTalk turns a field technician's normal workflow — **take a photo and explai
 
 > Built as a practical field workflow: **Photo → Voice → Transcript → Job Context → AI Draft → Human Approval → PDF Report**
 
+**Try it live:** https://pictalk-6cbff.web.app  
+**Portfolio case study:** https://ky-gray-portfolio.vercel.app/#pictalk
+
+> **Demo note:** Open it on your phone. No sign-up is needed: take a photo, tap to talk, and save a stop. End the job to see the AI summary and download the PDF. To see the pipeline behind it, tap **Engineering Mode** at the bottom of the main screen. Demo limits: up to 10 stops per job, and voice recordings are deleted after 5 days. Please don't record real customer information.
+
 ## The problem
 
 Field technicians often finish a site walk with useful information scattered across camera rolls, handwritten notes, text messages, and memory. Turning that information into something useful for sales, service, estimating, or project management takes additional office time and can lose important field context.

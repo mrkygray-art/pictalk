@@ -1,11 +1,20 @@
-import { StrictMode } from 'react'
+import { StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import LabPage from './lab/LazyLabPage.jsx' // the public Evaluation Lab page at /lab
+
+const isLab = window.location.pathname.replace(/\/+$/, '') === '/lab'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    {isLab ? (
+      <Suspense fallback={null}>
+        <LabPage />
+      </Suspense>
+    ) : (
+      <App />
+    )}
   </StrictMode>,
 )
 

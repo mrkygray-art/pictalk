@@ -8,11 +8,11 @@ PicTalk turns a field technician's normal workflow — **take a photo and explai
 
 **Try it live:** https://pictalk-6cbff.web.app  
 **Portfolio case study:** https://ky-gray-portfolio.vercel.app/#pictalk  
-**How it's built:** [Architecture](#high-level-architecture) · [Run it locally](#run-it-locally)
+**How it's built:** [Architecture](#high-level-architecture) · [Evaluation Lab](#evaluation-lab) · [Run it locally](#run-it-locally)
 
-> **Demo note:** Open it on your phone. No sign-up is needed: take a photo, tap to talk, and save a stop. End the job to see the AI summary and download the PDF. To see the pipeline behind it, tap **Engineering Mode** at the bottom of the main screen. Demo limits: up to 10 stops per job, and voice recordings are deleted after 5 days. Please don't record real customer information.
+> **Demo note:** Open it on your phone. No sign-up is needed: take a photo, tap to talk, and save a stop. End the job to see the AI summary and download the PDF. To see the pipeline behind it, tap **Engineering Mode** at the bottom of the main screen. On Android, install it from the browser (Chrome shows an **Install PicTalk on this phone** link at the bottom) and it opens with no signal. Demo limits: up to 10 stops per job, and voice recordings are deleted after 5 days. Please don't record real customer information.
 
-## Two ways to explore
+## Three ways to explore
 
 **Field view (default).** What a technician sees: start a job, photograph each stop, talk, and save. Everything is plain language ("Saved on this phone", "Writing it down…"), and it keeps working with no signal.
 
@@ -21,6 +21,8 @@ PicTalk turns a field technician's normal workflow — **take a photo and explai
 <p>
   <img src="docs/engineering-panel.webp" alt="Engineering Mode panel: the data path and sync status" width="260">
 </p>
+
+**Evaluation Lab.** [pictalk-6cbff.web.app/lab](https://pictalk-6cbff.web.app/lab) shows the results of an offline simulator that uses the app like a field tech, cuts the signal at the worst moments (mid-recording, mid-upload, mid-sentence of live words, app closed while offline), and checks that every recording still reaches the cloud whole and gets written down. It also lists the problems it caught and what was fixed. [Full details below.](#evaluation-lab)
 
 ## The problem
 
@@ -64,7 +66,7 @@ PicTalk is designed to capture that information **while the technician is alread
 
 ## Key capabilities
 
-- **Mobile-first PWA** designed for field use
+- **Mobile-first PWA** designed for field use: installs to the home screen and opens with no signal
 - **Offline-first capture** using IndexedDB so a technician can save work before cloud connectivity is available
 - Job-based organization with multiple photo/voice stops: a My Jobs list, rename and reopen jobs, customer and location names, and moving or deleting stops (moving works offline)
 - Browser microphone selection for field laptops and external microphones
@@ -78,6 +80,7 @@ PicTalk is designed to capture that information **while the technician is alread
 - Web Share support for sharing completed reports from supported devices
 - Automatic voice-note retention policy designed to reduce unnecessary long-term audio storage
 - **Engineering Mode:** an opt-in inside view of the capture pipeline with real timings, sync status, and AI usage
+- **Evaluation Lab:** an offline simulator with a public scorecard and fixes log
 
 ## AI with human review
 
@@ -97,9 +100,11 @@ PicTalk therefore saves a new stop to **IndexedDB first**, including its photo a
 
 This architecture allows capture to continue even when the cloud is temporarily unavailable.
 
+The app itself also works with no signal. A hand-written service worker saves every file of the current build at install, including the PDF tools that only load on first export. The build lists those files and stamps a version into the worker, so each new release replaces the saved copy in one step. Opening the app tries the network for up to 4 seconds, then uses the saved copy. Firebase traffic is never cached.
+
 ## Live transcription without exposing the API key
 
-Wrap-up notes show words on screen while the technician talks. A Cloud Function exchanges the server-held Deepgram key for a token that lasts 30 seconds, just long enough for the phone to open a WebSocket to Deepgram's streaming API. The phone streams quarter-second audio chunks; words appear gray while Deepgram is still deciding and white once final. Pausing closes the connection so silence isn't billed. The full recording is always kept and uploaded afterward: if the live connection stayed up, its words become the transcript, and if it dropped, a Cloud Function transcribes the whole recording instead. Text the technician typed is never overwritten. ([Diagram](#live-words-without-exposing-the-deepgram-key))
+Wrap-up notes show words on screen while the technician talks. A Cloud Function exchanges the server-held Deepgram key for a token that lasts 30 seconds, just long enough for the phone to open a WebSocket to Deepgram's streaming API. The phone streams quarter-second audio chunks; words appear gray while Deepgram is still deciding and white once final. Pausing closes the connection so silence isn't billed. The full recording is always kept and uploaded afterward: if the live connection stayed up, its words become the transcript, and if it dropped (or the phone lost signal, which counts as a drop straight away), a Cloud Function transcribes the whole recording instead. Text the technician typed is never overwritten. ([Diagram](#live-words-without-exposing-the-deepgram-key))
 
 ## Engineering Mode
 
@@ -123,6 +128,35 @@ An offline-first app hides its hardest work: queued uploads, retries, and backgr
 **Why it matters:** it shows whether a slow stop was the phone's signal, the upload, or the speech-to-text service; whether the retry loop really recovers after a dead zone; and what each AI summary costs in time and tokens.
 
 *The screenshots above were taken in the local Firebase emulator, where speech-to-text and the AI are free stand-ins, so their times show near zero. Upload, sync, and offline timings are real browser measurements.*
+
+## Evaluation Lab
+
+Offline-first is easy to claim and hard to prove by hand. The Evaluation Lab is a simulator (`lab/simulate.js`) that builds the real production app, opens it in headless Chrome at phone size, and drives it the way a technician would: real file picker, a test microphone, real taps. It runs against the local Firebase emulators. "Signal off" cuts the network for both the page and the app's service worker, like airplane mode. Results are published at **[/lab](https://pictalk-6cbff.web.app/lab)** as a scorecard, the checks behind each scenario, and a fixes log.
+
+| Scenario | What happens | What it proves |
+| --- | --- | --- |
+| No signal from the start | Stops saved with no signal, then signal returns | Queued stops upload and get written down |
+| Signal lost mid-recording | Signal drops while a voice note is recording | The recording isn't cut short |
+| Signal lost mid-upload | Photo uploads, then signal drops as the voice note starts uploading | Clean retry: nothing missing, nothing doubled, no stray files |
+| Live words drop mid-sentence | Wrap-up note loses signal partway; a second note stays connected as a control | Dropped notes are written down from the whole recording |
+| Flaky signal through a full job | Signal flips every 3 seconds across a 10-stop job | No stops lost, doubled, or out of order |
+| App closed and reopened with no signal | Stops saved offline, app closed and reopened still offline | Waiting work survives a restart; the app opens with no signal |
+| Opening the app in airplane mode | One visit with signal, then opened fresh in airplane mode | Every app file is on the phone, PDF tools included |
+
+**How it checks "nothing lost".** The emulator's stand-in transcriber reports how many bytes of audio it received, and the lab compares that with the size of the stored file, which proves each recording was written down from the whole file. It also decodes every stored recording in the browser and compares its length with how long the microphone was held, and confirms nothing was in the cloud before signal returned (so the cut was real).
+
+**Caught and fixed on the first run (October 2026):**
+
+- **Live words dropping mid-sentence could lose words.** The recorder waited for the live connection to report that it had dropped. If it never did, the note kept only the words heard before the drop. Now losing signal counts as a drop straight away, and the whole recording is written down after upload.
+- **The PDF tools weren't saved for offline use**, so a first export with no signal could fail. Now every file is saved at install.
+- **The saved copy was ignored when the server sent a `Vary` header** (the lab's test server does; Firebase Hosting currently doesn't). App files are now matched by name.
+
+**Not measured yet:** real transcription accuracy (the stand-in doesn't hear words), real phones and cell networks (times after signal returns are local and near zero), weak-but-not-zero signal, and long recordings.
+
+```bash
+firebase emulators:start --only auth,firestore,storage,functions   # with PICTALK_FAKE_STT=1
+node lab/simulate.js            # every scenario, 3 runs each; --only <id>, --runs <n>, --save
+```
 
 ## Technology stack
 
@@ -231,7 +265,7 @@ That includes understanding the realities of field work — intermittent connect
 
 ## Current project status
 
-PicTalk is an actively developed demonstration application. Current functionality includes job organization, offline capture and synchronization, photo and voice stops, transcription, live words for wrap-up notes, editable field notes, AI-generated summaries and action items, human approval, PDF job reporting, and Engineering Mode.
+PicTalk is an actively developed demonstration application. Current functionality includes job organization, offline capture and synchronization, photo and voice stops, transcription, live words for wrap-up notes, editable field notes, AI-generated summaries and action items, human approval, PDF job reporting, an installable app that opens with no signal, Engineering Mode, and the Evaluation Lab.
 
 The current demo limits a job to 10 stops. Voice recordings are designed to expire after five days.
 
@@ -262,7 +296,7 @@ npm run dev:emulators      # in a second terminal: the app talks to the emulator
 | `PICTALK_FAKE_STT=1` | `functions/.env.local` | Stand-in transcripts and live words instead of Deepgram (emulator only) |
 | `VITE_USE_EMULATORS=true` | `.env.emulators` (used by `npm run dev:emulators`) | Points the dev app at the local emulators |
 
-The setup script copies `functions/.secret.local.example` and `functions/.env.local.example`; the copies are git-ignored and never overwritten. In production the keys are set with `firebase functions:secrets:set ANTHROPIC_API_KEY` (and `DEEPGRAM_API_KEY`). The Firebase web config in `src/firebase.js` is public by design and needs no setting. Browser test scripts are in `e2e/`.
+The setup script copies `functions/.secret.local.example` and `functions/.env.local.example`; the copies are git-ignored and never overwritten. In production the keys are set with `firebase functions:secrets:set ANTHROPIC_API_KEY` (and `DEEPGRAM_API_KEY`). The Firebase web config in `src/firebase.js` is public by design and needs no setting. Browser test scripts are in `e2e/`; the offline simulator is in `lab/` ([Evaluation Lab](#evaluation-lab)).
 
 ## Repository notes
 

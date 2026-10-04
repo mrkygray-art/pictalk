@@ -21,8 +21,11 @@ export const storage = getStorage(app);
 export const functions = getFunctions(app, "us-west2"); // same region as the Cloud Functions
 
 // Local testing only: `VITE_USE_EMULATORS=true npm run dev` talks to the Firebase
-// emulators (firebase emulators:start) instead of the live project.
-if (import.meta.env.DEV && import.meta.env.VITE_USE_EMULATORS === "true") {
+// emulators (firebase emulators:start) instead of the live project. The Evaluation Lab
+// also builds with `vite build --mode emulators` (into dist-lab, never deployed) so it
+// can test the real offline app; a normal `npm run build` never connects to them.
+const emulatorBuild = import.meta.env.DEV || import.meta.env.MODE === "emulators";
+if (emulatorBuild && import.meta.env.VITE_USE_EMULATORS === "true") {
   connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
   connectFirestoreEmulator(db, "127.0.0.1", 8080);
   connectStorageEmulator(storage, "127.0.0.1", 9199);

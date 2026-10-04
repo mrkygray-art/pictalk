@@ -1,0 +1,281 @@
+{
+  "note": "First lab run, on the code before the lab fixes (commit 98c1609). Kept as the evidence for the fixes log.",
+  "ranAt": "2026-10-04T18:29:03.224Z",
+  "environment": {
+    "browser": "Chrome/154.0.8037.93",
+    "viewport": "390×844 phone",
+    "backend": "Firebase emulators (Auth, Firestore, Storage, Functions)",
+    "transcriber": "Stand-in (PICTALK_FAKE_STT): reports how many bytes of audio it received",
+    "microphone": "Chrome's built-in test tone"
+  },
+  "runs": [
+    {
+      "scenario": "offline-before",
+      "passed": true,
+      "recoveryMs": 6387,
+      "checks": [
+        {
+          "name": "App shows the stops as saved on this phone while offline",
+          "ok": true,
+          "detail": "2 waiting"
+        },
+        {
+          "name": "Every stop reached the cloud (none lost, none doubled)",
+          "ok": true,
+          "detail": "2 of 2"
+        },
+        {
+          "name": "Every stop has its photo on file",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "Every recording was written down from the whole file",
+          "ok": true,
+          "detail": "2 recordings"
+        },
+        {
+          "name": "No recording cut short",
+          "ok": true,
+          "detail": "5.6 s on file, 5.7 s recorded"
+        },
+        {
+          "name": "Stops kept in the order they were taken",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "No stray files left behind",
+          "ok": true,
+          "detail": "4 files"
+        },
+        {
+          "name": "Nothing left waiting on the phone",
+          "ok": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "scenario": "offline-mid-recording",
+      "passed": true,
+      "recoveryMs": 285,
+      "checks": [
+        {
+          "name": "Every stop reached the cloud (none lost, none doubled)",
+          "ok": true,
+          "detail": "1 of 1"
+        },
+        {
+          "name": "Every stop has its photo on file",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "Every recording was written down from the whole file",
+          "ok": true,
+          "detail": "1 recordings"
+        },
+        {
+          "name": "No recording cut short",
+          "ok": true,
+          "detail": "4.3 s on file, 4.4 s recorded"
+        },
+        {
+          "name": "Stops kept in the order they were taken",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "No stray files left behind",
+          "ok": true,
+          "detail": "2 files"
+        },
+        {
+          "name": "Nothing left waiting on the phone",
+          "ok": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "scenario": "offline-mid-upload",
+      "passed": true,
+      "recoveryMs": 1107,
+      "checks": [
+        {
+          "name": "Upload was cut mid-way",
+          "ok": true
+        },
+        {
+          "name": "Every stop reached the cloud (none lost, none doubled)",
+          "ok": true,
+          "detail": "1 of 1"
+        },
+        {
+          "name": "Every stop has its photo on file",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "Every recording was written down from the whole file",
+          "ok": true,
+          "detail": "1 recordings"
+        },
+        {
+          "name": "No recording cut short",
+          "ok": true,
+          "detail": "2.8 s on file, 2.9 s recorded"
+        },
+        {
+          "name": "Stops kept in the order they were taken",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "No stray files left behind",
+          "ok": true,
+          "detail": "2 files"
+        },
+        {
+          "name": "Nothing left waiting on the phone",
+          "ok": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "scenario": "drop-live",
+      "passed": false,
+      "recoveryMs": 389,
+      "checks": [
+        {
+          "name": "Connected the whole time: live words kept",
+          "ok": true,
+          "detail": "live words, 3.8 s of 3.9 s on file"
+        },
+        {
+          "name": "Signal dropped: whole recording written down after upload",
+          "ok": false,
+          "detail": "kept only the live words heard before the signal dropped"
+        },
+        {
+          "name": "Nothing left waiting on the phone",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "scenario": "flaky-signal",
+      "passed": true,
+      "recoveryMs": 292,
+      "checks": [
+        {
+          "name": "Every stop reached the cloud (none lost, none doubled)",
+          "ok": true,
+          "detail": "10 of 10"
+        },
+        {
+          "name": "Every stop has its photo on file",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "Every recording was written down from the whole file",
+          "ok": true,
+          "detail": "10 recordings"
+        },
+        {
+          "name": "No recording cut short",
+          "ok": true,
+          "detail": "18.0 s on file, 18.5 s recorded"
+        },
+        {
+          "name": "Stops kept in the order they were taken",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "No stray files left behind",
+          "ok": true,
+          "detail": "20 files"
+        },
+        {
+          "name": "Nothing left waiting on the phone",
+          "ok": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "scenario": "restart-offline",
+      "passed": false,
+      "recoveryMs": null,
+      "checks": [
+        {
+          "name": "Reopened with no signal (job still open)",
+          "ok": false
+        },
+        {
+          "name": "Waiting stops still on the phone after reopening",
+          "ok": false,
+          "detail": "null waiting"
+        },
+        {
+          "name": "Every stop reached the cloud (none lost, none doubled)",
+          "ok": false,
+          "detail": "0 of 2"
+        },
+        {
+          "name": "Every stop has its photo on file",
+          "ok": false,
+          "detail": ""
+        },
+        {
+          "name": "Every recording was written down from the whole file",
+          "ok": false,
+          "detail": "missing audio; missing audio"
+        },
+        {
+          "name": "No recording cut short",
+          "ok": false,
+          "detail": "missing audio; missing audio"
+        },
+        {
+          "name": "Stops kept in the order they were taken",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "No stray files left behind",
+          "ok": true,
+          "detail": "0 files"
+        },
+        {
+          "name": "Nothing left waiting on the phone",
+          "ok": false,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "scenario": "open-offline",
+      "passed": false,
+      "checks": [
+        {
+          "name": "Network really off (page and service worker)",
+          "ok": true
+        },
+        {
+          "name": "App opens with no signal",
+          "ok": false
+        },
+        {
+          "name": "Every app file saved on the phone",
+          "ok": false,
+          "detail": "missing /assets/html2canvas-CqwknzLD.js, /assets/index.es-XAmUNZ6l.js, /assets/jspdf.es.min-CJ9QAEyX.js, /assets/purify.es-Bvo9QlJ8.js, /icons.svg"
+        }
+      ]
+    }
+  ]
+}

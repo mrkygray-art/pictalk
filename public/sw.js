@@ -1,18 +1,25 @@
 // PicTalk service worker: keeps the app itself on the phone so it opens with no signal.
 // Only caches PicTalk's own files. Firebase uploads/data always go straight to the network.
-const CACHE = 'pictalk-shell-v1';
+
+// Filled in by the build (pictalkOfflineFiles in vite.config.js): an id for this build and
+// every file it's made of, so the whole app — PDF tools included — is saved at install.
+// A new build changes this file, so phones install it and drop the old copy.
+const BUILD = 'dev';
+const FILES = [];
+const CACHE = `pictalk-shell-${BUILD}`;
+
+// App files have content hashes in their names, so a header like "Vary: Origin" from the
+// server must not stop a saved copy from being used.
+const match = (req) => caches.match(req, { ignoreVary: true });
 
 const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
-    const res = await fetch('/index.html', { cache: 'no-store' });
-    const html = await res.clone().text();
-    await cache.put('/index.html', res);
-    // Also save the JS/CSS/icon files that index.html points to
-    const files = [...html.matchAll(/(?:src|href)="(\/[^"/][^"]*)"/g)].map((m) => m[1]);
-    await Promise.allSettled(files.map((f) => cache.add(f)));
+    await cache.put('/index.html', await fetch('/index.html', { cache: 'no-store' }));
+    // All or nothing: if a file can't be saved, the previous copy of the app stays in use
+    await cache.addAll(FILES.filter((f) => f !== '/index.html').map((f) => new Request(f, { cache: 'reload' })));
   })());
   self.skipWaiting();
 });
@@ -40,7 +47,7 @@ self.addEventListener('fetch', (event) => {
         if (fresh.ok) (await caches.open(CACHE)).put('/index.html', fresh.clone());
         return fresh;
       } catch {
-        return (await caches.match('/index.html')) || Response.error();
+        return (await match('/index.html')) || Response.error();
       }
     })());
     return;
@@ -48,7 +55,7 @@ self.addEventListener('fetch', (event) => {
 
   // App files (JS, CSS, icons): use the saved copy, else fetch and save it
   event.respondWith((async () => {
-    const cached = await caches.match(req);
+    const cached = await match(req);
     if (cached) return cached;
     const res = await fetch(req);
     if (res.ok) (await caches.open(CACHE)).put(req, res.clone());

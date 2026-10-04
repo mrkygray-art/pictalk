@@ -1,0 +1,41 @@
+/* Evaluation Lab page (/lab). Uses the app's color tokens from index.css. */
+.lab {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 20px 16px 64px;
+  text-align: left;
+  color: var(--text);
+  line-height: 1.5;
+}
+.lab h1 { font-size: 32px; margin: 12px 0 8px; }
+.lab h2 { font-size: 22px; margin: 36px 0 10px; }
+.lab p { margin: 0 0 10px; }
+.lab a { color: var(--blue); }
+.lab code { font-size: 0.92em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.lab-back { font-size: 16px; text-decoration: none; }
+.lab-lead { font-size: 18px; color: var(--muted); max-width: 680px; }
+.lab-fine { font-size: 14px; color: var(--muted); }
+.lab-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0 10px; }
+.lab-tile { background: var(--surface); border-radius: 12px; padding: 14px; }
+.lab-tile b { display: block; font-size: 26px; }
+.lab-tile span { font-size: 14px; color: var(--muted); }
+.lab-scroll { overflow-x: auto; margin-bottom: 8px; }
+.lab-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.lab-table th, .lab-table td { padding: 9px 10px; border-bottom: 1px solid var(--surface-2); vertical-align: top; text-align: left; }
+.lab-table th { font-size: 13px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.lab-table td:nth-child(2) { white-space: nowrap; }
+.lab-fixes td:nth-child(2) { white-space: normal; min-width: 220px; }
+.lab-fixes td { min-width: 140px; }
+.lab-bad td { color: var(--orange); }
+.lab-ok { color: var(--live); }
+.lab-warn { color: var(--orange); }
+.lab-scenario { background: var(--surface); border-radius: 12px; padding: 4px 14px; margin-bottom: 10px; }
+.lab-scenario summary { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; cursor: pointer; font-weight: 600; min-height: 44px; align-items: center; }
+.lab-scenario[open] summary { border-bottom: 1px solid var(--surface-2); margin-bottom: 10px; }
+.lab-scenario .lab-table th, .lab-scenario .lab-table td { border-color: #3a3a3c; }
+@media (max-width: 480px) {
+  .lab h1 { font-size: 28px; }
+  .lab-tile b { font-size: 22px; }
+}
+.lab-notes td:nth-child(2) { white-space: normal; }
+.lab-notes td:first-child { width: 30%; }

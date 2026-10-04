@@ -40,7 +40,7 @@ export async function openLiveStream({ onInterim, onFinal, onUtteranceEnd, onDro
   if (data.fake) {
     setLiveInfo({ state: 'live', connectMs: 0 });
     engLog('live', 'Live words connected (emulator stand-in)', `token ${ms(tokenMs)}`);
-    return fakeStream({ onInterim, onFinal, onUtteranceEnd });
+    return fakeStream({ onInterim, onFinal, onUtteranceEnd, onDrop });
   }
 
   const params = new URLSearchParams({
@@ -88,14 +88,14 @@ export async function openLiveStream({ onInterim, onFinal, onUtteranceEnd, onDro
       onUtteranceEnd();
     }
   };
+  // A dropped connection means the live words are incomplete, so the whole recording is
+  // written down after upload instead. Losing signal counts as a drop straight away: a
+  // socket can sit "open" long after the signal is gone, without ever reporting it.
+  const drop = watchForDrop(() => closing, onDrop, () => ws.close());
   ws.onerror = () => {};
   ws.onclose = () => {
     markClosed();
-    if (!closing) {
-      setLiveInfo({ state: 'offline', reason: 'connection dropped' });
-      engLog('error', 'Live words dropped; the recording is transcribed after you finish');
-      onDrop();
-    }
+    drop('connection dropped');
   };
 
   return {
@@ -104,6 +104,7 @@ export async function openLiveStream({ onInterim, onFinal, onUtteranceEnd, onDro
     },
     async finish() {
       closing = true;
+      drop.stop();
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'CloseStream' })); // flush the last words, then close
         await Promise.race([closed, sleep(3000)]);
@@ -114,13 +115,39 @@ export async function openLiveStream({ onInterim, onFinal, onUtteranceEnd, onDro
   };
 }
 
+/**
+ * Report a dropped connection once (unless we're closing on purpose). Also treats the
+ * phone going offline as a drop and calls close(). Returns drop(reason), with
+ * drop.stop() to stop listening.
+ */
+function watchForDrop(isClosing, onDrop, close) {
+  let done = false;
+  const drop = (reason) => {
+    if (done || isClosing()) return;
+    done = true;
+    window.removeEventListener('offline', onOffline);
+    setLiveInfo({ state: 'offline', reason });
+    engLog('error', 'Live words dropped; the recording is transcribed after you finish', reason);
+    onDrop();
+  };
+  const onOffline = () => {
+    drop('phone went offline');
+    try { close(); } catch { /* already closed */ }
+  };
+  window.addEventListener('offline', onOffline);
+  drop.stop = () => window.removeEventListener('offline', onOffline);
+  return drop;
+}
+
 // Emulator-only stand-in, used when the token function says so (it only does in the
-// Functions emulator). Plays a short pretend transcript word by word.
-function fakeStream({ onInterim, onFinal, onUtteranceEnd }) {
+// Functions emulator). Plays a short pretend transcript word by word, and drops like a
+// real connection when the phone goes offline.
+function fakeStream({ onInterim, onFinal, onUtteranceEnd, onDrop }) {
   const lines = ['Panel door is loose', 'and the hinge is rusted', 'Customer wants it replaced this month'];
   let line = 0;
   let word = 0;
   let stopped = false;
+  const drop = watchForDrop(() => stopped, onDrop, () => { stopped = true; clearInterval(tick); });
   const tick = setInterval(() => {
     if (stopped || line >= lines.length) return;
     const words = lines[line].split(' ');
@@ -139,6 +166,7 @@ function fakeStream({ onInterim, onFinal, onUtteranceEnd }) {
     send() {},
     async finish() {
       stopped = true;
+      drop.stop();
       clearInterval(tick);
       onInterim('');
     },

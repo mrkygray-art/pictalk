@@ -1,0 +1,414 @@
+{
+  "ranAt": "2026-10-04T18:42:08.580Z",
+  "environment": {
+    "browser": "Chrome/154.0.8037.93",
+    "viewport": "390×844 phone",
+    "backend": "Firebase emulators (Auth, Firestore, Storage, Functions)",
+    "transcriber": "Stand-in (PICTALK_FAKE_STT): reports how many bytes of audio it received",
+    "microphone": "Chrome's built-in test tone"
+  },
+  "scenarios": [
+    {
+      "id": "offline-before",
+      "title": "No signal from the start",
+      "what": "Signal off before the job starts. Two stops (photo + voice) saved, then signal returns.",
+      "proves": "Stops saved with no signal upload and get written down when it comes back.",
+      "runs": 3,
+      "passed": 3,
+      "recordings": 6,
+      "recoveryMs": {
+        "typical": 267,
+        "slowest": 267,
+        "n": 3
+      },
+      "checks": [
+        {
+          "name": "App shows the stops as saved on this phone while offline",
+          "passed": 3,
+          "runs": 3,
+          "detail": "2 waiting"
+        },
+        {
+          "name": "Stops waited on the phone until signal returned",
+          "passed": 3,
+          "runs": 3,
+          "detail": "0 in the cloud at reconnect"
+        },
+        {
+          "name": "Every stop reached the cloud (none lost, none doubled)",
+          "passed": 3,
+          "runs": 3,
+          "detail": "2 of 2"
+        },
+        {
+          "name": "Every stop has its photo on file",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        },
+        {
+          "name": "Every recording was written down from the whole file",
+          "passed": 3,
+          "runs": 3,
+          "detail": "2 recordings"
+        },
+        {
+          "name": "No recording cut short",
+          "passed": 3,
+          "runs": 3,
+          "detail": "5.6 s on file, 5.7 s recorded"
+        },
+        {
+          "name": "Stops kept in the order they were taken",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        },
+        {
+          "name": "No stray files left behind",
+          "passed": 3,
+          "runs": 3,
+          "detail": "4 files"
+        },
+        {
+          "name": "Nothing left waiting on the phone",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "id": "offline-mid-recording",
+      "title": "Signal lost mid-recording",
+      "what": "Signal drops 1.2 s into a 4 s voice note; the stop is saved offline; signal returns.",
+      "proves": "Losing signal while talking doesn’t cut the recording short.",
+      "runs": 3,
+      "passed": 3,
+      "recordings": 3,
+      "recoveryMs": {
+        "typical": 273,
+        "slowest": 276,
+        "n": 3
+      },
+      "checks": [
+        {
+          "name": "Stops waited on the phone until signal returned",
+          "passed": 3,
+          "runs": 3,
+          "detail": "0 in the cloud at reconnect"
+        },
+        {
+          "name": "Every stop reached the cloud (none lost, none doubled)",
+          "passed": 3,
+          "runs": 3,
+          "detail": "1 of 1"
+        },
+        {
+          "name": "Every stop has its photo on file",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        },
+        {
+          "name": "Every recording was written down from the whole file",
+          "passed": 3,
+          "runs": 3,
+          "detail": "1 recordings"
+        },
+        {
+          "name": "No recording cut short",
+          "passed": 3,
+          "runs": 3,
+          "detail": "4.3 s on file, 4.3 s recorded"
+        },
+        {
+          "name": "Stops kept in the order they were taken",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        },
+        {
+          "name": "No stray files left behind",
+          "passed": 3,
+          "runs": 3,
+          "detail": "2 files"
+        },
+        {
+          "name": "Nothing left waiting on the phone",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "id": "offline-mid-upload",
+      "title": "Signal lost mid-upload",
+      "what": "The photo uploads, then the signal drops the moment the voice note starts uploading. Signal returns 5 s later.",
+      "proves": "A half-finished upload retries cleanly: no missing voice note, no duplicate stop, no stray files.",
+      "runs": 3,
+      "passed": 3,
+      "recordings": 3,
+      "recoveryMs": {
+        "typical": 1323,
+        "slowest": 1860,
+        "n": 3
+      },
+      "checks": [
+        {
+          "name": "Upload was cut mid-way",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        },
+        {
+          "name": "Stops waited on the phone until signal returned",
+          "passed": 3,
+          "runs": 3,
+          "detail": "0 in the cloud at reconnect"
+        },
+        {
+          "name": "Every stop reached the cloud (none lost, none doubled)",
+          "passed": 3,
+          "runs": 3,
+          "detail": "1 of 1"
+        },
+        {
+          "name": "Every stop has its photo on file",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        },
+        {
+          "name": "Every recording was written down from the whole file",
+          "passed": 3,
+          "runs": 3,
+          "detail": "1 recordings"
+        },
+        {
+          "name": "No recording cut short",
+          "passed": 3,
+          "runs": 3,
+          "detail": "2.8 s on file, 2.9 s recorded"
+        },
+        {
+          "name": "Stops kept in the order they were taken",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        },
+        {
+          "name": "No stray files left behind",
+          "passed": 3,
+          "runs": 3,
+          "detail": "2 files"
+        },
+        {
+          "name": "Nothing left waiting on the phone",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "id": "drop-live",
+      "title": "Live words drop mid-sentence",
+      "what": "Wrap-up notes: field notes recorded with live words the whole way (control); customer comments lose signal 2 s in, keep recording 2 s, then Done. Signal returns.",
+      "proves": "When live words drop, the full recording is written down after upload, so no words are lost.",
+      "runs": 3,
+      "passed": 3,
+      "recordings": 6,
+      "recoveryMs": {
+        "typical": 307,
+        "slowest": 368,
+        "n": 3
+      },
+      "checks": [
+        {
+          "name": "Connected the whole time: live words kept",
+          "passed": 3,
+          "runs": 3,
+          "detail": "live words, 3.8 s of 3.9 s on file"
+        },
+        {
+          "name": "Signal dropped: whole recording written down after upload",
+          "passed": 3,
+          "runs": 3,
+          "detail": "batch words, 4.3 s of 4.4 s on file"
+        },
+        {
+          "name": "Nothing left waiting on the phone",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "id": "flaky-signal",
+      "title": "Flaky signal through a full job",
+      "what": "Signal flips off and on every 3 s while ten stops are taken (the demo limit), then stays on.",
+      "proves": "Patchy signal doesn’t lose, double, or reorder stops.",
+      "runs": 3,
+      "passed": 3,
+      "recordings": 30,
+      "recoveryMs": {
+        "typical": 265,
+        "slowest": 269,
+        "n": 3
+      },
+      "checks": [
+        {
+          "name": "Every stop reached the cloud (none lost, none doubled)",
+          "passed": 3,
+          "runs": 3,
+          "detail": "10 of 10"
+        },
+        {
+          "name": "Every stop has its photo on file",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        },
+        {
+          "name": "Every recording was written down from the whole file",
+          "passed": 3,
+          "runs": 3,
+          "detail": "10 recordings"
+        },
+        {
+          "name": "No recording cut short",
+          "passed": 3,
+          "runs": 3,
+          "detail": "18.0 s on file, 18.5 s recorded"
+        },
+        {
+          "name": "Stops kept in the order they were taken",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        },
+        {
+          "name": "No stray files left behind",
+          "passed": 3,
+          "runs": 3,
+          "detail": "20 files"
+        },
+        {
+          "name": "Nothing left waiting on the phone",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "id": "restart-offline",
+      "title": "App closed and reopened with no signal",
+      "what": "Two stops saved offline, the app is closed, then reopened still offline. Signal returns later.",
+      "proves": "Waiting stops survive closing the app, and the app opens with no signal.",
+      "runs": 3,
+      "passed": 3,
+      "recordings": 6,
+      "recoveryMs": {
+        "typical": 259,
+        "slowest": 260,
+        "n": 3
+      },
+      "checks": [
+        {
+          "name": "Reopened with no signal (job still open)",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        },
+        {
+          "name": "Waiting stops still on the phone after reopening",
+          "passed": 3,
+          "runs": 3,
+          "detail": "2 waiting"
+        },
+        {
+          "name": "Stops waited on the phone until signal returned",
+          "passed": 3,
+          "runs": 3,
+          "detail": "0 in the cloud at reconnect"
+        },
+        {
+          "name": "Every stop reached the cloud (none lost, none doubled)",
+          "passed": 3,
+          "runs": 3,
+          "detail": "2 of 2"
+        },
+        {
+          "name": "Every stop has its photo on file",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        },
+        {
+          "name": "Every recording was written down from the whole file",
+          "passed": 3,
+          "runs": 3,
+          "detail": "2 recordings"
+        },
+        {
+          "name": "No recording cut short",
+          "passed": 3,
+          "runs": 3,
+          "detail": "4.6 s on file, 4.7 s recorded"
+        },
+        {
+          "name": "Stops kept in the order they were taken",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        },
+        {
+          "name": "No stray files left behind",
+          "passed": 3,
+          "runs": 3,
+          "detail": "4 files"
+        },
+        {
+          "name": "Nothing left waiting on the phone",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "id": "open-offline",
+      "title": "Opening the app in airplane mode",
+      "what": "One visit with signal, then airplane mode; the app is opened fresh.",
+      "proves": "The app opens with no signal and has every file it needs, including the PDF tools.",
+      "runs": 3,
+      "passed": 3,
+      "recordings": 0,
+      "recoveryMs": null,
+      "checks": [
+        {
+          "name": "Network really off (page and service worker)",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        },
+        {
+          "name": "App opens with no signal",
+          "passed": 3,
+          "runs": 3,
+          "detail": ""
+        },
+        {
+          "name": "Every app file saved on the phone",
+          "passed": 3,
+          "runs": 3,
+          "detail": "16 files"
+        }
+      ]
+    }
+  ]
+}

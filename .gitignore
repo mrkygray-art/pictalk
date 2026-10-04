@@ -24,3 +24,8 @@ dist-ssr
 *.sw?
 .firebase/
 .firebase/
+
+# Evaluation Lab build (talks to the emulators; never deploy it)
+dist-lab
+lab/out
+lab/clips/*.wav

@@ -26,6 +26,7 @@ import MicPicker from "./MicPicker";
 import { openMic } from "./micChoice";
 import ExportSheet from "./ExportSheet";
 import { EngineeringPanel, EngineeringToggle } from "./EngineeringPanel";
+import InstallLink from "./InstallLink";
 
 // Pick an audio format this phone's browser can record (iPhone uses mp4, Android/Chrome uses webm)
 function pickAudioType() {
@@ -592,6 +593,7 @@ export default function App() {
             </button>
           )}
           <EngineeringPanel pending={pending} online={online} uid={uid} />
+          <InstallLink />
           <EngineeringToggle />
         </>
       )}

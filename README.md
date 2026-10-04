@@ -7,7 +7,8 @@ PicTalk turns a field technician's normal workflow — **take a photo and explai
 > Built as a practical field workflow: **Photo → Voice → Transcript → Job Context → AI Draft → Human Approval → PDF Report**
 
 **Try it live:** https://pictalk-6cbff.web.app  
-**Portfolio case study:** https://ky-gray-portfolio.vercel.app/#pictalk
+**Portfolio case study:** https://ky-gray-portfolio.vercel.app/#pictalk  
+**How it's built:** [Architecture](#high-level-architecture) · [Run it locally](#run-it-locally)
 
 > **Demo note:** Open it on your phone. No sign-up is needed: take a photo, tap to talk, and save a stop. End the job to see the AI summary and download the PDF. To see the pipeline behind it, tap **Engineering Mode** at the bottom of the main screen. Demo limits: up to 10 stops per job, and voice recordings are deleted after 5 days. Please don't record real customer information.
 
@@ -98,7 +99,7 @@ This architecture allows capture to continue even when the cloud is temporarily 
 
 ## Live transcription without exposing the API key
 
-Wrap-up notes show words on screen while the technician talks. A Cloud Function exchanges the server-held Deepgram key for a token that lasts 30 seconds, just long enough for the phone to open a WebSocket to Deepgram's streaming API. The phone streams quarter-second audio chunks; words appear gray while Deepgram is still deciding and white once final. Pausing closes the connection so silence isn't billed. The full recording is always kept and uploaded afterward: if the live connection stayed up, its words become the transcript, and if it dropped, a Cloud Function transcribes the whole recording instead. Text the technician typed is never overwritten.
+Wrap-up notes show words on screen while the technician talks. A Cloud Function exchanges the server-held Deepgram key for a token that lasts 30 seconds, just long enough for the phone to open a WebSocket to Deepgram's streaming API. The phone streams quarter-second audio chunks; words appear gray while Deepgram is still deciding and white once final. Pausing closes the connection so silence isn't billed. The full recording is always kept and uploaded afterward: if the live connection stayed up, its words become the transcript, and if it dropped, a Cloud Function transcribes the whole recording instead. Text the technician typed is never overwritten. ([Diagram](#live-words-without-exposing-the-deepgram-key))
 
 ## Engineering Mode
 
@@ -141,35 +142,69 @@ An offline-first app hides its hardest work: queued uploads, retries, and backgr
 
 ## High-level architecture
 
-```text
-Field Technician
-      │
-      ├── Photo
-      └── Voice Note
-             │
-             ▼
-      React / PWA Client
-             │
-             ├── IndexedDB offline queue
-             │
-             ▼
-          Firebase
-      ┌──────┼─────────┐
-      │      │         │
-  Firestore Storage  Cloud Functions
-                       │
-                 ┌─────┴─────┐
-                 │           │
-              Deepgram     Claude
-                 │           │
-                 └─────┬─────┘
-                       ▼
-              Transcript + AI Draft
-                       │
-                 Human Review
-                       │
-                       ▼
-                  PDF Job Report
+The phone does the capturing and the queueing; Firebase stores everything; Cloud Functions hold every API key and do the transcription and summaries.
+
+```mermaid
+flowchart LR
+    subgraph Phone["Phone: React PWA"]
+        CAP["Photo +<br/>voice note"]
+        IDB[("IndexedDB queue<br/>works offline")]
+        SYNC["syncQueue()<br/>retries when back online"]
+        REC["Wrap-up recorder<br/>live words"]
+        JOB["Job page<br/>review + approve"]
+        PDF["PDF report<br/>built on the phone"]
+    end
+
+    subgraph FB["Firebase, us-west2"]
+        ST[("Storage<br/>photos, voice<br/>(voice expires in 5 days)")]
+        FS[("Firestore<br/>jobs, stops, notes, summary")]
+        subgraph CF["Cloud Functions: keys live here"]
+            TS["transcribeStop<br/>transcribeWrapUpNote"]
+            TOK["getDeepgramStreamToken<br/>30-second token"]
+            SUM["generateJobSummary"]
+        end
+    end
+
+    DG["Deepgram nova-3<br/>trade keyterms"]
+    CL["Claude API<br/>structured JSON"]
+
+    CAP --> IDB --> SYNC
+    SYNC -- "1: files first" --> ST
+    SYNC -- "2: then the record" --> FS
+    FS -- "new recording" --> TS
+    TS -- "audio" --> DG
+    TS -- "transcript" --> FS
+    REC -- "ask for a token" --> TOK
+    TOK -- "grant" --> DG
+    REC <-- "live audio + words<br/>WebSocket" --> DG
+    JOB -- "build summary" --> SUM
+    SUM -- "transcripts + notes" --> CL
+    SUM -- "draft" --> FS
+    FS --> JOB
+    JOB --> PDF
+```
+
+Files upload before the Firestore record is written, so a record never points at a missing photo. The client-made ID is the record's ID, so a retried upload can't create a duplicate.
+
+### Live words without exposing the Deepgram key
+
+```mermaid
+sequenceDiagram
+    participant R as Recorder (phone)
+    participant F as Token function
+    participant D as Deepgram
+
+    R->>F: Ask for a token (signed-in user)
+    F->>F: Limit: 60 per account per hour
+    F->>D: POST /v1/auth/grant (API key, server only)
+    D-->>F: Token that lasts 30 seconds
+    F-->>R: Token + model + trade keyterms
+    R->>D: Open wss /v1/listen<br/>with the token as the WebSocket protocol
+    loop While recording
+        R->>D: Audio
+        D-->>R: Words as they're spoken
+    end
+    Note over R,D: The full recording is still uploaded. If the stream<br/>dropped, the server transcribes the file instead.
 ```
 
 ## Data and security design
@@ -202,21 +237,32 @@ The current demo limits a job to 10 stops. Voice recordings are designed to expi
 
 ## Run it locally
 
+Needs Node 24 and, for the emulators, the Firebase CLI and Java 11+.
+
 ```bash
 npm install
-npm run dev        # Vite dev server (the service worker only runs in production builds)
+npm run dev        # Vite dev server against the live project (the service worker only runs in production builds)
 npm run build      # production build into dist/, which Firebase Hosting serves
 npm run lint
 ```
 
-To test without touching the live Firebase project, use the emulators (they need Java):
+To test without touching the live Firebase project, use the emulators. One command sets them up with free stand-ins for Claude and Deepgram, so no API keys are needed:
 
 ```bash
+npm run setup:emulator     # creates the two local settings files below and installs the functions' dependencies
 firebase emulators:start --only auth,firestore,storage,functions
-VITE_USE_EMULATORS=true npm run dev
+npm run dev:emulators      # in a second terminal: the app talks to the emulators
 ```
 
-The functions read `ANTHROPIC_API_KEY` and `DEEPGRAM_API_KEY` from `functions/.secret.local` in the emulator (dummy values are fine). Put `PICTALK_FAKE_AI=1` and `PICTALK_FAKE_STT=1` in `functions/.env.local` to use free stand-ins for Claude and Deepgram; these only work in the emulator. Both files are git-ignored. Browser test scripts are in `e2e/`.
+| Setting | Where | What it does |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | `functions/.secret.local` (emulator), Firebase secret (production) | Claude API key for summaries. Dummy value is fine with the stand-in on |
+| `DEEPGRAM_API_KEY` | same | Deepgram key for transcripts and live-word tokens. Live words need a Member-role key |
+| `PICTALK_FAKE_AI=1` | `functions/.env.local` | Stand-in summaries instead of the Claude API (emulator only) |
+| `PICTALK_FAKE_STT=1` | `functions/.env.local` | Stand-in transcripts and live words instead of Deepgram (emulator only) |
+| `VITE_USE_EMULATORS=true` | `.env.emulators` (used by `npm run dev:emulators`) | Points the dev app at the local emulators |
+
+The setup script copies `functions/.secret.local.example` and `functions/.env.local.example`; the copies are git-ignored and never overwritten. In production the keys are set with `firebase functions:secrets:set ANTHROPIC_API_KEY` (and `DEEPGRAM_API_KEY`). The Firebase web config in `src/firebase.js` is public by design and needs no setting. Browser test scripts are in `e2e/`.
 
 ## Repository notes
 

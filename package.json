@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "setup:emulator": "node scripts/setup-emulator.mjs",
+    "dev:emulators": "vite --mode emulators"
   },
   "dependencies": {
     "firebase": "^12.19.0",

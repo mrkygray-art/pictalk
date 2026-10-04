@@ -20,8 +20,9 @@ Firebase (needs the Firebase CLI):
 - `cd functions && npm run serve` — Functions emulator; `npm run logs` — function logs
 
 Local testing without touching the live project (needs Java; installed at `C:\Program Files\Microsoft\jdk-21.*`):
+- `npm run setup:emulator` — one-time: copies `functions/.secret.local.example` / `functions/.env.local.example` (dummy keys, stand-ins on) if missing and installs functions deps
 - `firebase emulators:start --only auth,firestore,storage` — uses the local `firestore.rules` / `storage.rules`
-- `VITE_USE_EMULATORS=true npm run dev` — the app connects to the emulators (dev builds only; see `src/firebase.js`)
+- `npm run dev:emulators` (Vite mode `emulators`, reads `.env.emulators`) or `VITE_USE_EMULATORS=true npm run dev` — the app connects to the emulators (dev builds only; see `src/firebase.js`)
 - To include Functions: `firebase emulators:start --only auth,firestore,storage,functions`. Needs `functions/.secret.local` (`ANTHROPIC_API_KEY=…`, `DEEPGRAM_API_KEY=…`; dummy values are fine) and, to use the no-cost stand-in model instead of the real API, `functions/.env.local` with `PICTALK_FAKE_AI=1` (and `PICTALK_FAKE_STT=1` for a stand-in Deepgram) (only honored when `FUNCTIONS_EMULATOR` is set). Both files are git-ignored. `transcribeStop` fails locally (no Deepgram), so write transcripts into the emulator to test summaries.
 
 There is no test suite.

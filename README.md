@@ -272,3 +272,5 @@ This repository is public. API keys for Deepgram and Anthropic are Firebase Func
 
 **Designed and developed by Ky Gray**  
 Security Solutions Engineer · AI/SaaS Product Builder
+
+© 2026 Ky Gray. All rights reserved.

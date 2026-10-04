@@ -593,8 +593,11 @@ export default function App() {
             </button>
           )}
           <EngineeringPanel pending={pending} online={online} uid={uid} />
-          <InstallLink />
-          <EngineeringToggle />
+          <div className="bottom-links">
+            <InstallLink />
+            <EngineeringToggle />
+            <a className="text-btn lab-link" href="/lab">Evaluation Lab</a>
+          </div>
         </>
       )}
 

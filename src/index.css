@@ -1460,6 +1460,10 @@ button:focus-visible {
 
 /* ---------- Engineering Mode (off by default) ---------- */
 .eng-toggle { font-size: 15px; margin-top: 28px; }
+/* Small links at the bottom of the main screen: Install, Engineering Mode, Evaluation Lab */
+.bottom-links { display: flex; flex-direction: column; align-items: center; margin-top: 20px; }
+.bottom-links .eng-toggle { margin-top: 0; }
+.lab-link { font-size: 15px; }
 .eng-panel {
   background: var(--surface);
   border: 1px dashed #48484a;

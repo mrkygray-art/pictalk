@@ -22,7 +22,7 @@ PicTalk turns a field technician's normal workflow — **take a photo and explai
   <img src="docs/engineering-panel.webp" alt="Engineering Mode panel: the data path and sync status" width="260">
 </p>
 
-**Evaluation Lab.** [pictalk-6cbff.web.app/lab](https://pictalk-6cbff.web.app/lab) shows the results of an offline simulator that uses the app like a field tech, cuts the signal at the worst moments (mid-recording, mid-upload, mid-sentence of live words, app closed while offline), and checks that every recording still reaches the cloud whole and gets written down. It also lists the problems it caught and what was fixed. [Full details below.](#evaluation-lab)
+**Evaluation Lab.** The **Evaluation Lab** link at the bottom of the main screen ([pictalk-6cbff.web.app/lab](https://pictalk-6cbff.web.app/lab)) shows the results of an offline simulator that uses the app like a field tech, cuts the signal at the worst moments (mid-recording, mid-upload, mid-sentence of live words, app closed while offline), and checks that every recording still reaches the cloud whole and gets written down. It also lists the problems it caught and what was fixed. [Full details below.](#evaluation-lab)
 
 ## The problem
 

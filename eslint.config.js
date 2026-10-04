@@ -18,4 +18,13 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
+  {
+    // Cloud Functions: CommonJS on Node
+    files: ['functions/**/*.js'],
+    languageOptions: { sourceType: 'commonjs', globals: globals.node },
+  },
+  {
+    files: ['public/sw.js'],
+    languageOptions: { globals: globals.serviceworker },
+  },
 ])

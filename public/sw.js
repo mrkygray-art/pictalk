@@ -11,7 +11,7 @@ self.addEventListener('install', (event) => {
     const html = await res.clone().text();
     await cache.put('/index.html', res);
     // Also save the JS/CSS/icon files that index.html points to
-    const files = [...html.matchAll(/(?:src|href)="(\/[^"\/][^"]*)"/g)].map((m) => m[1]);
+    const files = [...html.matchAll(/(?:src|href)="(\/[^"/][^"]*)"/g)].map((m) => m[1]);
     await Promise.allSettled(files.map((f) => cache.add(f)));
   })());
   self.skipWaiting();

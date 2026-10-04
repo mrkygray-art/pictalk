@@ -10,7 +10,11 @@ PicTalk turns a field technician's normal workflow — **take a photo and explai
 **Portfolio case study:** https://ky-gray-portfolio.vercel.app/#pictalk  
 **How it's built:** [Architecture](#high-level-architecture) · [Evaluation Lab](#evaluation-lab) · [Run it locally](#run-it-locally)
 
-> **Demo note:** Open it on your phone. No sign-up is needed: take a photo, tap to talk, and save a stop. End the job to see the AI summary and download the PDF. To see the pipeline behind it, tap **Engineering Mode** at the bottom of the main screen. On Android, install it from the browser (Chrome shows an **Install PicTalk on this phone** link at the bottom) and it opens with no signal. Demo limits: up to 10 stops per job, and voice recordings are deleted after 5 days. Please don't record real customer information.
+> **Demo note:** Open it on your phone. No sign-up is needed: take a photo, tap to talk, and save a stop. End the job to see the AI summary and download the PDF. To see the pipeline behind it, tap **Engineering Mode** at the bottom of the main screen. Demo limits: up to 10 stops per job, and voice recordings are deleted after 5 days. Please don't record real customer information.
+
+## Works with no signal
+
+Add PicTalk to your phone's home screen: in Chrome, tap **Install PicTalk on this phone** at the bottom of the main screen; in Firefox or DuckDuckGo, choose **Add to Home screen** from the browser menu. From then on it opens from its own icon even with no signal, in a basement, an equipment room, or a dead zone, and you keep working: start and end jobs, take photos, record voice notes, and save stops. Everything waits safely on the phone. When signal returns, PicTalk uploads it and the voice notes are written down automatically, with nothing to tap. ([How it works](#offline-first-architecture) · [How it's tested](#evaluation-lab))
 
 ## Three ways to explore
 

@@ -14,7 +14,7 @@ PicTalk turns a field technician's normal workflow — **take a photo and explai
 
 ## Works with no signal
 
-Add PicTalk to your phone's home screen: in Chrome, tap **Install PicTalk on this phone** at the bottom of the main screen; in Firefox or DuckDuckGo, choose **Add to Home screen** from the browser menu. From then on it opens from its own icon even with no signal, in a basement, an equipment room, or a dead zone, and you keep working: start and end jobs, take photos, record voice notes, and save stops. Everything waits safely on the phone. When signal returns, PicTalk uploads it and the voice notes are written down automatically, with nothing to tap. ([How it works](#offline-first-architecture) · [How it's tested](#evaluation-lab))
+Add PicTalk to your phone's home screen: tap **Install PicTalk on this phone** at the bottom of the main screen. In Chrome on Android it opens Chrome's install dialog; on an iPhone (which never offers a one-tap install), and in Firefox, DuckDuckGo, or Samsung Internet, it opens a step-by-step guide with pictures of the real buttons. On an iPhone in Safari: tap **⋯** next to the address bar, **Share**, **Add to Home Screen**, keep **Open as Web App** on, and tap **Add**. From then on it opens from its own icon even with no signal, in a basement, an equipment room, or a dead zone, and you keep working: start and end jobs, take photos, record voice notes, and save stops. Everything waits safely on the phone. When signal returns, PicTalk uploads it and the voice notes are written down automatically, with nothing to tap. ([How it works](#offline-first-architecture) · [How it's tested](#evaluation-lab))
 
 ## Three ways to explore
 

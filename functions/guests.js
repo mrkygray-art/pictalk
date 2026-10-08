@@ -237,6 +237,9 @@ exports.mergeGuestIntoAccount = onCall(piccoloCallable({ timeoutSeconds: 540, me
 exports.createDemoJob = onCall(piccoloCallable({ timeoutSeconds: 60 }), async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign-in is required.");
+  if (!(await getAuth().getUser(uid)).providerData.length) {
+    throw new HttpsError("permission-denied", "Sign in (Save my work) to use Piccolo.");
+  }
   const now = Date.now();
   const existing = (await db().collection(`users/${uid}/jobs`).where("isDemo", "==", true).get()).docs.find((d) => (d.get("expiresAt") || 0) > now);
   if (existing) return { jobId: existing.id, created: false };

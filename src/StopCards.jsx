@@ -170,11 +170,29 @@ function CloudStop({ stop, number, online, photoDesc, onSelect, onEdit }) {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([urlFor(stop.photoPath), urlFor(stop.audioPath)]).then(([photo, audio]) => {
-      if (alive) setUrls({ photo, audio, loaded: true });
-    });
+    let tries = 0;
+    let timer = null;
+    const load = () =>
+      Promise.all([urlFor(stop.photoPath), urlFor(stop.audioPath)]).then(([photo, audio]) => {
+        if (!alive) return;
+        setUrls({ photo, audio, loaded: true });
+        // A photo that didn't load (a moment without signal, say): try again a few times
+        if (stop.photoPath && !photo && tries < 3) {
+          tries++;
+          timer = setTimeout(load, 3000 * tries);
+        }
+      });
+    load();
+    const onOnline = () => {
+      tries = 0;
+      clearTimeout(timer);
+      load();
+    };
+    window.addEventListener("online", onOnline);
     return () => {
       alive = false;
+      clearTimeout(timer);
+      window.removeEventListener("online", onOnline);
     };
   }, [stop.photoPath, stop.audioPath]);
 

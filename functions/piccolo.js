@@ -25,12 +25,13 @@ const crypto = require("node:crypto");
 const { reserveGlobalAi, piccoloCallable } = require("./budget");
 const { piccoloAccess, ownerOf } = require("./teams");
 const { learnedFor, findLearned } = require("./learning");
+const { isUnlimited } = require("./limits");
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 
 const MODEL = "claude-opus-5-5";
 const PROMPT_VERSION = "piccolo-draft-v2"; // v2: past finalized lines as examples
-const DAY_LIMITS = { guest: 1, personal: 10 }; // drafts per account per day (UTC); team = personal
+const DAY_LIMIT = 10; // drafts per account per day (UTC); guests can't draft (sign-in required)
 const DEMO_DAY_LIMIT = 3; // the "Try Piccolo" sample job has its own allowance
 const PER_JOB_LIMIT = 5;
 const MAX_PHOTOS = 10;
@@ -343,10 +344,10 @@ async function tierOf(uid) {
 }
 
 /** Reserve one draft against the per-job and per-day limits (or refuse). Returns the version number. */
-async function reserveDraft(uid, ownerUid, jobId, tier, isDemo) {
+async function reserveDraft(uid, ownerUid, jobId, isDemo, unlimited) {
   const jobRef = db().doc(`users/${ownerUid}/jobs/${jobId}`); // the job's owner (a teammate's job, maybe)
   const usageRef = db().doc(`users/${uid}/aiUsage/${new Date().toISOString().slice(0, 10)}`); // whoever asked
-  const dayLimit = isDemo ? DEMO_DAY_LIMIT : tier === "guest" ? DAY_LIMITS.guest : DAY_LIMITS.personal;
+  const dayLimit = unlimited ? Infinity : isDemo ? DEMO_DAY_LIMIT : DAY_LIMIT;
   const field = isDemo ? "piccoloDemoDrafts" : "piccoloDrafts";
   return db().runTransaction(async (tx) => {
     const [jobSnap, usageSnap] = await Promise.all([tx.get(jobRef), tx.get(usageRef)]);
@@ -355,9 +356,7 @@ async function reserveDraft(uid, ownerUid, jobId, tier, isDemo) {
     if (dayCount >= dayLimit) {
       throw new HttpsError("resource-exhausted", isDemo
         ? `The sample job can be drafted ${dayLimit} times a day. Try editing the draft instead.`
-        : tier === "guest"
-          ? "Guests can make 1 AI draft a day. Save your work (sign in) for more, or edit this draft."
-          : `You can make ${dayLimit} AI drafts a day. Try again tomorrow, or edit this draft.`);
+        : `You can make ${dayLimit} AI drafts a day. Try again tomorrow, or edit this draft.`);
     }
     if (jobCount >= PER_JOB_LIMIT) {
       throw new HttpsError("resource-exhausted", `Each job can be drafted ${PER_JOB_LIMIT} times. Edit the current draft instead.`);
@@ -377,6 +376,9 @@ exports.draftPiccolo = onCall(
     if (!uid) throw new HttpsError("unauthenticated", "Sign-in is required.");
     const jobId = String(request.data?.jobId || "");
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(jobId)) throw new HttpsError("invalid-argument", "Missing job.");
+    if ((await tierOf(uid)) === "guest") {
+      throw new HttpsError("permission-denied", "Sign in (Save my work) to use Piccolo.");
+    }
 
     // The caller's own job, or a teammate's job shared with the caller's company (admin/estimator)
     const owner = ownerOf(request);
@@ -443,9 +445,8 @@ exports.draftPiccolo = onCall(
       .filter(Boolean)
       .join(" ");
 
-    const tier = await tierOf(uid);
     await reserveGlobalAi("draft");
-    const version = await reserveDraft(uid, owner, jobId, tier, !!job.isDemo);
+    const version = await reserveDraft(uid, owner, jobId, !!job.isDemo, await isUnlimited(uid));
     const useFake = process.env.FUNCTIONS_EMULATOR === "true" && process.env.PICTALK_FAKE_AI === "1";
     const photos = useFake ? new Map() : await loadPhotos(stops, owner, jobId);
     const content = buildContent(input, photos);

@@ -99,6 +99,27 @@ export default function PiccoloPane({ uid, isGuest, profile, target, onAccount, 
   };
   const orgName = orgId && org?.id === orgId ? org.name : null;
 
+  // Piccolo needs an account (the server refuses guests too); PicTalk capture doesn't
+  if (isGuest) {
+    return (
+      <main className="app piccolo">
+        <header className="header">
+          <h1>Piccolo</h1>
+          <p className="subtitle">Turn a finished job into a work order, parts list, and quote.</p>
+        </header>
+        <div className="piccolo-callout is-try">
+          <p>
+            Sign in to use Piccolo. Your PicTalk jobs come with you, and Piccolo drafts the work order, parts, and quote from your photos and voice
+            notes.
+          </p>
+          <button className="big-btn photo-btn" onClick={onAccount}>
+            Sign In to Use Piccolo
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   if (job && !fullEditor) {
     return (
       <main className="app piccolo">

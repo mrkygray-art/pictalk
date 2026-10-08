@@ -8,6 +8,7 @@ const logger = require("firebase-functions/logger");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const Anthropic = require("@anthropic-ai/sdk");
 const { reserveGlobalAi } = require("./budget");
+const { isUnlimited } = require("./limits");
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 
@@ -179,7 +180,7 @@ function fakeModel(input) {
 }
 
 /** Reserve one generation against the per-job and per-day limits (or refuse). */
-async function reserveGeneration(uid, jobId) {
+async function reserveGeneration(uid, jobId, unlimited = false) {
   const summaryRef = db().doc(`users/${uid}/jobs/${jobId}/ai/summary`);
   const day = new Date().toISOString().slice(0, 10);
   const usageRef = db().doc(`users/${uid}/aiUsage/${day}`);
@@ -190,7 +191,7 @@ async function reserveGeneration(uid, jobId) {
     if (jobCount >= PER_JOB_LIMIT) {
       throw new HttpsError("resource-exhausted", `This demo allows ${PER_JOB_LIMIT} summaries per job. Edit the current one instead.`);
     }
-    if (dayCount >= PER_DAY_LIMIT) {
+    if (dayCount >= PER_DAY_LIMIT && !unlimited) {
       throw new HttpsError("resource-exhausted", `This demo allows ${PER_DAY_LIMIT} summaries per day. Try again tomorrow.`);
     }
     tx.set(usageRef, { count: dayCount + 1, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
@@ -255,7 +256,7 @@ exports.generateJobSummary = onCall(
     if (input.customer_comments) stopIds.add("customer_comments");
 
     await reserveGlobalAi("summary");
-    const summaryRef = await reserveGeneration(uid, jobId);
+    const summaryRef = await reserveGeneration(uid, jobId, await isUnlimited(uid));
     const useFake = process.env.FUNCTIONS_EMULATOR === "true" && process.env.PICTALK_FAKE_AI === "1";
     const client = useFake ? null : new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
 

@@ -87,12 +87,12 @@ test("finals can't be changed, and only their owner can see them", async () => {
   await rejects(other.call("piccoloMediaLinks", { jobId: "fin2", versionId: "v1" }), "not-found");
 });
 
-test("guests can't finalize (they can still export a DEMO copy)", async () => {
+test("guests can't draft or finalize (Piccolo needs an account)", async () => {
   const g = phone();
   await signInAnonymously(g.auth);
   await g.call("ensureProfile");
   await seedJob(g, "fin3");
-  await g.call("draftPiccolo", { jobId: "fin3" });
+  await rejects(g.call("draftPiccolo", { jobId: "fin3" }), "permission-denied");
   await rejects(g.call("finalizePiccolo", { jobId: "fin3", acknowledged: true }), "permission-denied");
 });
 

@@ -124,8 +124,9 @@ test("a guest with jobs signing into an existing account: the jobs move in", asy
   await rejects(g.call("mergeGuestIntoAccount", { guestToken: "nonsense" }), "unauthenticated");
 });
 
-test("Try Piccolo: a sample job that drafts without using the guest's one draft", async () => {
-  const g = await guest();
+test("Try Piccolo: signed-in only; a sample job with its own draft allowance that still expires", async () => {
+  await rejects((await guest()).call("createDemoJob"), "permission-denied");
+  const g = await personal("tryer");
   const uid = g.auth.currentUser.uid;
   const { jobId, created } = await g.call("createDemoJob");
   assert.equal(created, true);
@@ -139,13 +140,11 @@ test("Try Piccolo: a sample job that drafts without using the guest's one draft"
   assert.match((await read(g, `users/${uid}/jobs/${jobId}/wrapUpNotes/customer`)).text, /after 5 pm/);
 
   await g.call("draftPiccolo", { jobId });
-  // The guest's own job can still be drafted (sample drafts have their own allowance)
+  // Sample drafts don't count toward the account's own drafts
+  assert.equal((await adminDb().doc(`users/${uid}/aiUsage/${new Date().toISOString().slice(0, 10)}`).get()).get("piccoloDrafts"), undefined);
   await jobWithPhoto(g, "own1");
   await g.call("draftPiccolo", { jobId: "own1" });
-
-  // Sample jobs still expire after the guest signs in
-  await linkWithCredential(g.auth.currentUser, google(mail("tryer")));
-  await g.call("ensureProfile");
+  // The sample still expires; the account's own jobs don't
   assert.ok((await read(g, `users/${uid}/jobs/${jobId}`)).expiresAt);
   assert.equal((await read(g, `users/${uid}/jobs/own1`)).expiresAt, undefined);
 });

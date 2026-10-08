@@ -3,9 +3,8 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { signInAnonymously } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from "firebase/firestore";
-import { phone, personal, rejects, blocked, closeAll } from "./emulator.js";
+import { personal, rejects, blocked, closeAll } from "./emulator.js";
 
 const { postProcess } = createRequire(import.meta.url)("../functions/piccolo.js");
 
@@ -114,15 +113,7 @@ test("only finished jobs with something in them can be drafted", async () => {
   await rejects(p.call("draftPiccolo", { jobId: "nope" }), "not-found");
 });
 
-test("limits: guests get 1 draft a day, and each job 5", async () => {
-  const guest = phone();
-  await signInAnonymously(guest.auth);
-  await guest.call("ensureProfile");
-  await seedJob(guest, "g1");
-  await seedJob(guest, "g2");
-  await guest.call("draftPiccolo", { jobId: "g1" });
-  await rejects(guest.call("draftPiccolo", { jobId: "g2" }), "resource-exhausted");
-
+test("limits: each job can be drafted 5 times (daily limits and guests: limits.test.js)", async () => {
   const p = await personal("busy");
   await seedJob(p, "many");
   for (let i = 0; i < 5; i++) await p.call("draftPiccolo", { jobId: "many" });

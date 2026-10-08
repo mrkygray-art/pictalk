@@ -10,6 +10,7 @@ const logger = require("firebase-functions/logger");
 const { getAuth } = require("firebase-admin/auth");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
+const { piccoloCallable } = require("./budget");
 
 const LINK_DAYS = 7;
 const db = () => getFirestore();
@@ -58,7 +59,7 @@ async function keep(bucket, from, to) {
 
 exports.finalizeWarnings = finalizeWarnings;
 
-exports.finalizePiccolo = onCall({ timeoutSeconds: 300, memory: "512MiB" }, async (request) => {
+exports.finalizePiccolo = onCall(piccoloCallable({ timeoutSeconds: 300, memory: "512MiB" }), async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign-in is required.");
   const jobId = String(request.data?.jobId || "");
@@ -154,7 +155,7 @@ exports.finalizePiccolo = onCall({ timeoutSeconds: 300, memory: "512MiB" }, asyn
   return { version, versionId, media: mediaManifest.length, missing: mediaManifest.filter((m) => m.missing).length };
 });
 
-exports.piccoloMediaLinks = onCall({ timeoutSeconds: 60 }, async (request) => {
+exports.piccoloMediaLinks = onCall(piccoloCallable({ timeoutSeconds: 60 }), async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign-in is required.");
   const jobId = String(request.data?.jobId || "");

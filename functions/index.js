@@ -24,6 +24,13 @@ exports.draftPiccolo = require("./piccolo").draftPiccolo;
 exports.finalizePiccolo = require("./finalize").finalizePiccolo;
 exports.piccoloMediaLinks = require("./finalize").piccoloMediaLinks;
 
+// Guests: 7-day expiry, daily cleanup, merging into an existing account, sample job
+const guests = require("./guests");
+exports.setGuestExpiry = guests.setGuestExpiry;
+exports.cleanupGuestJobs = guests.cleanupGuestJobs;
+exports.mergeGuestIntoAccount = guests.mergeGuestIntoAccount;
+exports.createDemoJob = guests.createDemoJob;
+
 // Piccolo accounts: profiles, companies, team invites, roles
 const accounts = require("./accounts");
 exports.ensureProfile = accounts.ensureProfile;
@@ -51,6 +58,11 @@ exports.transcribeStop = onDocumentCreated(
 
     if (!stop.audioPath) {
       logger.info("No audio on this stop, skipping", { uid, stopId });
+      return;
+    }
+    // Already written down (e.g. a guest's stop moved into their account): don't pay twice
+    if (["transcribed", "no_speech"].includes(stop.status)) {
+      logger.info("Already transcribed, skipping", { uid, stopId });
       return;
     }
 

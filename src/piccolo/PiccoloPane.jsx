@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { watchJobs, jobTitle } from "../jobStore";
 import { watchStops, getPendingStops, onQueueChange } from "../stopStore";
 import PiccoloJob from "./PiccoloJob";
-import { watchOrg } from "../accountStore";
+import { watchOrg, createDemoJob, errorText } from "../accountStore";
 
 const day = (t) => new Date(t).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
 const STATUS = { drafted: "AI draft ready", editing: "Being edited", finalized: "Finalized" };
@@ -25,6 +25,8 @@ export default function PiccoloPane({ uid, isGuest, orgId, target, onAccount, on
   const [openId, setOpenId] = useState(() => target?.jobId ?? savedOpenJob());
   const [online, setOnline] = useState(navigator.onLine);
   const [org, setOrg] = useState(null);
+  const [demo, setDemo] = useState({ busy: false, jobId: null, error: "" }); // "Try Piccolo"
+
   useEffect(() => (orgId ? watchOrg(orgId, setOrg) : undefined), [orgId]);
 
   useEffect(() => (uid ? watchJobs(uid, (list) => setJobs({ uid, list })) : undefined), [uid]);
@@ -70,7 +72,7 @@ export default function PiccoloPane({ uid, isGuest, orgId, target, onAccount, on
           job={job}
           stops={(stops.uid === uid ? stops.list : []).filter((s) => s.jobId === job.id)}
           pendingStops={pending.filter((p) => p.jobId === job.id).length}
-          autoDraft={target?.autoDraft && target.jobId === job.id}
+          autoDraft={(target?.autoDraft && target.jobId === job.id) || demo.jobId === job.id}
           online={online}
           isGuest={isGuest}
           orgName={orgId && org?.id === orgId ? org.name : null}
@@ -90,14 +92,26 @@ export default function PiccoloPane({ uid, isGuest, orgId, target, onAccount, on
         <p className="subtitle">Turn a finished job into a work order, parts list, and quote.</p>
       </header>
 
-      {isGuest && (
-        <div className="piccolo-callout">
-          <p>You're a guest. Save your work to keep your jobs and quotes in your account.</p>
-          <button className="link-btn" onClick={onAccount}>
-            Save my work
-          </button>
-        </div>
-      )}
+      <div className="piccolo-callout is-try">
+        <p>New here? Try Piccolo on a sample site walk: a dental office with a cracked card reader, two cameras, and a network closet.</p>
+        {demo.error && <p className="error" role="alert">{demo.error}</p>}
+        <button
+          className="big-btn photo-btn"
+          disabled={demo.busy || !uid}
+          onClick={async () => {
+            setDemo({ busy: true, jobId: null, error: "" });
+            try {
+              const { jobId, created } = await createDemoJob();
+              setDemo({ busy: false, jobId: created ? jobId : null, error: "" });
+              open(jobId);
+            } catch (err) {
+              setDemo({ busy: false, jobId: null, error: errorText(err) || "Couldn't open the sample. Please try again." });
+            }
+          }}
+        >
+          {demo.busy ? "Opening the sample…" : "Try Piccolo"}
+        </button>
+      </div>
 
       <section aria-label="Finished jobs">
         <h2 className="section-title">Finished jobs</h2>
@@ -106,6 +120,7 @@ export default function PiccoloPane({ uid, isGuest, orgId, target, onAccount, on
           <button key={j.id} className="job-card" onClick={() => open(j.id)}>
             <strong>
               {jobTitle(j)}
+              {j.isDemo && <span className="pill is-sample">Sample</span>}
               {STATUS[j.piccoloStatus] && <span className="pill">{STATUS[j.piccoloStatus]}</span>}
             </strong>
             <span>Finished {day(j.endedAt || j.startedAt)}</span>

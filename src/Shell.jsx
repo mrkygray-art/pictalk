@@ -5,9 +5,69 @@ import App from "./App";
 import PiccoloPane from "./piccolo/PiccoloPane";
 import AccountSheet from "./AccountSheet";
 import TeamScreen from "./TeamScreen";
-import { watchProfile, ensureProfile, acceptInvite, isEmailLinkVisit, roleLabel, errorText } from "./accountStore";
+import { watchProfile, ensureProfile, acceptInvite, isEmailLinkVisit, roleLabel, errorText, retryGuestMerge } from "./accountStore";
+import { watchJobs } from "./jobStore";
 
 const PANE_KEY = "pictalk-pane";
+const BANNER_KEY = "pictalk-guest-banner"; // dismissed for this visit
+const DAY = 24 * 60 * 60 * 1000;
+
+// Guests: a privacy line, then "save your work" after a finished job, then a warning the
+// day before a job is deleted (that one can't be dismissed).
+function GuestBanner({ uid, onSave }) {
+  const [jobs, setJobs] = useState({ uid: null, list: [] });
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return sessionStorage.getItem(BANNER_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [now] = useState(() => Date.now());
+  useEffect(() => (uid ? watchJobs(uid, (list) => setJobs({ uid, list })) : undefined), [uid]);
+  const own = (jobs.uid === uid ? jobs.list : []).filter((j) => !j.isDemo);
+  const soon = own.filter((j) => j.expiresAt && j.expiresAt - now < DAY).length;
+  const finished = own.some((j) => j.status === "finished");
+  const hide = () => {
+    setHidden(true);
+    try {
+      sessionStorage.setItem(BANNER_KEY, "1");
+    } catch {
+      // hidden until the app is reopened
+    }
+  };
+
+  if (soon) {
+    return (
+      <div className="guest-banner is-urgent" role="alert">
+        <p>
+          {soon === 1 ? "A job" : `${soon} jobs`} will be deleted within a day. Save your work to keep {soon === 1 ? "it" : "them"}.
+        </p>
+        <button className="link-btn" onClick={onSave}>
+          Save my work
+        </button>
+      </div>
+    );
+  }
+  if (hidden) return null;
+  return (
+    <div className="guest-banner" role="status">
+      <p>
+        {finished
+          ? "Save your work so it follows you. Guest jobs are deleted after 7 days."
+          : "Guest mode: jobs are deleted after 7 days. Don't capture anything sensitive until you save your work."}
+      </p>
+      <div className="guest-banner-actions">
+        <button className="link-btn" onClick={onSave}>
+          Save my work
+        </button>
+        <button className="text-btn" onClick={hide} aria-label="Hide this message">
+          Not now
+        </button>
+      </div>
+    </div>
+  );
+}
 const INVITE_KEY = "pictalk-invite";
 
 function savedPane() {
@@ -138,6 +198,15 @@ export default function Shell() {
     };
   }, [inviteId, signedIn, emailLink]);
 
+  // A guest merge that was cut off (signal dropped) finishes the next time the app opens
+  const signedInUid = user && !user.isAnonymous ? user.uid : null;
+  useEffect(() => {
+    if (!signedInUid) return;
+    retryGuestMerge()
+      .then((r) => r?.jobs && showToast(`We added your ${r.jobs} guest job${r.jobs === 1 ? "" : "s"} to your account`))
+      .catch((err) => showToast(err.message));
+  }, [signedInUid]);
+
   const isAdmin = profile?.role === "admin" && profile?.status === "active" && !!profile?.orgId;
   const chip = !user || user.isAnonymous ? "Save my work" : (user.displayName || user.email || "Account").split(/[ @]/)[0];
 
@@ -164,6 +233,8 @@ export default function Shell() {
           {chip}
         </button>
       </nav>
+
+      {user?.isAnonymous && view === "panes" && <GuestBanner uid={user.uid} onSave={() => setSheetOpen(true)} />}
 
       <div className="pane-body" hidden={pane !== "pictalk" || view !== "panes"}>
         <App

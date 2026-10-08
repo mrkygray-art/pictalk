@@ -19,12 +19,14 @@ const { getStorage } = require("firebase-admin/storage");
 const Anthropic = require("@anthropic-ai/sdk");
 const sharp = require("sharp");
 const crypto = require("node:crypto");
+const { reserveGlobalAi, piccoloCallable } = require("./budget");
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 
 const MODEL = "claude-opus-5-5";
 const PROMPT_VERSION = "piccolo-draft-v1";
 const DAY_LIMITS = { guest: 1, personal: 10 }; // drafts per account per day (UTC); team = personal
+const DEMO_DAY_LIMIT = 3; // the "Try Piccolo" sample job has its own allowance
 const PER_JOB_LIMIT = 5;
 const MAX_PHOTOS = 10;
 const PHOTO_SIDE = 1024;
@@ -294,23 +296,26 @@ async function tierOf(uid) {
 }
 
 /** Reserve one draft against the per-job and per-day limits (or refuse). Returns the version number. */
-async function reserveDraft(uid, jobId, tier) {
+async function reserveDraft(uid, jobId, tier, isDemo) {
   const jobRef = db().doc(`users/${uid}/jobs/${jobId}`);
   const usageRef = db().doc(`users/${uid}/aiUsage/${new Date().toISOString().slice(0, 10)}`);
-  const dayLimit = tier === "guest" ? DAY_LIMITS.guest : DAY_LIMITS.personal;
+  const dayLimit = isDemo ? DEMO_DAY_LIMIT : tier === "guest" ? DAY_LIMITS.guest : DAY_LIMITS.personal;
+  const field = isDemo ? "piccoloDemoDrafts" : "piccoloDrafts";
   return db().runTransaction(async (tx) => {
     const [jobSnap, usageSnap] = await Promise.all([tx.get(jobRef), tx.get(usageRef)]);
     const jobCount = jobSnap.get("piccoloDraftCount") || 0;
-    const dayCount = usageSnap.get("piccoloDrafts") || 0;
+    const dayCount = usageSnap.get(field) || 0;
     if (dayCount >= dayLimit) {
-      throw new HttpsError("resource-exhausted", tier === "guest"
-        ? "Guests can make 1 AI draft a day. Save your work (sign in) for more, or edit this draft."
-        : `You can make ${dayLimit} AI drafts a day. Try again tomorrow, or edit this draft.`);
+      throw new HttpsError("resource-exhausted", isDemo
+        ? `The sample job can be drafted ${dayLimit} times a day. Try editing the draft instead.`
+        : tier === "guest"
+          ? "Guests can make 1 AI draft a day. Save your work (sign in) for more, or edit this draft."
+          : `You can make ${dayLimit} AI drafts a day. Try again tomorrow, or edit this draft.`);
     }
     if (jobCount >= PER_JOB_LIMIT) {
       throw new HttpsError("resource-exhausted", `Each job can be drafted ${PER_JOB_LIMIT} times. Edit the current draft instead.`);
     }
-    tx.set(usageRef, { piccoloDrafts: dayCount + 1, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    tx.set(usageRef, { [field]: dayCount + 1, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     tx.update(jobRef, { piccoloDraftCount: jobCount + 1 });
     return jobCount + 1;
   });
@@ -319,7 +324,7 @@ async function reserveDraft(uid, jobId, tier) {
 exports.postProcess = postProcess;
 
 exports.draftPiccolo = onCall(
-  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 300, memory: "1GiB" },
+  piccoloCallable({ secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 300, memory: "1GiB" }),
   async (request) => {
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Sign-in is required.");
@@ -379,7 +384,8 @@ exports.draftPiccolo = onCall(
       .join(" ");
 
     const tier = await tierOf(uid);
-    const version = await reserveDraft(uid, jobId, tier);
+    await reserveGlobalAi("draft");
+    const version = await reserveDraft(uid, jobId, tier, !!job.isDemo);
     const useFake = process.env.FUNCTIONS_EMULATOR === "true" && process.env.PICTALK_FAKE_AI === "1";
     const photos = useFake ? new Map() : await loadPhotos(stops, uid, jobId);
     const content = buildContent(input, photos);

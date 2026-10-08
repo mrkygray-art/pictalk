@@ -7,6 +7,7 @@ const { defineSecret } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const Anthropic = require("@anthropic-ai/sdk");
+const { reserveGlobalAi } = require("./budget");
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 
@@ -253,6 +254,7 @@ exports.generateJobSummary = onCall(
     if (input.field_notes) stopIds.add("field_notes");
     if (input.customer_comments) stopIds.add("customer_comments");
 
+    await reserveGlobalAi("summary");
     const summaryRef = await reserveGeneration(uid, jobId);
     const useFake = process.env.FUNCTIONS_EMULATOR === "true" && process.env.PICTALK_FAKE_AI === "1";
     const client = useFake ? null : new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });

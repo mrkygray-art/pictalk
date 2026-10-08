@@ -9,6 +9,8 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const { getAuth } = require("firebase-admin/auth");
 const { getFirestore } = require("firebase-admin/firestore");
+const { piccoloCallable } = require("./budget");
+const { clearGuestExpiry } = require("./guests");
 
 const TEAM_ROLES = ["admin", "estimator", "field", "installer"];
 const DEFAULTS = { markupPct: 0, taxPct: 0, terms: "", quotePrefix: "Q-" };
@@ -71,10 +73,10 @@ function applyInvite(tx, who, inviteSnap, profile) {
 // Creates or refreshes the caller's users/{uid} profile. The app calls it after sign-in
 // and whenever a guest saves their work. A verified email with a pending invite joins
 // that company on first sign-in.
-exports.ensureProfile = onCall({ timeoutSeconds: 30 }, async (request) => {
+exports.ensureProfile = onCall(piccoloCallable({ timeoutSeconds: 30 }), async (request) => {
   const who = await caller(request);
   const userRef = db().doc(`users/${who.uid}`);
-  return db().runTransaction(async (tx) => {
+  const result = await db().runTransaction(async (tx) => {
     const snap = await tx.get(userRef);
     const profile = snap.exists ? snap.data() : null;
     const now = Date.now();
@@ -113,10 +115,13 @@ exports.ensureProfile = onCall({ timeoutSeconds: 30 }, async (request) => {
     const invite = inviteSnap?.data();
     return { joined: invite ? { orgId: invite.orgId, orgName: invite.orgName, role: invite.role } : null };
   });
+  // Signed in (not a guest): none of their jobs expire any more (sample jobs still do)
+  if (!who.isAnonymous) await clearGuestExpiry(who.uid);
+  return result;
 });
 
 // Opens an invite link: joins the company if the signed-in email matches.
-exports.acceptInvite = onCall({ timeoutSeconds: 30 }, async (request) => {
+exports.acceptInvite = onCall(piccoloCallable({ timeoutSeconds: 30 }), async (request) => {
   const who = await caller(request);
   const inviteId = String(request.data?.inviteId || "");
   if (who.isAnonymous || !who.email) {
@@ -136,7 +141,7 @@ exports.acceptInvite = onCall({ timeoutSeconds: 30 }, async (request) => {
 });
 
 // A personal user starts a company and becomes its admin.
-exports.createOrg = onCall({ timeoutSeconds: 30 }, async (request) => {
+exports.createOrg = onCall(piccoloCallable({ timeoutSeconds: 30 }), async (request) => {
   const who = await caller(request);
   const name = String(request.data?.name || "").trim();
   if (who.isAnonymous) throw new HttpsError("permission-denied", "Save your work (sign in) before creating a company.");
@@ -166,7 +171,7 @@ async function requireAdmin(tx, uid) {
   return profile;
 }
 
-exports.createInvite = onCall({ timeoutSeconds: 30 }, async (request) => {
+exports.createInvite = onCall(piccoloCallable({ timeoutSeconds: 30 }), async (request) => {
   const who = await caller(request);
   const email = normEmail(request.data?.email);
   const role = String(request.data?.role || "");
@@ -195,7 +200,7 @@ exports.createInvite = onCall({ timeoutSeconds: 30 }, async (request) => {
   });
 });
 
-exports.revokeInvite = onCall({ timeoutSeconds: 30 }, async (request) => {
+exports.revokeInvite = onCall(piccoloCallable({ timeoutSeconds: 30 }), async (request) => {
   const who = await caller(request);
   const inviteRef = db().doc(`invites/${String(request.data?.inviteId || "x")}`);
   return db().runTransaction(async (tx) => {
@@ -211,7 +216,7 @@ exports.revokeInvite = onCall({ timeoutSeconds: 30 }, async (request) => {
 
 // Change a team member's role or turn their access off/on. Never deletes the user or
 // their data. A company always keeps at least one active admin.
-exports.updateMember = onCall({ timeoutSeconds: 30 }, async (request) => {
+exports.updateMember = onCall(piccoloCallable({ timeoutSeconds: 30 }), async (request) => {
   const who = await caller(request);
   const targetUid = String(request.data?.uid || "");
   const { role, status } = request.data || {};

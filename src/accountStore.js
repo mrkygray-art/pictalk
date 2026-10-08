@@ -16,6 +16,8 @@ export const createOrg = (name) => call("createOrg")({ name });
 export const createInvite = (email, role) => call("createInvite")({ email, role });
 export const revokeInvite = (inviteId) => call("revokeInvite")({ inviteId });
 export const updateMember = (uid, change) => call("updateMember")({ uid, ...change });
+export const createDemoJob = () => call("createDemoJob")();
+const mergeGuest = (guestToken) => call("mergeGuestIntoAccount")({ guestToken });
 
 export const TEAM_ROLES = [
   { id: "admin", label: "Admin", about: "Everything, including the team and settings" },
@@ -49,8 +51,6 @@ export class AccountError extends Error {
   }
 }
 
-const ALREADY_USED =
-  "That account already has saved PicTalk work. Moving this phone's guest jobs into it is coming soon. For now, keep working as a guest here.";
 
 // The profile doc (users/{uid}); null until the account function has made it.
 // Cached snapshots are skipped for "missing", so an offline start doesn't look like a new account.
@@ -67,34 +67,75 @@ export function watchProfile(uid, callback) {
 }
 
 // Does this guest have anything that would be lost by switching to another account?
+// (The sample job doesn't count; it isn't moved.)
 async function guestHasWork(uid) {
-  const jobs = await getDocs(query(collection(db, "users", uid, "jobs"), limit(1)));
-  return !jobs.empty;
+  const jobs = await getDocs(query(collection(db, "users", uid, "jobs"), limit(10)));
+  return jobs.docs.some((d) => !d.get("isDemo"));
 }
 
-// A guest whose identity is already someone's account: an empty guest just switches to
-// that account; a guest with jobs stays put (merging comes in the next step).
-async function switchIfEmpty(guest, credential) {
-  if (await guestHasWork(guest.uid)) throw new AccountError("already-used", ALREADY_USED);
+const MERGE_KEY = "pictalk-pending-merge"; // { token, at }: retried for an hour if the move fails
+
+/**
+ * A guest whose Google / email is already someone's account. An empty guest just switches.
+ * A guest with jobs proves who they were (their ID token), switches, and the server moves
+ * their jobs, stops, drafts, and files into the account (mergeGuestIntoAccount).
+ * Returns the merge counts, or null when there was nothing to move.
+ */
+async function switchToExisting(guest, credential) {
+  if (!(await guestHasWork(guest.uid))) {
+    await signInWithCredential(auth, credential);
+    return null;
+  }
+  const token = await guest.getIdToken(true);
+  try {
+    localStorage.setItem(MERGE_KEY, JSON.stringify({ token, at: Date.now() }));
+  } catch {
+    // private mode: no retry later, but the merge below still runs
+  }
   await signInWithCredential(auth, credential);
+  return retryGuestMerge();
+}
+
+/** Finish a guest merge that was started (also called on app start, in case it was cut off). */
+export async function retryGuestMerge() {
+  let pending;
+  try {
+    pending = JSON.parse(localStorage.getItem(MERGE_KEY));
+  } catch {
+    return null;
+  }
+  if (!pending?.token || !auth.currentUser || auth.currentUser.isAnonymous) return null;
+  if (Date.now() - pending.at > 55 * 60 * 1000) {
+    localStorage.removeItem(MERGE_KEY); // the guest's proof has expired
+    return null;
+  }
+  try {
+    const result = await mergeGuest(pending.token);
+    localStorage.removeItem(MERGE_KEY);
+    return result;
+  } catch (err) {
+    if (err.code === "functions/unauthenticated" || err.code === "functions/permission-denied") localStorage.removeItem(MERGE_KEY);
+    throw new AccountError("merge-failed", "You're signed in, but your guest jobs couldn't be moved yet. Keep the app open with signal and they'll move shortly.");
+  }
 }
 
 export async function continueWithGoogle() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
   const user = auth.currentUser;
+  let merged = null;
   if (user?.isAnonymous) {
     try {
       await linkWithPopup(user, provider);
     } catch (err) {
       if (err.code !== "auth/credential-already-in-use") throw err;
-      await switchIfEmpty(user, GoogleAuthProvider.credentialFromError(err));
+      merged = await switchToExisting(user, GoogleAuthProvider.credentialFromError(err));
     }
   } else {
     await signInWithPopup(auth, provider);
   }
   await auth.currentUser.getIdToken(true);
-  return ensureProfile();
+  return { ...(await ensureProfile()), merged };
 }
 
 // ---------- Email me a link ----------
@@ -158,12 +199,13 @@ export async function finishEmailLink(email, { anyway = false, href = window.loc
   const credential = EmailAuthProvider.credentialWithLink(email.trim(), href);
   const guest = new URL(href).searchParams.get("guest");
   const user = auth.currentUser;
+  let merged = null;
   if (user?.isAnonymous && (!guest || guest === user.uid)) {
     try {
       await linkWithCredential(user, credential);
     } catch (err) {
       if (!["auth/email-already-in-use", "auth/credential-already-in-use"].includes(err.code)) throw err;
-      await switchIfEmpty(user, credential);
+      merged = await switchToExisting(user, credential);
     }
   } else if (user?.isAnonymous && !anyway) {
     throw new AccountError("other-browser", "Open this link in the same browser or app you started in, so your jobs come with you.");
@@ -177,7 +219,7 @@ export async function finishEmailLink(email, { anyway = false, href = window.loc
   }
   if (opened) cleanLinkFromUrl();
   await auth.currentUser.getIdToken(true);
-  return ensureProfile();
+  return { ...(await ensureProfile()), merged };
 }
 
 export const cancelEmailLink = cleanLinkFromUrl;

@@ -68,7 +68,7 @@ function SaveWork({ inviteId, onSignedIn }) {
       <p>
         {inviteId
           ? "You've been invited to join a team. Sign in with the email address the invite was sent to."
-          : "You're using PicTalk as a guest on this device. Sign in so your jobs are kept in your account and you can open them on other devices. The jobs you have now come with you."}
+          : "You're using PicTalk as a guest on this device. Guest jobs are deleted after 7 days. Sign in to keep them in your account and open them on other devices. The jobs you have now come with you."}
       </p>
       {error && <p className="error" role="alert">{error}</p>}
       {busy && <p className="sent-note" role="status">Saving your work…</p>}
@@ -294,6 +294,7 @@ export default function AccountSheet({ user, profile, inviteId, inviteError, ema
   const signedIn = (result) => {
     onEmailLinkDone();
     if (result?.joined) onNotice(`You joined ${result.joined.orgName} as ${roleLabel(result.joined.role)}`);
+    else if (result?.merged?.jobs) onNotice(`We added your ${result.merged.jobs} guest job${result.merged.jobs === 1 ? "" : "s"} to your account`);
     else onNotice("Your work is saved to your account");
     onClose();
   };

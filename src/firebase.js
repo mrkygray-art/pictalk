@@ -3,6 +3,7 @@ import { getAuth, signInAnonymously, connectAuthEmulator } from "firebase/auth";
 import { initializeFirestore, persistentLocalCache, connectFirestoreEmulator } from "firebase/firestore";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 
 const liveConfig = {
   apiKey: "AIzaSyCpi_XSpfJzpBHt0-kFFP8G-TQaou7SmA8",
@@ -30,6 +31,13 @@ const firebaseConfig = useEmulators
   : liveConfig;
 
 const app = initializeApp(firebaseConfig);
+
+// App Check (abuse and cost control): on once the real project has a reCAPTCHA Enterprise
+// site key in VITE_APPCHECK_SITE_KEY; the functions enforce it with PICCOLO_ENFORCE_APP_CHECK=1.
+const appCheckKey = import.meta.env.VITE_APPCHECK_SITE_KEY;
+if (!useEmulators && appCheckKey) {
+  initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(appCheckKey), isTokenAutoRefreshEnabled: true });
+}
 export const auth = getAuth(app);
 export const db = initializeFirestore(app, { localCache: persistentLocalCache() });
 export const storage = getStorage(app);

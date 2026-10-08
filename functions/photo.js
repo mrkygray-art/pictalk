@@ -11,6 +11,7 @@ const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 const Anthropic = require("@anthropic-ai/sdk");
 const sharp = require("sharp");
+const { reserveGlobalAi } = require("./budget");
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 
@@ -138,6 +139,12 @@ exports.describeStopPhoto = onDocumentWritten(
 
     const stop = await claim(ref, uid);
     if (!stop) return;
+    try {
+      await reserveGlobalAi("photo");
+    } catch (err) {
+      await ref.update({ photoDescStatus: "failed", photoDescError: err.message });
+      return;
+    }
 
     const started = Date.now();
     let result = null;

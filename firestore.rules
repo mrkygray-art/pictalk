@@ -48,9 +48,19 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
         && request.resource.data.defaults is map
-        && request.resource.data.defaults.keys().hasOnly(['markupPct', 'taxPct', 'terms', 'quotePrefix', 'laborRate', 'aiPriceEstimates'])
+        && request.resource.data.defaults.keys().hasOnly(['markupPct', 'taxPct', 'terms', 'quotePrefix', 'laborRate', 'aiPriceEstimates', 'learnFromEdits'])
         && request.resource.data.defaults.get('aiPriceEstimates', false) is bool
+        && request.resource.data.defaults.get('learnFromEdits', true) is bool
         && request.resource.data.updatedAt is number;
+    }
+
+    // What drafts learn from finals (functions/learning.js): learning/org_{orgId} for a company
+    // (its admin reads it), learning/user_{uid} for a personal account (its owner reads it).
+    // Written only by the functions.
+    match /learning/{key} {
+      allow read: if request.auth != null
+        && (key == 'user_' + request.auth.uid
+            || (key.matches('org_.+') && adminOf(key.replace('^org_', ''))));
     }
 
     // The company's customers. Members read them; admins and estimators add and edit them

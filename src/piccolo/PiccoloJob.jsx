@@ -119,6 +119,8 @@ function LineCard({ line, stopNumber, onJump, showPrice, onEdit }) {
           {line.source?.basis === "seen_in_photo" && <span className="badge">Seen in photo</span>}
           {line.partNumberStatus === "ai_suggested" && <span className="badge is-warn">Verify part #</span>}
           {line.priceSource === "ai_estimate" && <span className="badge is-warn">ESTIMATE</span>}
+          {line.partNumberStatus === "history" && <span className="badge">Part # from a past quote</span>}
+          {showPrice && line.priceSource === "history" && <span className="badge">Last quoted price</span>}
           {!priced && <span className="badge is-muted">Needs price</span>}
         </span>
         {line.partNumber && <span className="pc-meta">Part #: {line.partNumber}</span>}
@@ -500,6 +502,12 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
                   <span>
                     v{f.version} · {when(f.finalizedAt, true)}
                     {f.finalizedByName ? ` · ${f.finalizedByName}` : ""}
+                    {f.editDiff && (
+                      <span className="pc-meta">
+                        From the AI draft: {f.editDiff.linesKept} kept, {f.editDiff.linesChanged} changed, {f.editDiff.linesRemoved} removed,{" "}
+                        {f.editDiff.linesAdded} added
+                      </span>
+                    )}
                   </span>
                   <button className="link-btn" onClick={() => setSheet({ type: "export", choice: f.id })}>
                     Export

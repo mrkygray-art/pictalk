@@ -2,7 +2,8 @@
 // questions) as an immutable, numbered final (v1, v2, …) with the job's summary, notes, and
 // words, and copies every photo and voice recording to finals/{uid}/{jobId}/v{n}/. Voice
 // files under voice/ are deleted after 5 days by a Storage lifecycle rule; the copies are not,
-// so a final keeps the full record (picture, audio, text).
+// so a final keeps the full record (picture, audio, text). It also records what changed since
+// the AI's draft (editDiff) and adds the final's lines to what later drafts learn from.
 //
 // piccoloMediaLinks: short-lived signed links to a final's media, for the JSON export.
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
@@ -12,6 +13,7 @@ const { getFirestore } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 const { piccoloCallable } = require("./budget");
 const { piccoloAccess, ownerOf } = require("./teams");
+const { diffDraft, learnFromFinal } = require("./learning");
 
 const LINK_DAYS = 7;
 const db = () => getFirestore();
@@ -118,6 +120,11 @@ exports.finalizePiccolo = onCall(piccoloCallable({ timeoutSeconds: 300, memory: 
     }
   }
 
+  // What changed since the AI's draft this version started from
+  const draft = working.draftId ? (await jobRef.collection("drafts").doc(working.draftId).get()).data() : null;
+  const editDiff = draft?.aiOriginal ? diffDraft(draft.aiOriginal, working) : null;
+  const orgId = job.orgId || profile.orgId || null;
+
   const now = Date.now();
   const final = {
     version,
@@ -126,7 +133,7 @@ exports.finalizePiccolo = onCall(piccoloCallable({ timeoutSeconds: 300, memory: 
     finalizedByName: profile.displayName || profile.email || null,
     createdAt: now,
     createdBy: uid,
-    orgId: job.orgId || profile.orgId || null,
+    orgId,
     basedOnDraftId: working.draftId || null,
     draftVersion: working.draftVersion || null,
     job: {
@@ -145,6 +152,7 @@ exports.finalizePiccolo = onCall(piccoloCallable({ timeoutSeconds: 300, memory: 
     stops: stops.map((s, i) => ({ id: s.id, index: i + 1, words: stopWords(s) || null, photoDescription: photoWords(s) || null })),
     mediaManifest,
     warningsAcknowledged: warnings,
+    editDiff,
   };
   const batch = db().batch();
   batch.set(jobRef.collection("finals").doc(versionId), final);
@@ -154,6 +162,14 @@ exports.finalizePiccolo = onCall(piccoloCallable({ timeoutSeconds: 300, memory: 
   });
   await batch.commit();
   logger.info("Piccolo finalized", { uid, jobId, version, media: mediaManifest.length });
+
+  // Remember the final's lines for later drafts (the final is already saved, so a failure here only logs)
+  try {
+    const defaults = orgId ? (await db().doc(`orgs/${orgId}`).get()).get("defaults") || {} : {};
+    await learnFromFinal({ orgId: job.orgId || null, ownerUid: owner, job, defaults, bom: working.bom, diff: editDiff, at: now });
+  } catch (err) {
+    logger.warn("Piccolo: couldn't record learning", { uid, jobId, error: String(err?.message || err) });
+  }
   return { version, versionId, media: mediaManifest.length, missing: mediaManifest.filter((m) => m.missing).length };
 });
 

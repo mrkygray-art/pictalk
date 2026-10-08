@@ -7,7 +7,7 @@ import { watchOrg, watchTeam, roleLabel, errorText } from "../accountStore";
 import { AssignSheet } from "../piccolo/TeamViews";
 import {
   SALES, salesLabel, salesStatusOf, watchCustomers, watchOrgJobs, watchActivity, saveCustomer, saveOrgSettings,
-  updateTeamJob, orgStorageUsage, exportAll, jobsCsv,
+  updateTeamJob, orgStorageUsage, exportAll, jobsCsv, watchLearning, clearLearning,
 } from "./adminStore";
 
 const TABS = [
@@ -313,6 +313,7 @@ function SettingsTab({ org, onNotice }) {
     laborRate: d.laborRate ? String(d.laborRate) : "",
     terms: d.terms || "",
     aiPriceEstimates: !!d.aiPriceEstimates,
+    learnFromEdits: d.learnFromEdits !== false,
   });
   const [error, setError] = useState("");
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value });
@@ -335,6 +336,7 @@ function SettingsTab({ org, onNotice }) {
             laborRate: nums.laborRate,
             terms: f.terms.trim().slice(0, 2000),
             aiPriceEstimates: f.aiPriceEstimates,
+            learnFromEdits: f.learnFromEdits,
           });
           onNotice("Settings saved. New drafts use them.");
         } catch (err) {
@@ -389,6 +391,15 @@ function SettingsTab({ org, onNotice }) {
             quote PDF says so.
           </span>
         </label>
+        <label className="adm-toggle">
+          <input type="checkbox" checked={f.learnFromEdits} onChange={set("learnFromEdits")} />
+          <span>
+            <strong>Learn from finalized quotes</strong>
+            <br />
+            New drafts reuse your company's wording, part numbers, and last prices from earlier finals. Only your company's quotes are used. Turn off
+            to stop remembering and using them; the Data tab can clear what's remembered.
+          </span>
+        </label>
         <p className="pc-hint">Drafts use Claude. Each draft records the model and prompt version, so changes can be compared later.</p>
       </section>
       <button type="submit" className="save-btn">
@@ -415,6 +426,7 @@ const ACTIONS = {
   "piccolo.export": "exported a job",
   "org.settings": "company settings changed",
   "account.mergeGuest": "added guest jobs to their account",
+  "learning.clear": "cleared what drafts learned",
 };
 
 function ActivityTab({ entries, team, jobs }) {
@@ -479,6 +491,79 @@ function ActivityTab({ entries, team, jobs }) {
 
 // ---------- Data ----------
 
+function LearningBlock({ org, onNotice }) {
+  const [learning, setLearning] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  useEffect(() => watchLearning(org.id, setLearning), [org.id]);
+  const s = learning?.stats || {};
+  const lines = learning?.lines || [];
+  const pct = s.linesDrafted ? Math.round((100 * (s.linesKept || 0)) / s.linesDrafted) : null;
+  const off = org.defaults?.learnFromEdits === false;
+  return (
+    <section className="pc-block">
+      <h3>What drafts learn</h3>
+      {off && <p className="pc-hint">Learning is off (Settings). Drafts don't use what's below.</p>}
+      {s.finals ? (
+        <>
+          <p className="pc-text">
+            {s.finals} final{s.finals === 1 ? "" : "s"} so far. {lines.length} remembered line{lines.length === 1 ? "" : "s"} (wording, part numbers, last
+            prices) go into new drafts.
+          </p>
+          {pct !== null && (
+            <p className="pc-text">
+              Of {s.linesDrafted} AI-drafted lines, {pct}% were finalized unchanged, {s.linesChanged || 0} edited, and {s.linesRemoved || 0} removed.{" "}
+              {s.linesAdded || 0} more {s.linesAdded === 1 ? "was" : "were"} added by hand.
+            </p>
+          )}
+          {lines.length > 0 && (
+            <ul className="adm-learned">
+              {lines.slice(0, 8).map((l, i) => (
+                <li key={i}>
+                  {l.description}
+                  {l.partNumber ? ` · ${l.partNumber}` : ""}
+                </li>
+              ))}
+              {lines.length > 8 && <li className="pc-hint">and {lines.length - 8} more</li>}
+            </ul>
+          )}
+          {confirm ? (
+            <div className="sheet-actions">
+              <button
+                className="big-btn danger-btn"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await clearLearning();
+                    onNotice("Cleared. New drafts start fresh.");
+                  } catch (err) {
+                    onNotice(errorText(err) || "Couldn't clear it.");
+                  } finally {
+                    setBusy(false);
+                    setConfirm(false);
+                  }
+                }}
+              >
+                {busy ? "Clearing…" : "Yes, Forget All of It"}
+              </button>
+              <button className="big-btn plain-btn" disabled={busy} onClick={() => setConfirm(false)}>
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button className="big-btn plain-btn" onClick={() => setConfirm(true)}>
+              Forget Remembered Lines
+            </button>
+          )}
+        </>
+      ) : (
+        <p className="pc-empty">Nothing yet. Each finalized quote teaches new drafts your wording, part numbers, and prices.</p>
+      )}
+    </section>
+  );
+}
+
 function DataTab({ org, team, customers, jobs, onNotice }) {
   const [usage, setUsage] = useState(null);
   const [busy, setBusy] = useState("");
@@ -542,6 +627,7 @@ function DataTab({ org, team, customers, jobs, onNotice }) {
           {busy === "usage" ? "Checking…" : "Check Storage Used"}
         </button>
       </section>
+      <LearningBlock org={org} onNotice={onNotice} />
       <section className="pc-block">
         <h3>Export everything</h3>
         <p className="pc-empty">Company settings, team, customers, and every shared job with its Piccolo work order, parts, quote, and finals.</p>

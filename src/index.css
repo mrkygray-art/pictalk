@@ -2528,3 +2528,17 @@ div.adm-stat {
   font-size: 14px;
   color: var(--muted);
 }
+
+/* Admin Data tab: lines drafts have learned */
+.adm-learned {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  font-size: 16px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.pc-compare-row .pc-meta {
+  display: block;
+  font-size: 15px;
+}

@@ -75,6 +75,18 @@ export const saveOrgSettings = (orgId, name, defaults) => updateDoc(doc(db, "org
 const call = (name) => (data) => httpsCallable(functions, name, { timeout: 130000 })(data).then((r) => r.data);
 export const updateTeamJob = (ownerUid, jobId, change) => call("updateTeamJob")({ ownerUid, jobId, ...change });
 export const orgStorageUsage = () => call("orgStorageUsage")({});
+export const clearLearning = () => call("clearLearning")({});
+
+/** What drafts have learned from the company's finals (lines and edit counts), or null. */
+export const watchLearning = (orgId, callback) =>
+  onSnapshot(
+    doc(db, "learning", `org_${orgId}`),
+    (snap) => callback(snap.exists() ? snap.data() : null),
+    (err) => {
+      console.warn("Watching learning failed:", err);
+      callback(null);
+    }
+  );
 
 // ---------- export everything ----------
 

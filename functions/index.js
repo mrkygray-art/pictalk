@@ -37,6 +37,7 @@ exports.updateTeamJob = require("./admin").updateTeamJob;
 exports.orgStorageUsage = require("./admin").orgStorageUsage;
 exports.auditOrgSettings = require("./admin").auditOrgSettings;
 exports.recordExport = require("./admin").recordExport;
+exports.clearLearning = require("./learning").clearLearning;
 
 // Guests: 7-day expiry, daily cleanup, merging into an existing account, sample job
 const guests = require("./guests");

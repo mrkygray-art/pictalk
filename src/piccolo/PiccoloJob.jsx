@@ -7,10 +7,12 @@ import { watchNotes, saveNoteText } from "../wrapUpStore";
 import { watchSummary, hasSummary, saveSummaryEdits, isTranscriptPending } from "../summaryStore";
 import {
   watchLatestDraft, requestDraft, captureChangedSince, money, quoteTotals, draftToWorking, blankLine, renumber, newId,
+  watchFinals, requestFinalize, finalizeWarnings,
 } from "./piccoloStore";
 import useWorkingCopy from "./useWorkingCopy";
 import LineSheet from "./LineSheet";
 import { ItemSheet, CompareSheet } from "./EditSheets";
+import { FinalizeSheet, ExportSheet } from "./FinalSheets";
 
 const TABS = [
   ["overview", "Overview"],
@@ -227,9 +229,10 @@ function DetailsSheet({ job, onSave, onClose }) {
 }
 
 /** One job in Piccolo: draft with AI, then edit the work order, BOM, and quote. */
-export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, online, onBack, onOpenInPicTalk, onNotice }) {
+export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, online, isGuest, orgName, onBack, onAccount, onOpenInPicTalk, onNotice }) {
   const [tab, setTab] = useState("overview");
-  const { working, loaded: workingLoaded, status, edit, undo, canUndo, replace } = useWorkingCopy(uid, job);
+  const { working, loaded: workingLoaded, status, edit, undo, canUndo, replace, saveNow } = useWorkingCopy(uid, job);
+  const [finals, setFinals] = useState([]);
   const [latest, setLatest] = useState(undefined);
   const [notes, setNotes] = useState({});
   const [summary, setSummary] = useState(null);
@@ -239,6 +242,7 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
   const autoTried = useRef(false);
 
   useEffect(() => watchLatestDraft(uid, job.id, setLatest), [uid, job.id]);
+  useEffect(() => watchFinals(uid, job.id, setFinals), [uid, job.id]);
   useEffect(() => watchNotes(uid, job.id, setNotes), [uid, job.id]);
   useEffect(() => watchSummary(uid, job.id, setSummary), [uid, job.id]);
 
@@ -328,6 +332,17 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
   const totals = quoteTotals(bom, working?.quote);
   const questions = working?.questions || [];
   const openQuestions = questions.filter((q) => !q.answered).length;
+  const lastFinal = finals[0] || null;
+  const changedSinceFinal = !!lastFinal && !!working && (working.updatedAt || 0) > lastFinal.finalizedAt;
+  const when = (t, year) => new Date(t).toLocaleString([], { month: "short", day: "numeric", ...(year ? { year: "numeric" } : {}), hour: "numeric", minute: "2-digit" });
+  const exportBase = {
+    job,
+    working,
+    summary: hasSummary(summary) ? summary.summary : null,
+    notes,
+    stops: sorted.map((s) => ({ id: s.id, words: stopText(s) || null, photoDescription: photoText(s) || null })),
+    orgName,
+  };
 
   return (
     <>
@@ -405,6 +420,20 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
               </button>
             )}
           </div>
+          {lastFinal && (
+            <p className={`pc-final-note${changedSinceFinal ? " is-changed" : ""}`}>
+              Final v{lastFinal.version} saved {when(lastFinal.finalizedAt)}.
+              {changedSinceFinal ? ` You've made changes since. Finalize again to save v${lastFinal.version + 1}.` : ""}
+            </p>
+          )}
+          <div className="pc-actions">
+            <button className="big-btn photo-btn" onClick={() => setSheet({ type: "finalize" })} disabled={!!lastFinal && !changedSinceFinal}>
+              {lastFinal && !changedSinceFinal ? `Finalized v${lastFinal.version}` : "Finalize"}
+            </button>
+            <button className="big-btn plain-btn" onClick={() => setSheet({ type: "export" })}>
+              Export
+            </button>
+          </div>
         </>
       )}
 
@@ -458,6 +487,23 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
                 itemSheet("Open question", "", (w, text, answer) => void w.questions.push({ id: newId(), text, sourceIds: [], answer, answered: !!answer }), null, { answer: "" })
               }
             />
+          )}
+          {finals.length > 0 && (
+            <section className="pc-block">
+              <h3>Finalized versions</h3>
+              {finals.map((f) => (
+                <div key={f.id} className="pc-compare-row">
+                  <span>
+                    v{f.version} · {when(f.finalizedAt, true)}
+                    {f.finalizedByName ? ` · ${f.finalizedByName}` : ""}
+                  </span>
+                  <button className="link-btn" onClick={() => setSheet({ type: "export", choice: f.id })}>
+                    Export
+                  </button>
+                </div>
+              ))}
+              <p className="pc-hint">Each final keeps its own copy of the photos and audio.</p>
+            </section>
           )}
           <button className="text-btn" onClick={() => onOpenInPicTalk(job.id)}>
             Add photos or notes in PicTalk
@@ -655,6 +701,38 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
           onClose={() => {
             edit((w) => void (w.reviewedDraftVersion = latest.version));
             setSheet(null);
+          }}
+        />
+      )}
+      {sheet?.type === "finalize" && working && (
+        <FinalizeSheet
+          warnings={finalizeWarnings(working)}
+          nextVersion={(job.latestFinalVersion || 0) + 1}
+          isGuest={isGuest}
+          onAccount={() => {
+            setSheet(null);
+            onAccount();
+          }}
+          onClose={() => setSheet(null)}
+          onFinalize={async () => {
+            await saveNow(); // the server finalizes what's in the cloud
+            const { version, missing } = await requestFinalize(job.id);
+            setSheet(null);
+            onNotice(`Saved final v${version}${missing ? `. ${missing} expired recording${missing === 1 ? " wasn't" : "s weren't"} included` : ""}`);
+          }}
+        />
+      )}
+      {sheet?.type === "export" && working && (
+        <ExportSheet
+          jobId={job.id}
+          base={exportBase}
+          finals={finals}
+          isGuest={isGuest}
+          initialChoice={sheet.choice || (changedSinceFinal ? "current" : null)}
+          onClose={() => setSheet(null)}
+          onDone={(how) => {
+            setSheet(null);
+            onNotice(how === "shared" ? "Shared" : "Downloaded");
           }}
         />
       )}

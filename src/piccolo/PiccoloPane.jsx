@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { watchJobs, jobTitle } from "../jobStore";
 import { watchStops, getPendingStops, onQueueChange } from "../stopStore";
 import PiccoloJob from "./PiccoloJob";
+import { watchOrg } from "../accountStore";
 
 const day = (t) => new Date(t).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
 const STATUS = { drafted: "AI draft ready", editing: "Being edited", finalized: "Finalized" };
@@ -17,12 +18,14 @@ function savedOpenJob() {
 
 // Piccolo: turns a finished PicTalk job into a work order, parts list (BOM), and quote.
 // It reads the same jobs and stops as PicTalk (nothing is copied).
-export default function PiccoloPane({ uid, isGuest, target, onAccount, onOpenInPicTalk, onNotice }) {
+export default function PiccoloPane({ uid, isGuest, orgId, target, onAccount, onOpenInPicTalk, onNotice }) {
   const [jobs, setJobs] = useState({ uid: null, list: [] });
   const [stops, setStops] = useState({ uid: null, list: [] });
   const [pending, setPending] = useState([]);
   const [openId, setOpenId] = useState(() => target?.jobId ?? savedOpenJob());
   const [online, setOnline] = useState(navigator.onLine);
+  const [org, setOrg] = useState(null);
+  useEffect(() => (orgId ? watchOrg(orgId, setOrg) : undefined), [orgId]);
 
   useEffect(() => (uid ? watchJobs(uid, (list) => setJobs({ uid, list })) : undefined), [uid]);
   useEffect(() => (uid ? watchStops(uid, (list) => setStops({ uid, list })) : undefined), [uid]);
@@ -69,6 +72,9 @@ export default function PiccoloPane({ uid, isGuest, target, onAccount, onOpenInP
           pendingStops={pending.filter((p) => p.jobId === job.id).length}
           autoDraft={target?.autoDraft && target.jobId === job.id}
           online={online}
+          isGuest={isGuest}
+          orgName={orgId && org?.id === orgId ? org.name : null}
+          onAccount={onAccount}
           onBack={() => open(null)}
           onOpenInPicTalk={onOpenInPicTalk}
           onNotice={onNotice}

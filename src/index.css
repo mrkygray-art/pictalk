@@ -2286,3 +2286,74 @@ button:focus-visible {
   padding: 6px 14px;
   background: var(--bg);
 }
+
+/* ---------- Piccolo finalize and export ---------- */
+
+.pc-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.pc-actions .big-btn {
+  min-height: 60px;
+  font-size: 20px;
+}
+
+.pc-final-note {
+  font-size: 16px;
+  color: var(--live);
+  line-height: 1.4;
+}
+
+.pc-final-note.is-changed {
+  color: var(--orange);
+}
+
+.pc-warnings {
+  background: var(--surface-2);
+  border-left: 4px solid var(--orange);
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.pc-warnings ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.pc-checks {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 18px;
+}
+
+.pc-checks legend {
+  margin-bottom: 6px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.pc-checks label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.pc-checks input {
+  width: 24px;
+  height: 24px;
+}
+
+.pc-file-name {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}

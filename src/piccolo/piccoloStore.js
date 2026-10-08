@@ -158,3 +158,65 @@ export function quoteTotals(bom, quote = {}) {
   const tax = ((subtotal + markup) * (Number(quote.taxPct) || 0)) / 100;
   return { subtotal, markup, tax, total: subtotal + markup + tax, unpriced };
 }
+
+// ---------- finalize ----------
+const WARNING_TEXT = {
+  unpriced: (n) => `${n} line${n === 1 ? " has" : "s have"} no price`,
+  verify: (n) => `${n} part number${n === 1 ? " is" : "s are"} marked Verify`,
+  estimate: (n) => `${n} price${n === 1 ? " is an AI estimate" : "s are AI estimates"}`,
+  inferred: (n) => `${n} inferred line${n === 1 ? " hasn't" : "s haven't"} been checked`,
+  questions: (n) => `${n} open question${n === 1 ? " isn't" : "s aren't"} answered`,
+};
+
+/** Things to double-check before finalizing (same rules as functions/finalize.js). */
+export function finalizeWarnings(working) {
+  const bom = working?.bom || [];
+  const count = (fn) => bom.filter(fn).length;
+  const list = [
+    ["unpriced", count((l) => !Number.isFinite(l.unitPrice))],
+    ["verify", count((l) => l.partNumberStatus === "ai_suggested")],
+    ["estimate", count((l) => l.priceSource === "ai_estimate")],
+    ["inferred", count((l) => l.source?.basis === "inferred" && !l.checked)],
+    ["questions", (working?.questions || []).filter((q) => !q.answered).length],
+  ];
+  return list.filter(([, n]) => n > 0).map(([kind, n]) => ({ kind, count: n, text: WARNING_TEXT[kind](n) }));
+}
+
+/** Finalized versions of a job, newest first. */
+export function watchFinals(uid, jobId, callback) {
+  return onSnapshot(
+    query(collection(db, ...jobDoc(uid, jobId), "finals"), orderBy("version", "desc")),
+    (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => {
+      console.warn("Watching Piccolo finals failed:", err);
+      callback([]);
+    }
+  );
+}
+
+const finalize = httpsCallable(functions, "finalizePiccolo", { timeout: 310000 });
+const mediaLinks = httpsCallable(functions, "piccoloMediaLinks", { timeout: 70000 });
+
+/** Save the current version as the next final (v1, v2, …). Throws an Error with a friendly message. */
+export async function requestFinalize(jobId) {
+  if (!navigator.onLine) throw new Error("Finalizing needs signal, so the photos and audio can be saved with it.");
+  try {
+    return (await finalize({ jobId, acknowledged: true })).data;
+  } catch (err) {
+    const code = String(err?.code || "").replace("functions/", "");
+    const message = String(err.message || "").replace(/\s*[[(][^\])]*[\])]\s*$/, "");
+    if (["permission-denied", "failed-precondition", "not-found"].includes(code)) throw new Error(message, { cause: err });
+    console.error("Finalize failed:", err);
+    throw new Error("Couldn't finalize right now. Please try again.", { cause: err });
+  }
+}
+
+/** Signed, expiring links to a final's media (empty when the server can't sign them). */
+export async function finalMediaLinks(jobId, versionId) {
+  try {
+    return (await mediaLinks({ jobId, versionId })).data;
+  } catch (err) {
+    console.warn("Media links failed:", err);
+    return { links: {}, expiresAt: null };
+  }
+}

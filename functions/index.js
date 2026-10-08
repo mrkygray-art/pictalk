@@ -21,6 +21,8 @@ exports.describeStopPhoto = require("./photo").describeStopPhoto;
 
 // Piccolo: AI draft of a work order, BOM, and quote from a finished job
 exports.draftPiccolo = require("./piccolo").draftPiccolo;
+exports.finalizePiccolo = require("./finalize").finalizePiccolo;
+exports.piccoloMediaLinks = require("./finalize").piccoloMediaLinks;
 
 // Piccolo accounts: profiles, companies, team invites, roles
 const accounts = require("./accounts");

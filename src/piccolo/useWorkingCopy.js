@@ -19,6 +19,7 @@ export default function useWorkingCopy(uid, job) {
   const history = useRef([]);
   const pending = useRef(null);
   const timer = useRef(null);
+  const lastWrite = useRef(Promise.resolve());
   const statusOfJob = useRef(job.piccoloStatus);
   useEffect(() => {
     statusOfJob.current = job.piccoloStatus;
@@ -34,12 +35,14 @@ export default function useWorkingCopy(uid, job) {
     if (!next) return;
     pending.current = null;
     setStatus(navigator.onLine ? "saving" : "offline");
-    saveWorking(uid, jobId, next)
+    lastWrite.current = saveWorking(uid, jobId, next)
       .then(() => !pending.current && setStatus("saved"))
       .catch((err) => {
         console.warn("Saving Piccolo edits failed:", err);
         setStatus("error");
+        throw err;
       });
+    lastWrite.current.catch(() => {}); // handled above; callers of saveNow see it too
   }, [uid, jobId]);
 
   // Save right away when leaving the job or hiding the app
@@ -95,5 +98,11 @@ export default function useWorkingCopy(uid, job) {
     [working, commit, uid]
   );
 
-  return { working, loaded: server !== undefined, status, edit, undo, canUndo: undoCount > 0, replace };
+  /** Send any waiting edit now; resolves once the cloud has it (used before finalizing). */
+  const saveNow = useCallback(() => {
+    flush();
+    return lastWrite.current;
+  }, [flush]);
+
+  return { working, loaded: server !== undefined, status, edit, undo, canUndo: undoCount > 0, replace, saveNow };
 }

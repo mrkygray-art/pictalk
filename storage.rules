@@ -18,6 +18,11 @@ service firebase.storage {
         && request.resource.size < 25 * 1024 * 1024
         && request.resource.contentType == 'application/pdf';
     }
+    // Piccolo finals: copies of a job's photos and audio, made by finalizePiccolo (never
+    // written by the app, and outside voice/, so the 5-day voice lifecycle doesn't apply)
+    match /finals/{uid}/{jobId}/{version}/{file} {
+      allow read: if isOwner(uid);
+    }
     match /voice/{uid}/{file} {
       allow read, delete: if isOwner(uid);
       allow create, update: if isOwner(uid)

@@ -90,7 +90,8 @@ service cloud.firestore {
           return d.keys().hasOnly(['name', 'address', 'lat', 'lng', 'status',
                                    'startedAt', 'endedAt', 'lastStopAt',
                                    'customer', 'location', 'exportCount',
-                                   'piccoloStatus', 'latestDraftId', 'piccoloDraftedAt', 'piccoloDraftCount'])
+                                   'piccoloStatus', 'latestDraftId', 'piccoloDraftedAt', 'piccoloDraftCount',
+                                   'latestFinalVersion', 'finalizedAt'])
             && (d.get('piccoloStatus', null) == null
                 || d.piccoloStatus in ['none', 'drafted', 'editing', 'finalized'])
             && (d.get('latestDraftId', null) == null || (d.latestDraftId is string && d.latestDraftId.size() <= 64))
@@ -107,10 +108,19 @@ service cloud.firestore {
         }
         allow read, delete: if isOwner();
         // piccoloDraftCount (the per-job Piccolo draft limit) is set only by draftPiccolo
+        // latestFinalVersion / finalizedAt are set only by finalizePiccolo
         allow create: if isOwner() && validJob()
-          && request.resource.data.get('piccoloDraftCount', 0) == 0;
+          && request.resource.data.get('piccoloDraftCount', 0) == 0
+          && request.resource.data.get('latestFinalVersion', 0) == 0;
         allow update: if isOwner() && validJob()
-          && request.resource.data.get('piccoloDraftCount', 0) == resource.data.get('piccoloDraftCount', 0);
+          && request.resource.data.get('piccoloDraftCount', 0) == resource.data.get('piccoloDraftCount', 0)
+          && request.resource.data.get('latestFinalVersion', 0) == resource.data.get('latestFinalVersion', 0)
+          && request.resource.data.get('finalizedAt', 0) == resource.data.get('finalizedAt', 0);
+
+        // Piccolo finals: immutable numbered snapshots, written only by finalizePiccolo
+        match /finals/{versionId} {
+          allow read: if isOwner();
+        }
 
         // Piccolo AI drafts: versioned, written only by draftPiccolo (Admin SDK)
         match /drafts/{draftId} {

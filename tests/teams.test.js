@@ -6,9 +6,12 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { signInWithCredential } from "firebase/auth";
-import { doc, getDoc, setDoc, collectionGroup, query, where, getDocs } from "firebase/firestore";
-import { ref, uploadBytes, getMetadata } from "firebase/storage";
+import { doc, getDoc, setDoc, updateDoc, collectionGroup, query, where, getDocs } from "firebase/firestore";
+import { ref, uploadBytes, getMetadata, deleteObject } from "firebase/storage";
+import { createRequire } from "node:module";
 import { phone, personal, google, mail, rejects, blocked, closeAll } from "./emulator.js";
+
+const sharp = createRequire(import.meta.url)("../functions/node_modules/sharp");
 
 after(closeAll);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -152,4 +155,30 @@ test("personal accounts' jobs stay private", async () => {
   assert.equal((await read(P, `users/${pu}/jobs/pj1`)).orgId, undefined);
   await blocked(getDoc(doc(E.db, `users/${pu}/jobs/pj1`)));
   await rejects(P.call("setJobSharing", { jobId: "pj1", shared: true }), "failed-precondition");
+});
+
+test("replacing a stop's photo (Add photo / Replace photo): new file, teammates see it, it gets described again", async () => {
+  const stopPath = `users/${owner}/stops/${JOB}-s1`;
+  const oldPath = (await read(A, stopPath)).photoPath;
+  // What the app does (stopStore uploadPhoto): a new "{stopId}.{time}.ext" file, then the record
+  const newPath = `photos/${owner}/${JOB}-s1.${Date.now()}.jpg`;
+  const jpeg = new Uint8Array(await sharp({ create: { width: 8, height: 8, channels: 3, background: "#888" } }).jpeg().toBuffer());
+  await rejects(uploadBytes(ref(F.storage, newPath), jpeg, { contentType: "image/jpeg" }), "storage/unauthorized");
+  await uploadBytes(ref(A.storage, newPath), jpeg, { contentType: "image/jpeg" });
+  await updateDoc(doc(A.db, stopPath), {
+    photoPath: newPath, photoDescStatus: "requested", photoDescRequestedAt: Date.now(), photoDescription: null, photoDescEdited: false, photoDescError: null,
+  });
+  await deleteObject(ref(A.storage, oldPath));
+  await blocked(updateDoc(doc(F.db, stopPath), { photoPath: `photos/${owner}/x.jpg` })); // only the owner
+
+  // The team still sees the stop's (new) photo: the part before the first dot is the stop id
+  assert.ok(await getMetadata(ref(F.storage, newPath)));
+  await rejects(getMetadata(ref(I.storage, newPath)), "storage/unauthorized");
+  await rejects(getMetadata(ref(O.storage, newPath)), "storage/unauthorized");
+  const stop = await waitFor(async () => {
+    const s = await read(A, stopPath);
+    return s.photoDescStatus === "described" || s.photoDescStatus === "failed" ? s : null;
+  }, 30000);
+  assert.equal(stop.photoDescStatus, "described");
+  assert.equal(stop.orgId, orgId);
 });

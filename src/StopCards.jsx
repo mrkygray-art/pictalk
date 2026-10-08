@@ -91,8 +91,10 @@ function SparkleIcon() {
 // One row in a list of stops. Each box holds the buttons for what's in it:
 // the voice note (words, audio, Edit words), then the photo description;
 // actions for the whole stop sit at the bottom.
-function StopCard({ stop, anchor, number, time, photoUrl, audioUrl, audioExpired, status, statusText, transcript, online, photoDesc, onSelect, onEdit }) {
+// photoWaiting: a new photo is still on this phone (no Describe photo until it uploads)
+function StopCard({ stop, anchor, number, time, photoUrl, photoWaiting, audioUrl, audioExpired, status, statusText, transcript, online, photoDesc, onSelect, onEdit }) {
   const hasVoice = transcript || audioUrl || audioExpired;
+  const onPhoto = photoDesc?.onPhoto && stop ? () => photoDesc.onPhoto(stop, number, !!photoUrl) : null;
   return (
     <article className="stop" id={anchor ? `stop-${anchor}` : undefined}>
       {photoUrl && <img src={photoUrl} alt="" className="thumb" />}
@@ -116,14 +118,21 @@ function StopCard({ stop, anchor, number, time, photoUrl, audioUrl, audioExpired
           </div>
         )}
         {photoDesc && stop && (
-          <PhotoDescription stop={stop} number={number} online={online} hasPhoto={!!photoUrl} actions={photoDesc} />
+          <PhotoDescription stop={stop} number={number} online={online} hasPhoto={!!photoUrl && !photoWaiting} actions={photoDesc} />
         )}
         {stop && <StopEngLine stop={stop} />}
-        {onSelect && (
+        {(onSelect || onPhoto) && (
           <div className="stop-footer">
-            <button className="stop-more stop-move" onClick={() => onSelect({ number, photoUrl })}>
-              Move or delete this stop
-            </button>
+            {onPhoto && (
+              <button className="stop-more stop-photo" onClick={onPhoto}>
+                {photoUrl ? "Replace photo" : "Add photo"}
+              </button>
+            )}
+            {onSelect && (
+              <button className="stop-more stop-move" onClick={() => onSelect({ number, photoUrl })}>
+                Move or delete this stop
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -156,6 +165,7 @@ function describeStatus(stop) {
 
 // A stop that's already in the cloud: look up its photo/voice download links
 function CloudStop({ stop, number, online, photoDesc, onSelect, onEdit }) {
+  const localPhoto = photoDesc?.localPhotos?.get(stop.id) || null; // a new photo waiting on this phone
   const [urls, setUrls] = useState({ photo: null, audio: null, loaded: false });
 
   useEffect(() => {
@@ -169,6 +179,10 @@ function CloudStop({ stop, number, online, photoDesc, onSelect, onEdit }) {
   }, [stop.photoPath, stop.audioPath]);
 
   const s = describeStatus(stop);
+  if (localPhoto) {
+    s.status = s.status === "problem" ? s.status : "pending";
+    s.text = `${s.text} · ${online ? "New photo uploading…" : "New photo saved on this phone. Will upload when you're online."}`;
+  }
 
   return (
     <StopCard
@@ -176,7 +190,8 @@ function CloudStop({ stop, number, online, photoDesc, onSelect, onEdit }) {
       anchor={stop.id}
       number={number}
       time={new Date(stop.clientCreatedAt)}
-      photoUrl={urls.photo}
+      photoUrl={localPhoto || urls.photo}
+      photoWaiting={!!localPhoto}
       audioUrl={urls.audio}
       audioExpired={urls.loaded && stop.audioPath && !urls.audio}
       status={s.status}
@@ -194,7 +209,9 @@ function CloudStop({ stop, number, online, photoDesc, onSelect, onEdit }) {
 // taken (Stop 1 is the first); newestFirst only changes the display order.
 // onSelect(stop, { number, photoUrl }) adds a "Move or delete this stop" button to each card.
 // photoDesc { onDescribe(stop), onEdit(stop, number), onDelete(stop, number) } adds
-// Describe photo and shows the photo description with its Edit and Delete buttons.
+// Describe photo and shows the photo description with its Edit and Delete buttons;
+// its onPhoto(stop, number, hasPhoto) adds Add photo / Replace photo, and localPhotos
+// (Map stop id -> preview link) shows new photos still waiting on this phone.
 export function StopList({ stops, online, newestFirst = false, onSelect, onEdit, photoDesc }) {
   const inOrder = [...stops].sort((a, b) => a.clientCreatedAt - b.clientCreatedAt);
   const shown = newestFirst ? [...inOrder].reverse() : inOrder;

@@ -11,6 +11,7 @@ import { auth, db, storage } from './firebase';
 import { engLog, recordUpload, setSyncInfo, bytes, ms } from './engineering';
 
 const QUEUE_PREFIX = 'pending-stop:';
+const PHOTO_PREFIX = 'pending-photo:'; // a photo added to (or replacing one on) an uploaded stop
 export const VOICE_DAYS = 5; // matches the Storage lifecycle rule on voice/
 export const EARLIER_JOB_ID = 'earlier'; // job for stops saved before jobs existed
 
@@ -127,6 +128,52 @@ export async function deletePhotoDescription(uid, stop) {
     .catch((err) => console.warn('Deleting the photo description failed:', err));
 }
 
+// ---------- adding or replacing a photo ----------
+/**
+ * Add a photo to a saved stop, or replace its photo. Works offline: a stop still on this
+ * phone just takes the new photo; an uploaded stop's photo waits on this phone
+ * (pending-photo:) and uploads with the next sync (uploadPhoto).
+ */
+export async function setStopPhoto(stop, photoBlob) {
+  if (stop.isPending && (await updatePendingStop(stop.id, { photoBlob, photoVersion: Date.now() }))) return;
+  await set(PHOTO_PREFIX + stop.id, { stopId: stop.id, photoBlob, addedAt: Date.now(), attempts: 0 });
+  engLog('save', 'Photo saved on this phone', `IndexedDB · photo ${bytes(photoBlob.size)} for an uploaded stop`);
+  notify();
+  syncQueue(); // fire and forget
+}
+
+/** Photos waiting on this phone for uploaded stops. */
+export async function getPendingPhotos() {
+  const ids = (await keys()).filter((k) => typeof k === 'string' && k.startsWith(PHOTO_PREFIX));
+  return (await Promise.all(ids.map((k) => get(k)))).filter(Boolean);
+}
+
+// Photo descriptions that should carry over to a new photo (asked for, or done)
+const WANTS_DESCRIPTION = ['requested', 'describing', 'described'];
+
+async function uploadPhoto(uid, item) {
+  const stopRef = doc(db, 'users', uid, 'stops', item.stopId);
+  const snap = await getDoc(stopRef);
+  if (!snap.exists()) return; // the stop was deleted; drop the photo
+  const old = snap.data();
+  const type = baseType(item.photoBlob.type || 'image/jpeg');
+  // A new name each time ("{stopId}.{time}.ext"), so nobody sees the old photo from a cache;
+  // the part before the first dot is still the stop id, which the Storage rules look up
+  const path = `photos/${uid}/${item.stopId}.${item.addedAt}.${extFor(type)}`;
+  const started = performance.now();
+  await uploadBytes(ref(storage, path), item.photoBlob, { contentType: type });
+  await updateDoc(stopRef, {
+    photoPath: path,
+    // The old description was of the old photo: describe the new one if there was one
+    ...PHOTO_DESC_CLEARED,
+    ...(WANTS_DESCRIPTION.includes(old.photoDescStatus) ? { photoDescStatus: 'requested', photoDescRequestedAt: Date.now() } : {}),
+  });
+  engLog('upload', old.photoPath ? 'Photo replaced' : 'Photo added', `photo ${bytes(item.photoBlob.size)} in ${ms(performance.now() - started)}`);
+  if (old.photoPath && old.photoPath !== path) {
+    deleteObject(ref(storage, old.photoPath)).catch((err) => console.warn('Removing the old photo failed:', err));
+  }
+}
+
 // ---------- moving and deleting ----------
 /** Put a stop into a different job. Works offline. */
 export async function moveStop(uid, stop, jobId) {
@@ -147,6 +194,7 @@ export async function deleteStop(uid, stop) {
     return;
   }
   if (!navigator.onLine) throw new Error('offline');
+  await del(PHOTO_PREFIX + stop.id); // a new photo still waiting on this phone
   const stopRef = doc(db, 'users', uid, 'stops', stop.id);
   // Read the file paths from the record (the stop may have finished uploading just now)
   const saved = (await getDoc(stopRef)).data() ?? stop;
@@ -167,6 +215,7 @@ export async function syncQueue() {
   const user = auth.currentUser;
   if (!user) return;
   syncing = true;
+  let syncAgain = false;
   setSyncInfo({ running: true, lastRunAt: Date.now() });
   let sent = 0;
   let failed = 0;
@@ -195,10 +244,32 @@ export async function syncQueue() {
       }
       notify();
     }
+    // Photos added to uploaded stops (after the stops, so a stop exists before its new photo)
+    for (const item of navigator.onLine ? await getPendingPhotos() : []) {
+      try {
+        await uploadPhoto(user.uid, item);
+        // Replaced again while this one uploaded? Keep the newer one for the next run
+        const latest = await get(PHOTO_PREFIX + item.stopId);
+        if (latest?.addedAt === item.addedAt) await del(PHOTO_PREFIX + item.stopId);
+        else syncAgain = true;
+        sent++;
+      } catch (err) {
+        failed++;
+        engLog('error', 'Photo upload failed, will retry', String(err?.code || err));
+        console.warn('Photo sync failed, will retry:', item.stopId, err);
+        const latest = await get(PHOTO_PREFIX + item.stopId);
+        if (latest?.addedAt === item.addedAt) {
+          await set(PHOTO_PREFIX + item.stopId, { ...item, attempts: (item.attempts || 0) + 1, lastError: String(err?.code || err) });
+        }
+        if (!navigator.onLine) break;
+      }
+      notify();
+    }
   } finally {
     syncing = false;
     setSyncInfo({ running: false, lastResult: sent || failed ? `${sent} uploaded, ${failed} failed` : 'Nothing waiting' });
   }
+  if (syncAgain) syncQueue();
 }
 
 async function uploadStop(uid, stop) {

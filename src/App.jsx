@@ -14,6 +14,8 @@ import {
   requestPhotoDescription,
   savePhotoDescription,
   deletePhotoDescription,
+  setStopPhoto,
+  getPendingPhotos,
 } from "./stopStore";
 import {
   watchJobs, startJob, endJob, reopenJob, setJobDetails, touchJob, migrateEarlierStops, jobTitle,
@@ -188,6 +190,7 @@ function EndJobSheet({ uid, job, hasDraft, online, onFinish, onClose, canSendToP
 // asks PicTalk to show that job's page (from Piccolo). Both optional.
 export default function App({ onSendToPiccolo, openJob }) {
   const [pending, setPending] = useState([]); // saved on this phone, not uploaded yet
+  const [localPhotos, setLocalPhotos] = useState(new Map()); // uploaded stop id -> new photo still on this phone
   const [synced, setSynced] = useState([]); // safely in the cloud
   const [photo, setPhoto] = useState(null);
   const [audio, setAudio] = useState(null);
@@ -216,7 +219,10 @@ export default function App({ onSendToPiccolo, openJob }) {
   const recorder = useRef(null);
   const chunks = useRef([]);
   const timer = useRef(null);
-  const localUrls = useRef(new Map()); // pending stop id -> { photo, audio } preview links
+  const localUrls = useRef(new Map()); // pending stop id -> { photo, audio, version } preview links
+  const photoUrls = useRef(new Map()); // uploaded stop id -> { url, addedAt } for a new photo on this phone
+  const addPhotoInput = useRef(null);
+  const photoFor = useRef(null); // the stop Add photo / Replace photo is for
 
   useEffect(() => {
     // Sign in quietly in the background (anonymous, no account needed)
@@ -240,15 +246,38 @@ export default function App({ onSendToPiccolo, openJob }) {
       }
       setPending(
         items.map((item) => {
+          const cached = cache.get(item.id);
+          if (cached && cached.version !== (item.photoVersion || 0)) {
+            // The photo was added or replaced while the stop waited on this phone
+            if (cached.photo) URL.revokeObjectURL(cached.photo);
+            cached.photo = item.photoBlob ? URL.createObjectURL(item.photoBlob) : null;
+            cached.version = item.photoVersion || 0;
+          }
           if (!cache.has(item.id)) {
             cache.set(item.id, {
               photo: item.photoBlob ? URL.createObjectURL(item.photoBlob) : null,
               audio: item.audioBlob ? URL.createObjectURL(item.audioBlob) : null,
+              version: item.photoVersion || 0,
             });
           }
           return { ...item, urls: cache.get(item.id) };
         })
       );
+
+      // New photos for uploaded stops, shown until they upload
+      const photos = await getPendingPhotos();
+      const pc = photoUrls.current;
+      const waiting = new Map(photos.map((p) => [p.stopId, p]));
+      for (const [id, u] of pc) {
+        if (waiting.get(id)?.addedAt !== u.addedAt) {
+          URL.revokeObjectURL(u.url);
+          pc.delete(id);
+        }
+      }
+      for (const p of photos) {
+        if (!pc.has(p.stopId)) pc.set(p.stopId, { url: URL.createObjectURL(p.photoBlob), addedAt: p.addedAt });
+      }
+      setLocalPhotos(new Map([...pc].map(([id, u]) => [id, u.url])));
     };
     const stopQueueWatch = onQueueChange(refreshPending);
     refreshPending();
@@ -459,6 +488,30 @@ export default function App({ onSendToPiccolo, openJob }) {
     },
     onEdit: (stop, number) => setSheet({ type: "photodesc", stop, number }),
     onDelete: (stop, number) => setSheet({ type: "photodesc-delete", stop, number }),
+    // Add a photo to a saved stop, or replace it (asks first: the old photo is deleted)
+    onPhoto: (stop, number, hasPhoto) => (hasPhoto ? setSheet({ type: "replacephoto", stop, number }) : pickStopPhoto(stop)),
+    localPhotos,
+  };
+
+  // Opens the phone's camera / photo picker (must run from the tap itself)
+  function pickStopPhoto(stop) {
+    photoFor.current = stop;
+    addPhotoInput.current.click();
+  }
+
+  const handleStopPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    const stop = photoFor.current;
+    photoFor.current = null;
+    if (!file || !stop) return;
+    try {
+      await setStopPhoto(stop, file);
+      showToast(navigator.onLine || stop.isPending ? "Photo saved" : "Photo saved on this phone. It uploads when you're back online.");
+    } catch (err) {
+      console.warn("Saving the photo failed:", err);
+      setError("Couldn't save that photo. Please try again.");
+    }
   };
 
   const moveTo = async (stop, job) => {
@@ -775,6 +828,31 @@ export default function App({ onSendToPiccolo, openJob }) {
             showToast(how === "shared" ? "PDF shared" : "PDF downloaded");
           }}
         />
+      )}
+
+      {/* Add photo / Replace photo on a saved stop: camera or photo library */}
+      <input ref={addPhotoInput} type="file" accept="image/*" hidden onChange={handleStopPhoto} />
+
+      {sheet?.type === "replacephoto" && (
+        <Sheet title={`Replace the photo for Stop ${sheet.number}?`} onClose={() => setSheet(null)}>
+          <p>
+            The old photo is deleted for good. The voice note stays.
+            {sheet.stop.photoDescStatus === "described" ? " The photo description is written again for the new photo." : ""}
+          </p>
+          <button
+            className="big-btn photo-btn"
+            onClick={() => {
+              const stop = sheet.stop;
+              setSheet(null);
+              pickStopPhoto(stop);
+            }}
+          >
+            Choose New Photo
+          </button>
+          <button className="big-btn plain-btn" onClick={() => setSheet(null)}>
+            Keep It
+          </button>
+        </Sheet>
       )}
 
       <div className="toast-slot" role="status" aria-live="polite">

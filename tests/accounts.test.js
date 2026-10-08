@@ -2,52 +2,13 @@
 // functions in the Functions emulator (run with `npm test`).
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { initializeApp, deleteApp } from "firebase/app";
 import {
-  getAuth, connectAuthEmulator, signInAnonymously, signInWithCredential, linkWithCredential, GoogleAuthProvider,
+  signInAnonymously, signInWithCredential, linkWithCredential,
 } from "firebase/auth";
-import { getFunctions, connectFunctionsEmulator, httpsCallable } from "firebase/functions";
-import { getFirestore, connectFirestoreEmulator, doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { phone, google, mail, personal, rejects, closeAll } from "./emulator.js";
 
-const run = Math.random().toString(36).slice(2, 8); // fresh emails each run
-const apps = [];
-
-// One signed-out "phone" per person
-function phone() {
-  const app = initializeApp({ apiKey: "fake", projectId: "demo-pictalk" }, `p${apps.length}-${run}`);
-  apps.push(app);
-  const auth = getAuth(app);
-  connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
-  const fns = getFunctions(app, "us-west2");
-  connectFunctionsEmulator(fns, "127.0.0.1", 5001);
-  const db = getFirestore(app);
-  connectFirestoreEmulator(db, "127.0.0.1", 8080);
-  const call = (name, data) => httpsCallable(fns, name)(data).then((r) => r.data);
-  const profile = async () => (await getDoc(doc(db, `users/${auth.currentUser.uid}`))).data();
-  return { auth, db, call, profile };
-}
-
-// The Auth emulator accepts an unsigned Google token
-const google = (email) => GoogleAuthProvider.credential(JSON.stringify({ sub: `g-${email}`, email, email_verified: true }));
-const mail = (name) => `${name}-${run}@example.com`;
-
-async function personal(name) {
-  const p = phone();
-  await signInWithCredential(p.auth, google(mail(name)));
-  await p.call("ensureProfile");
-  return p;
-}
-
-async function rejects(promise, code) {
-  await assert.rejects(promise, (err) => {
-    assert.equal(err.code, `functions/${code}`, err.message);
-    return true;
-  });
-}
-
-after(async () => {
-  await Promise.all(apps.map((a) => deleteApp(a)));
-});
+after(closeAll);
 
 test("a guest gets a guest profile; saving their work keeps the same account", async () => {
   const p = phone();

@@ -1842,3 +1842,286 @@ button:focus-visible {
 .job-card.is-static {
   cursor: default;
 }
+
+/* ---------- Piccolo job screen ---------- */
+
+.piccolo-send-btn {
+  background: var(--surface);
+  color: var(--orange);
+  border: 3px solid var(--orange);
+  min-height: 64px;
+  font-size: 21px;
+}
+
+.pc-status,
+.pc-banner {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 14px 16px;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.pc-banner {
+  border: 2px solid var(--orange);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pc-banner-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pc-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.pc-tabs button {
+  flex-shrink: 0;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pc-tabs button.is-on {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.pc-draft-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.text-btn.pc-inline {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 8px 0;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.pc-block {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pc-block h3 {
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.pc-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pc-block-head .link-btn {
+  min-height: 40px;
+  padding: 6px 14px;
+  background: var(--surface-2);
+  font-size: 16px;
+}
+
+.pc-text {
+  font-size: 18px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pc-empty {
+  font-size: 16px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.pc-items {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.src-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.src-chip {
+  min-height: 34px;
+  padding: 4px 12px;
+  border: 1px solid var(--surface-2);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--blue);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pc-line {
+  background: var(--surface);
+  border-radius: 18px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-left: 4px solid transparent;
+}
+
+.pc-line.is-inferred {
+  border-left-color: var(--orange);
+}
+
+.pc-line-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+.pc-qty {
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.pc-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.badge.is-warn {
+  background: var(--orange);
+  color: #000000;
+}
+
+.badge.is-muted {
+  color: var(--muted);
+}
+
+.pc-meta {
+  font-size: 16px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.pc-quote {
+  font-size: 15px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.pc-totals {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 18px;
+}
+
+.pc-totals p {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pc-totals .pc-total {
+  border-top: 1px solid var(--surface-2);
+  padding-top: 8px;
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.pc-totals .pc-empty {
+  display: block;
+}
+
+.pc-media {
+  background: var(--surface);
+  border-radius: 18px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.pc-photo {
+  width: 100%;
+  max-height: 300px;
+  object-fit: cover;
+  display: block;
+}
+
+.pc-media-text {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.pc-seen {
+  color: var(--violet);
+}
+
+.piccolo .job-card .pill {
+  background: var(--orange);
+}
+
+/* Source chips jump here and flash it, like the summary's stop links */
+.pc-media.is-flash,
+.pc-block.is-flash {
+  animation: stop-flash 1.8s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pc-media.is-flash,
+  .pc-block.is-flash {
+    animation: none;
+    box-shadow: inset 0 0 0 3px var(--blue);
+  }
+}

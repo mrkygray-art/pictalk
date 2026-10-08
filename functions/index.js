@@ -19,6 +19,9 @@ exports.transcribeWrapUpNote = require("./wrapup").transcribeWrapUpNote;
 // AI description of a stop's photo (when the user taps Describe photo)
 exports.describeStopPhoto = require("./photo").describeStopPhoto;
 
+// Piccolo: AI draft of a work order, BOM, and quote from a finished job
+exports.draftPiccolo = require("./piccolo").draftPiccolo;
+
 // Piccolo accounts: profiles, companies, team invites, roles
 const accounts = require("./accounts");
 exports.ensureProfile = accounts.ensureProfile;

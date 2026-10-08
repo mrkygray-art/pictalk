@@ -92,6 +92,8 @@ export default function Shell() {
   const [emailLink, setEmailLink] = useState(isEmailLinkVisit);
   const [sheetOpen, setSheetOpen] = useState(() => isEmailLinkVisit() || !!startInvite());
   const [toast, setToast] = useState(null);
+  const [piccoloTarget, setPiccoloTarget] = useState(null); // { jobId, autoDraft, key }
+  const [pictalkTarget, setPictalkTarget] = useState(null); // { jobId, key }
 
   const showToast = (text) => text && setToast((t) => ({ text, id: (t?.id ?? 0) + 1 }));
   useEffect(() => {
@@ -164,10 +166,27 @@ export default function Shell() {
       </nav>
 
       <div className="pane-body" hidden={pane !== "pictalk" || view !== "panes"}>
-        <App />
+        <App
+          onSendToPiccolo={(jobId) => {
+            setPiccoloTarget((t) => ({ jobId, autoDraft: true, key: (t?.key ?? 0) + 1 }));
+            choosePane("piccolo");
+          }}
+          openJob={pictalkTarget}
+        />
       </div>
       {pane === "piccolo" && view === "panes" && (
-        <PiccoloPane uid={user?.uid} isGuest={!user || user.isAnonymous} onAccount={() => setSheetOpen(true)} />
+        <PiccoloPane
+          key={piccoloTarget?.key ?? 0}
+          uid={user?.uid}
+          isGuest={!user || user.isAnonymous}
+          target={piccoloTarget}
+          onAccount={() => setSheetOpen(true)}
+          onOpenInPicTalk={(jobId) => {
+            setPictalkTarget((t) => ({ jobId, key: (t?.key ?? 0) + 1 }));
+            choosePane("pictalk");
+          }}
+          onNotice={showToast}
+        />
       )}
       {view === "team" && isAdmin && (
         <main className="app">

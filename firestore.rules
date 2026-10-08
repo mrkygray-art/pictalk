@@ -89,7 +89,12 @@ service cloud.firestore {
           let d = request.resource.data;
           return d.keys().hasOnly(['name', 'address', 'lat', 'lng', 'status',
                                    'startedAt', 'endedAt', 'lastStopAt',
-                                   'customer', 'location', 'exportCount'])
+                                   'customer', 'location', 'exportCount',
+                                   'piccoloStatus', 'latestDraftId', 'piccoloDraftedAt', 'piccoloDraftCount'])
+            && (d.get('piccoloStatus', null) == null
+                || d.piccoloStatus in ['none', 'drafted', 'editing', 'finalized'])
+            && (d.get('latestDraftId', null) == null || (d.latestDraftId is string && d.latestDraftId.size() <= 64))
+            && optNumber(d, 'piccoloDraftedAt')
             && d.name is string && d.name.size() > 0 && d.name.size() <= 200
             && d.status in ['open', 'finished']
             && d.startedAt is number
@@ -101,7 +106,33 @@ service cloud.firestore {
             && (d.get('exportCount', 0) is int && d.get('exportCount', 0) >= 0);
         }
         allow read, delete: if isOwner();
-        allow create, update: if isOwner() && validJob();
+        // piccoloDraftCount (the per-job Piccolo draft limit) is set only by draftPiccolo
+        allow create: if isOwner() && validJob()
+          && request.resource.data.get('piccoloDraftCount', 0) == 0;
+        allow update: if isOwner() && validJob()
+          && request.resource.data.get('piccoloDraftCount', 0) == resource.data.get('piccoloDraftCount', 0);
+
+        // Piccolo AI drafts: versioned, written only by draftPiccolo (Admin SDK)
+        match /drafts/{draftId} {
+          allow read: if isOwner();
+        }
+
+        // Piccolo: the user's editable copy (work order, BOM, quote, questions)
+        match /working/{docId} {
+          function validWorking() {
+            let d = request.resource.data;
+            return docId == 'current'
+              && d.keys().hasOnly(['draftId', 'draftVersion', 'workOrder', 'bom', 'quote', 'questions',
+                                   'editedBy', 'createdAt', 'updatedAt'])
+              && d.workOrder is map && d.quote is map
+              && d.bom is list && d.bom.size() <= 300
+              && d.questions is list && d.questions.size() <= 100
+              && d.editedBy == uid
+              && optNumber(d, 'createdAt') && optNumber(d, 'updatedAt');
+          }
+          allow read: if isOwner();
+          allow create, update: if isOwner() && validWorking();
+        }
 
         // AI draft summary. Only the generateJobSummary function creates it (Admin SDK);
         // the owner can read it and edit the text, items, and approval fields.

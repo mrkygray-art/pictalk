@@ -72,7 +72,7 @@ PicTalk is designed to capture that information **while the technician is alread
 
 - **Mobile-first PWA** designed for field use: installs to the home screen and opens with no signal
 - **Offline-first capture** using IndexedDB so a technician can save work before cloud connectivity is available
-- Job-based organization with multiple photo/voice stops: a My Jobs list, rename and reopen jobs, customer and location names, and moving or deleting stops (moving works offline)
+- Job-based organization with multiple photo/voice stops: a My Jobs list, rename and reopen jobs, customer and location names, moving or deleting stops, and adding or replacing a saved stop's photo (moving and photos work offline)
 - Browser microphone selection for field laptops and external microphones
 - Cloud synchronization of photos, audio, jobs, and transcripts
 - **Deepgram Nova-3 speech-to-text** with security/low-voltage terminology

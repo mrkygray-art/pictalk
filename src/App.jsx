@@ -11,6 +11,9 @@ import {
   deleteStop,
   saveStopText,
   stopText,
+  requestPhotoDescription,
+  savePhotoDescription,
+  deletePhotoDescription,
 } from "./stopStore";
 import {
   watchJobs, startJob, endJob, reopenJob, setJobDetails, touchJob, migrateEarlierStops, jobTitle,
@@ -110,11 +113,11 @@ function JobBar({ job }) {
 // Demo limit: keeps storage and transcription costs small while PicTalk is a public demo
 const STOP_LIMIT = 10;
 
-// Correct a stop's words: one text box, Save or Cancel
-function EditWordsSheet({ stop, number, onSave, onClose }) {
-  const [words, setWords] = useState(stopText(stop));
+// Correct a stop's words (or its photo description): one text box, Save or Cancel
+function EditWordsSheet({ title, initial, maxLength = 5000, onSave, onClose }) {
+  const [words, setWords] = useState(initial);
   return (
-    <Sheet title={`Stop ${number} words`} onClose={onClose}>
+    <Sheet title={title} onClose={onClose}>
       <form
         className="sheet-form"
         onSubmit={(e) => {
@@ -126,8 +129,8 @@ function EditWordsSheet({ stop, number, onSave, onClose }) {
           className="words-field"
           value={words}
           rows={6}
-          maxLength={5000}
-          aria-label={`Stop ${number} words`}
+          maxLength={maxLength}
+          aria-label={title}
           onChange={(e) => setWords(e.target.value)}
         />
         <button type="submit" className="save-btn">
@@ -432,6 +435,16 @@ export default function App() {
   const selectStop = (stop, { number, photoUrl }) => setSheet({ type: "stop", stop, number, photoUrl });
   const editWords = (stop, number) => setSheet({ type: "words", stop, number });
 
+  // Photo description: ask for one (waits for signal if needed), edit it, or delete it
+  const photoDesc = {
+    onDescribe: (stop) => {
+      requestPhotoDescription(uid, stop);
+      if (!navigator.onLine) showToast("PicTalk will describe the photo when you're back online");
+    },
+    onEdit: (stop, number) => setSheet({ type: "photodesc", stop, number }),
+    onDelete: (stop, number) => setSheet({ type: "photodesc-delete", stop, number }),
+  };
+
   const moveTo = async (stop, job) => {
     setSheet(null);
     if (stopsInJob(job.id) >= STOP_LIMIT) {
@@ -489,6 +502,7 @@ export default function App() {
           onExport={(job) => setSheet({ type: "export", job })}
           onStopSelect={selectStop}
           onStopEdit={editWords}
+          photoDesc={photoDesc}
         />
       ) : (
         <>
@@ -580,7 +594,7 @@ export default function App() {
                 Saved stops <span className="count">{stopCount}</span>
               </h2>
               {jobStops.length === 0 && <p className="empty">No stops yet in this job.</p>}
-              <StopList stops={jobStops} online={online} newestFirst onSelect={selectStop} onEdit={editWords} />
+              <StopList stops={jobStops} online={online} newestFirst onSelect={selectStop} onEdit={editWords} photoDesc={photoDesc} />
               <button className="big-btn end-btn" onClick={() => setSheet({ type: "end" })} disabled={recording}>
                 <FlagIcon />
                 End Job
@@ -635,8 +649,8 @@ export default function App() {
 
       {sheet?.type === "words" && (
         <EditWordsSheet
-          stop={sheet.stop}
-          number={sheet.number}
+          title={`Stop ${sheet.number} words`}
+          initial={stopText(sheet.stop)}
           onClose={() => setSheet(null)}
           onSave={(words) => {
             saveStopText(uid, sheet.stop, words);
@@ -644,6 +658,39 @@ export default function App() {
             showToast("Words saved");
           }}
         />
+      )}
+
+      {sheet?.type === "photodesc" && (
+        <EditWordsSheet
+          title={`Stop ${sheet.number} photo description`}
+          initial={sheet.stop.photoDescription || ""}
+          maxLength={3000}
+          onClose={() => setSheet(null)}
+          onSave={(text) => {
+            savePhotoDescription(uid, sheet.stop, text);
+            setSheet(null);
+            showToast(text.trim() ? "Photo description saved" : "Photo description deleted");
+          }}
+        />
+      )}
+
+      {sheet?.type === "photodesc-delete" && (
+        <Sheet title="Delete this photo description?" onClose={() => setSheet(null)}>
+          <p>The photo and voice note stay. You can describe the photo again later.</p>
+          <button
+            className="big-btn danger-btn"
+            onClick={() => {
+              deletePhotoDescription(uid, sheet.stop);
+              setSheet(null);
+              showToast("Photo description deleted");
+            }}
+          >
+            Delete Description
+          </button>
+          <button className="big-btn plain-btn" onClick={() => setSheet(null)}>
+            Keep It
+          </button>
+        </Sheet>
       )}
 
       {sheet?.type === "stop" && (

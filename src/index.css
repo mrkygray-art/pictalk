@@ -1556,3 +1556,36 @@ button:focus-visible {
 }
 .install-step-icon svg { width: 24px; height: 24px; }
 .install-steps small { display: block; color: var(--muted); font-size: 15px; margin-top: 3px; }
+
+/* ---------- photo description (under a stop's words) ---------- */
+
+.photo-desc {
+  margin: 6px 0 2px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--blue);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.photo-desc-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--blue);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.photo-desc p {
+  margin: 4px 0 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.photo-desc.is-waiting p { color: var(--muted); font-style: italic; }
+.photo-desc.is-problem { border-left-color: var(--red); }
+.photo-desc.is-problem p { color: var(--red); }
+.photo-desc .stop-more { background: var(--surface); }
+.stop-more.is-danger { color: var(--red); }

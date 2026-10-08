@@ -9,8 +9,73 @@ function whenLabel(time) {
   return `${time.toLocaleDateString([], { month: "short", day: "numeric" })}, ${clock}`;
 }
 
+// Where a stop's photo description is: "none" | "queued" | "offline" | "working" | "stuck" | "failed" | "described"
+function photoDescState(stop, online) {
+  if (stop.isPending) return stop.describePhoto ? "queued" : "none";
+  switch (stop.photoDescStatus) {
+    case "described":
+    case "failed":
+      return stop.photoDescStatus;
+    case "requested":
+    case "describing":
+      if (!online) return "offline";
+      // Normally takes seconds; after 5 minutes, offer to try again
+      return Date.now() - (stop.photoDescRequestedAt || 0) > 5 * 60 * 1000 ? "stuck" : "working";
+    default:
+      return "none";
+  }
+}
+
+// The AI's description of the photo, under the voice note's words
+function PhotoDescription({ stop, number, online, actions }) {
+  const state = photoDescState(stop, online);
+  if (state === "none") return null;
+  if (state === "described") {
+    return (
+      <div className="photo-desc">
+        <span className="photo-desc-label">Photo description</span>
+        <p>{stop.photoDescription}</p>
+        <div className="stop-actions">
+          <button className="stop-more" onClick={() => actions.onEdit(stop, number)}>
+            Edit description
+          </button>
+          <button className="stop-more is-danger" onClick={() => actions.onDelete(stop, number)}>
+            Delete
+          </button>
+        </div>
+      </div>
+    );
+  }
+  const problem = state === "failed" || state === "stuck";
+  const text = {
+    queued: "PicTalk will describe the photo once this stop uploads.",
+    offline: "No signal right now. PicTalk will describe the photo when you're back online.",
+    working: "Describing the photo…",
+    stuck: "Couldn't describe the photo.",
+    failed: stop.photoDescError || "Couldn't describe the photo.",
+  }[state];
+  return (
+    <div className={`photo-desc is-${problem ? "problem" : "waiting"}`} role="status">
+      <span className="photo-desc-label">Photo description</span>
+      <p>{text}</p>
+      {problem && (
+        <div className="stop-actions">
+          <button className="stop-more" onClick={() => actions.onDescribe(stop)}>
+            Try again
+          </button>
+          <button className="stop-more is-danger" onClick={() => actions.onDelete(stop, number)}>
+            Remove
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // One row in a list of stops
-function StopCard({ stop, anchor, number, time, photoUrl, audioUrl, audioExpired, status, statusText, transcript, onSelect, onEdit }) {
+function StopCard({ stop, anchor, number, time, photoUrl, audioUrl, audioExpired, status, statusText, transcript, online, photoDesc, onSelect, onEdit }) {
+  // Describe photo shows once there's a photo and no description asked for yet
+  const canDescribe = photoDesc && stop && photoUrl && photoDescState(stop, online) === "none";
   return (
     <article className="stop" id={anchor ? `stop-${anchor}` : undefined}>
       {photoUrl && <img src={photoUrl} alt="" className="thumb" />}
@@ -19,14 +84,20 @@ function StopCard({ stop, anchor, number, time, photoUrl, audioUrl, audioExpired
         <span>{whenLabel(time)}</span>
         <span className={`stop-status is-${status}`}>{statusText}</span>
         {transcript && <p className="stop-transcript">{transcript}</p>}
+        {photoDesc && stop && <PhotoDescription stop={stop} number={number} online={online} actions={photoDesc} />}
         {audioUrl && <audio controls src={audioUrl} />}
         {audioExpired && <span className="stop-note">Voice note expired</span>}
         {stop && <StopEngLine stop={stop} />}
-        {(onEdit || onSelect) && (
+        {(onEdit || onSelect || canDescribe) && (
           <div className="stop-actions">
             {onEdit && (
               <button className="stop-more" onClick={onEdit}>
                 Edit words
+              </button>
+            )}
+            {canDescribe && (
+              <button className="stop-more" onClick={() => photoDesc.onDescribe(stop)}>
+                Describe photo
               </button>
             )}
             {onSelect && (
@@ -65,7 +136,7 @@ function describeStatus(stop) {
 }
 
 // A stop that's already in the cloud: look up its photo/voice download links
-function CloudStop({ stop, number, onSelect, onEdit }) {
+function CloudStop({ stop, number, online, photoDesc, onSelect, onEdit }) {
   const [urls, setUrls] = useState({ photo: null, audio: null, loaded: false });
 
   useEffect(() => {
@@ -92,6 +163,8 @@ function CloudStop({ stop, number, onSelect, onEdit }) {
       status={s.status}
       statusText={s.text}
       transcript={stopText(stop)}
+      online={online}
+      photoDesc={photoDesc}
       onSelect={onSelect}
       onEdit={onEdit}
     />
@@ -101,7 +174,9 @@ function CloudStop({ stop, number, onSelect, onEdit }) {
 // Phone-only and cloud stops together. Stops are numbered in the order they were
 // taken (Stop 1 is the first); newestFirst only changes the display order.
 // onSelect(stop, { number, photoUrl }) adds a "Move or Delete" button to each card.
-export function StopList({ stops, online, newestFirst = false, onSelect, onEdit }) {
+// photoDesc { onDescribe(stop), onEdit(stop, number), onDelete(stop, number) } adds
+// Describe photo and shows the photo description with its Edit and Delete buttons.
+export function StopList({ stops, online, newestFirst = false, onSelect, onEdit, photoDesc }) {
   const inOrder = [...stops].sort((a, b) => a.clientCreatedAt - b.clientCreatedAt);
   const shown = newestFirst ? [...inOrder].reverse() : inOrder;
   const numberOf = new Map(inOrder.map((s, i) => [s.id, i + 1]));
@@ -119,6 +194,8 @@ export function StopList({ stops, online, newestFirst = false, onSelect, onEdit 
         audioUrl={stop.urls?.audio}
         status="pending"
         statusText={online ? "Uploading…" : "Saved on this phone. Will upload when you're online."}
+        online={online}
+        photoDesc={photoDesc}
         onSelect={select}
       />
     ) : (
@@ -126,6 +203,8 @@ export function StopList({ stops, online, newestFirst = false, onSelect, onEdit 
         key={stop.id}
         stop={stop}
         number={numberOf.get(stop.id)}
+        online={online}
+        photoDesc={photoDesc}
         onSelect={select}
         // Words can be corrected once there's a transcript
         onEdit={onEdit && (stop.transcript || stop.editedTranscript != null) ? () => onEdit(stop, numberOf.get(stop.id)) : undefined}

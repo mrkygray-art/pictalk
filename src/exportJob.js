@@ -134,6 +134,7 @@ export async function buildJobExport({ uid, jobId, initials }) {
       hasPhoto: photoSources.has(s.id),
       transcript: stopText(s) || null, // the user's corrected words when there are any
       transcriptStatus: transcriptStatus(s),
+      photoDescription: s.photoDescStatus === 'described' ? s.photoDescription || null : null,
       hasAudio: !!(s.audioPath || s.audioBlob),
       audioAvailableUntil: iso(s.audioExpiresAt),
     })),

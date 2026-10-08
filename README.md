@@ -14,7 +14,7 @@ PicTalk turns a field technician's normal workflow — **take a photo and explai
 
 ## Works with no signal
 
-Add PicTalk to your phone's home screen: tap **Install PicTalk on this phone** at the bottom of the main screen. In Chrome on Android it opens Chrome's install dialog; on an iPhone (which never offers a one-tap install), and in Firefox, DuckDuckGo, or Samsung Internet, it opens a step-by-step guide with pictures of the real buttons. On an iPhone in Safari: tap **⋯** next to the address bar, **Share**, **Add to Home Screen**, keep **Open as Web App** on, and tap **Add**. From then on it opens from its own icon even with no signal, in a basement, an equipment room, or a dead zone, and you keep working: start and end jobs, take photos, record voice notes, and save stops. Everything waits safely on the phone. When signal returns, PicTalk uploads it and the voice notes are written down automatically, with nothing to tap. ([How it works](#offline-first-architecture) · [How it's tested](#evaluation-lab))
+Add PicTalk to your phone's home screen: tap **Install PicTalk on this phone** at the bottom of the main screen. In Chrome on Android it opens Chrome's install dialog; on an iPhone (which never offers a one-tap install), and in Firefox, DuckDuckGo, or Samsung Internet, it opens a step-by-step guide with pictures of the real buttons. On an iPhone in Safari: tap **⋯** next to the address bar, **Share**, **Add to Home Screen**, keep **Open as Web App** on, and tap **Add**. From then on it opens from its own icon even with no signal, in a basement, an equipment room, or a dead zone, and you keep working: start and end jobs, take photos, record voice notes, and save stops. Everything waits safely on the phone. When signal returns, PicTalk uploads it and the voice notes are written down automatically, with nothing to tap. Tapping **Describe photo** with no signal works the same way: the photo is described once the phone is back online. ([How it works](#offline-first-architecture) · [How it's tested](#evaluation-lab))
 
 ## Three ways to explore
 
@@ -41,8 +41,8 @@ PicTalk is designed to capture that information **while the technician is alread
 3. **Tap to talk** and describe the condition, finding, or required work.
 4. PicTalk saves the stop locally first and synchronizes it to the cloud when connectivity is available.
 5. **Deepgram** converts the technician's voice note into searchable text using terminology relevant to security and low-voltage work.
-6. The technician can review or correct the transcription and add optional end-of-job field/customer notes.
-7. **Claude** uses the job's transcripts and wrap-up notes to draft a concise job summary and prioritized action items.
+6. The technician can review or correct the transcription, tap **Describe photo** to have Claude describe what's in the picture (readable labels and model numbers, visible condition), and add optional end-of-job field/customer notes.
+7. **Claude** uses the job's transcripts, photo descriptions, and wrap-up notes to draft a concise job summary and prioritized action items.
 8. The technician reviews and edits the AI output before approving it.
 9. PicTalk generates a **PDF job report** containing the approved summary, action items, job details, photos, and field documentation.
 
@@ -77,6 +77,7 @@ PicTalk is designed to capture that information **while the technician is alread
 - Cloud synchronization of photos, audio, jobs, and transcripts
 - **Deepgram Nova-3 speech-to-text** with security/low-voltage terminology
 - Editable transcripts while retaining the original transcription
+- **AI photo descriptions on request:** a Describe photo button on each stop has Claude describe the photo (what it shows, readable text such as labels and model numbers, and visible condition), using the voice note as context. The description shows under the words with Edit and Delete buttons, goes into the PDF and the job summary, and works offline (it's written once the phone has signal)
 - Optional field wrap-up notes and customer comments, with **words shown live while the technician talks** (Deepgram streaming)
 - **Claude-powered job summaries and action items**
 - Human review and approval before AI-generated content is included in the final report
@@ -92,7 +93,9 @@ PicTalk deliberately treats AI output as a **draft**, not as an unquestioned fin
 
 The AI summary is created from the technician's captured job information. The technician can review and edit both the summary and action items. Only an **approved** summary is included in the final PDF report.
 
-If underlying transcripts or wrap-up notes change after generation, the application can identify that the existing AI summary is out of date and should be reviewed again.
+Photo descriptions work the same way: each one is labeled as a photo description, kept separate from the technician's own words, and can be edited or deleted, so the technician can check what the AI saw before it feeds the job summary. In the summary the technician's own words win when they disagree with a description.
+
+If underlying transcripts, photo descriptions, or wrap-up notes change after generation, the application can identify that the existing AI summary is out of date and should be reviewed again.
 
 This workflow keeps the technician responsible for the final field record while using AI to reduce the administrative work required to turn raw notes into useful documentation.
 
@@ -174,7 +177,7 @@ node lab/simulate.js            # every scenario, 3 runs each; --only <id>, --ru
 | File storage | Firebase Storage |
 | Backend | Firebase Cloud Functions |
 | Speech-to-text | Deepgram Nova-3 |
-| AI summarization | Anthropic Claude |
+| AI summaries and photo descriptions | Anthropic Claude |
 | PDF generation | jsPDF |
 | Hosting | Firebase Hosting |
 
@@ -255,9 +258,9 @@ Audio is intentionally treated as temporary working data. The application is des
 
 ## AI usage controls
 
-To keep AI use predictable, the summary function allows 5 summaries per job and 20 per account per day, and the live-words token function allows 60 connections per account per hour. These limits are enforced in Cloud Functions, not in the browser. AI-generated summaries also preserve metadata needed to distinguish drafts from approved content.
+To keep AI use predictable, the summary function allows 5 summaries per job and 20 per account per day, the photo description function allows 3 descriptions per stop and 30 per account per day, and the live-words token function allows 60 connections per account per hour. These limits are enforced in Cloud Functions, not in the browser. AI-generated summaries also preserve metadata needed to distinguish drafts from approved content.
 
-The application does not send job photos or audio recordings to the summarization model; the summary is generated from the text context associated with the job.
+The summary is generated from the text associated with the job, including photo descriptions; photos and audio recordings themselves are not sent to the summarization model. A photo is sent to Claude only when the technician taps **Describe photo** on that stop. It is shrunk to 1600 pixels on the long side first, and the description is written back onto the stop.
 
 ## Why I built it
 
@@ -269,7 +272,7 @@ That includes understanding the realities of field work — intermittent connect
 
 ## Current project status
 
-PicTalk is an actively developed demonstration application. Current functionality includes job organization, offline capture and synchronization, photo and voice stops, transcription, live words for wrap-up notes, editable field notes, AI-generated summaries and action items, human approval, PDF job reporting, an installable app that opens with no signal, Engineering Mode, and the Evaluation Lab.
+PicTalk is an actively developed demonstration application. Current functionality includes job organization, offline capture and synchronization, photo and voice stops, transcription, live words for wrap-up notes, editable field notes, AI-generated summaries and action items, AI photo descriptions, human approval, PDF job reporting, an installable app that opens with no signal, Engineering Mode, and the Evaluation Lab.
 
 The current demo limits a job to 10 stops. Voice recordings are designed to expire after five days.
 
@@ -294,9 +297,9 @@ npm run dev:emulators      # in a second terminal: the app talks to the emulator
 
 | Setting | Where | What it does |
 | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | `functions/.secret.local` (emulator), Firebase secret (production) | Claude API key for summaries. Dummy value is fine with the stand-in on |
+| `ANTHROPIC_API_KEY` | `functions/.secret.local` (emulator), Firebase secret (production) | Claude API key for summaries and photo descriptions. Dummy value is fine with the stand-in on |
 | `DEEPGRAM_API_KEY` | same | Deepgram key for transcripts and live-word tokens. Live words need a Member-role key |
-| `PICTALK_FAKE_AI=1` | `functions/.env.local` | Stand-in summaries instead of the Claude API (emulator only) |
+| `PICTALK_FAKE_AI=1` | `functions/.env.local` | Stand-in summaries and photo descriptions instead of the Claude API (emulator only) |
 | `PICTALK_FAKE_STT=1` | `functions/.env.local` | Stand-in transcripts and live words instead of Deepgram (emulator only) |
 | `VITE_USE_EMULATORS=true` | `.env.emulators` (used by `npm run dev:emulators`) | Points the dev app at the local emulators |
 

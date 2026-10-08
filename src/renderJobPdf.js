@@ -173,6 +173,10 @@ export async function renderJobPdf(data, photos) {
     }
     const t = transcriptText(stop);
     if (t) text(t, { size: 11, gap: 4 });
+    if (stop.photoDescription) {
+      text('Photo description', { size: 9, bold: true, color: MUTED, gap: 2 });
+      text(stop.photoDescription, { size: 10, gap: 4 });
+    }
     text(audioNote(stop, now), { size: 9, color: MUTED, gap: 8 });
     rule();
   }

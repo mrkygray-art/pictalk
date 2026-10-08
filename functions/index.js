@@ -16,6 +16,9 @@ exports.generateJobSummary = require("./summary").generateJobSummary;
 // Batch transcription of wrap-up notes (field notes / customer comments)
 exports.transcribeWrapUpNote = require("./wrapup").transcribeWrapUpNote;
 
+// AI description of a stop's photo (when the user taps Describe photo)
+exports.describeStopPhoto = require("./photo").describeStopPhoto;
+
 // Short-lived Deepgram token for live transcription in the browser
 exports.getDeepgramStreamToken = require("./streamtoken").getDeepgramStreamToken;
 

@@ -72,6 +72,10 @@ export async function updatePendingStop(id, patch) {
 /** The words for a stop: the user's correction if there is one, else the transcript. */
 export const stopText = (stop) => (stop?.editedTranscript ?? stop?.transcript ?? '').trim();
 
+/** What the AI saw in the stop's photo (as the user left it), once it's written. */
+export const photoText = (stop) =>
+  stop?.photoDescStatus === 'described' ? (stop.photoDescription || '').trim() : '';
+
 /**
  * Save the user's corrected words. The original transcript is kept untouched; the
  * correction is stored next to it and used everywhere. Works offline (syncs later).
@@ -83,6 +87,44 @@ export function saveStopText(uid, stop, text) {
     editedTranscript: words === (stop.transcript || '').trim() ? null : words,
     transcriptEditedAt: Date.now(),
   }).catch((err) => console.warn('Saving corrected words failed:', err));
+}
+
+// ---------- photo description ----------
+const PHOTO_DESC_CLEARED = {
+  photoDescStatus: null,
+  photoDescription: null,
+  photoDescEdited: false,
+  photoDescError: null,
+};
+
+/**
+ * Ask for an AI description of the stop's photo (describeStopPhoto writes it).
+ * Works offline: a stop still on this phone carries the request when it uploads, and
+ * an uploaded stop's request waits in Firestore's local cache until there's signal.
+ */
+export async function requestPhotoDescription(uid, stop) {
+  if (stop.isPending && (await updatePendingStop(stop.id, { describePhoto: true }))) return;
+  // Not awaited: the local cache updates right away and syncs when online
+  updateDoc(doc(db, 'users', uid, 'stops', stop.id), {
+    photoDescStatus: 'requested',
+    photoDescRequestedAt: Date.now(),
+    photoDescError: null,
+  }).catch((err) => console.warn('Asking for a photo description failed:', err));
+}
+
+/** Save the user's changes to the description. Blank text removes it. Works offline. */
+export function savePhotoDescription(uid, stop, text) {
+  const words = String(text || '').trim().slice(0, 3000);
+  if (!words) return deletePhotoDescription(uid, stop);
+  updateDoc(doc(db, 'users', uid, 'stops', stop.id), { photoDescription: words, photoDescEdited: true })
+    .catch((err) => console.warn('Saving the photo description failed:', err));
+}
+
+/** Remove the description (the photo can be described again later). Works offline. */
+export async function deletePhotoDescription(uid, stop) {
+  if (stop.isPending && (await updatePendingStop(stop.id, { describePhoto: false }))) return;
+  updateDoc(doc(db, 'users', uid, 'stops', stop.id), PHOTO_DESC_CLEARED)
+    .catch((err) => console.warn('Deleting the photo description failed:', err));
 }
 
 // ---------- moving and deleting ----------
@@ -133,7 +175,12 @@ export async function syncQueue() {
     for (const stop of pending) {
       try {
         await uploadStop(user.uid, stop);
+        // Describe photo may have been tapped (or undone) while this stop was uploading
+        const latest = await get(QUEUE_PREFIX + stop.id);
         await del(QUEUE_PREFIX + stop.id);
+        if (latest && !!latest.describePhoto !== !!stop.describePhoto) {
+          (latest.describePhoto ? requestPhotoDescription : deletePhotoDescription)(user.uid, { id: stop.id });
+        }
         sent++;
       } catch (err) {
         failed++;
@@ -193,6 +240,8 @@ async function uploadStop(uid, stop) {
     status: 'uploaded',
     clientCreatedAt: stop.clientCreatedAt,
     createdAt: serverTimestamp(),
+    // Describe photo was tapped while the stop was waiting on this phone
+    ...(stop.describePhoto && photoPath ? { photoDescStatus: 'requested', photoDescRequestedAt: Date.now() } : {}),
   });
   timing.recordMs = lap();
   recordUpload(stop.id, timing);

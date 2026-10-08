@@ -15,8 +15,15 @@ service cloud.firestore {
                                    'note', 'transcript', 'status', 'clientCreatedAt', 'createdAt',
                                    'transcriptConfidence', 'audioSeconds', 'transcriptModel',
                                    'transcribedAt', 'transcriptError', 'transcribeTimings',
-                                   'editedTranscript', 'transcriptEditedAt'])
+                                   'editedTranscript', 'transcriptEditedAt',
+                                   'photoDescStatus', 'photoDescription', 'photoDescRequestedAt',
+                                   'photoDescEdited', 'photoDescCount', 'photoDescModel',
+                                   'photoDescribedAt', 'photoDescError'])
             && d.note is string && d.note.size() < 2000
+            && (d.get('photoDescStatus', null) == null
+                || d.photoDescStatus in ['requested', 'describing', 'described', 'failed'])
+            && (d.get('photoDescription', null) == null
+                || (d.photoDescription is string && d.photoDescription.size() <= 3000))
             && (d.get('jobId', null) == null || (d.jobId is string && d.jobId.size() <= 64))
             && (d.get('editedTranscript', null) == null
                 || (d.editedTranscript is string && d.editedTranscript.size() <= 5000))
@@ -24,7 +31,11 @@ service cloud.firestore {
             && (d.audioPath == null || d.audioPath is string);
         }
         allow read, delete: if isOwner();
-        allow create, update: if isOwner() && validStop();
+        // photoDescCount (the per-stop photo description limit) is set only by describeStopPhoto
+        allow create: if isOwner() && validStop()
+          && request.resource.data.get('photoDescCount', 0) == 0;
+        allow update: if isOwner() && validStop()
+          && request.resource.data.get('photoDescCount', 0) == resource.data.get('photoDescCount', 0);
       }
 
       match /jobs/{jobId} {

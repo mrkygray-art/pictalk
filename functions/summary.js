@@ -47,6 +47,7 @@ The notes can include:
 - FIELD NOTES: the worker's own wrap-up recorded at the end of the job (observations, risks, next steps). Source id: field_notes.
 - CUSTOMER COMMENTS: what the customer said or asked for, recorded at the end of the job. Source id: customer_comments.
 - STOP n: a voice-note transcript recorded at one spot during the walk, with its id and time.
+- PHOTO DESCRIPTION (under a stop): what an AI saw in that stop's photo, which the worker can check and correct. Its source id is the stop's id.
 Any of these can be missing. The worker could be in any trade (security, electrical, HVAC, plumbing, property management, and so on); don't assume one.
 
 Write:
@@ -55,6 +56,7 @@ Write:
 
 Rules:
 - Treat FIELD NOTES and CUSTOMER COMMENTS as the most important input, and draw action items from them first. Use the stop transcripts as supporting detail.
+- Use a photo description for detail the worker didn't say (a readable model number, visible damage), but the worker's own words win when they disagree. Don't create an action item from a photo description alone unless it shows clear damage or a safety hazard.
 - Keep the customer's words separate from the worker's judgment: phrase customer points as what the customer said or asked (for example "Customer requested a camera at the side gate"), and the worker's as findings or recommendations (for example "Field notes flag water damage near the panel").
 - Use only what is in the notes. Never invent quantities, part numbers, model numbers, prices, measurements, names, or dates. If a detail wasn't said, leave it out rather than guessing.
 - Every action item must list, in source_stop_ids, at least one source it came from: a stop id, field_notes, or customer_comments. Use only ids that appear in the notes.
@@ -66,6 +68,8 @@ const db = () => getFirestore();
 
 // A stop's words: the user's correction if there is one, else the transcript
 const stopWords = (s) => (s.editedTranscript ?? s.transcript ?? "").trim();
+// What the AI saw in the stop's photo (the user may have corrected it), once it's written
+const photoWords = (s) => (s.photoDescStatus === "described" ? (s.photoDescription || "").trim() : "");
 
 /** A stop is still being transcribed if it has audio and hasn't finished yet. */
 function isTranscriptPending(stop, now) {
@@ -129,6 +133,7 @@ function formatNotes(input) {
   for (const st of input.stops) {
     lines.push("", `STOP ${st.index} (id "${st.id}"; ${st.photo ? "1 photo" : "no photo"}; ${st.timestamp || "time unknown"}):`);
     lines.push(st.transcript || "(no transcript)");
+    if (st.photo_description) lines.push("PHOTO DESCRIPTION:", st.photo_description);
   }
   return lines.join(String.fromCharCode(10)); // one item per line
 }
@@ -152,7 +157,7 @@ async function callModel(client, input) {
 // Emulator-only stand-in for the model, so the app can be tested without API cost.
 // It can never run in production: FUNCTIONS_EMULATOR is only set by the emulator.
 function fakeModel(input) {
-  const withText = input.stops.filter((s) => s.transcript);
+  const withText = input.stops.filter((s) => s.transcript || s.photo_description);
   const noteItems = [
     input.field_notes && { id: "nf", text: `Field notes: ${input.field_notes.slice(0, 60)}`, priority: "high", source_stop_ids: ["field_notes"] },
     input.customer_comments && { id: "nc", text: `Customer said: ${input.customer_comments.slice(0, 60)}`, priority: "medium", source_stop_ids: ["customer_comments"] },
@@ -162,7 +167,7 @@ function fakeModel(input) {
       summary: `Test summary for ${input.job_name}. ${withText.length} of ${input.stops.length} stops had voice notes${noteItems.length ? `, plus ${noteItems.length} wrap-up note${noteItems.length === 1 ? "" : "s"}` : ""}. This text comes from the emulator stand-in, not the AI.`,
       action_items: [...noteItems, ...withText.map((s, i) => ({
         id: `x${i}`,
-        text: `Follow up on stop ${s.index}: ${s.transcript.slice(0, 60)}`,
+        text: `Follow up on stop ${s.index}: ${(s.transcript || s.photo_description).slice(0, 60)}`,
         priority: ["high", "medium", "low"][i % 3],
         source_stop_ids: [s.id],
       }))],
@@ -221,8 +226,8 @@ exports.generateJobSummary = onCall(
     if (waiting) {
       throw new HttpsError("failed-precondition", `${waiting} voice note${waiting === 1 ? " is" : "s are"} still being written down. Try again in a minute.`, { waiting });
     }
-    if (!stops.some((s) => stopWords(s)) && !noteText("field") && !noteText("customer")) {
-      throw new HttpsError("failed-precondition", "This job has no voice notes or wrap-up notes to summarize yet.");
+    if (!stops.some((s) => stopWords(s) || photoWords(s)) && !noteText("field") && !noteText("customer")) {
+      throw new HttpsError("failed-precondition", "This job has no voice notes, photo descriptions, or wrap-up notes to summarize yet.");
     }
 
     const customer = job.customer || null;
@@ -240,6 +245,7 @@ exports.generateJobSummary = onCall(
         timestamp: s.clientCreatedAt ? new Date(s.clientCreatedAt).toISOString() : null,
         transcript: stopWords(s) || null,
         ...(stopWords(s) ? {} : { note: "no transcript" }),
+        photo_description: photoWords(s) || null,
       })),
     };
     // Valid sources for items: the stops, plus whichever wrap-up notes have text
@@ -298,6 +304,7 @@ exports.generateJobSummary = onCall(
         },
         notesUsed: { field: input.field_notes, customer: input.customer_comments },
         stopsUsed: Object.fromEntries(stops.map((s) => [s.id, stopWords(s) || null])),
+        photosUsed: Object.fromEntries(stops.map((s) => [s.id, photoWords(s) || null])),
         approvedAt: null,
         approvedBy: null,
         approvedByUid: null,

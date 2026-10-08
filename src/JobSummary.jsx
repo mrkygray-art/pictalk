@@ -5,7 +5,7 @@ import {
   isTranscriptPending, PRIORITIES,
 } from "./summaryStore";
 import { describeNote } from "./wrapUpStore";
-import { stopText } from "./stopStore";
+import { stopText, photoText } from "./stopStore";
 
 // Summary items can cite a wrap-up note instead of a stop
 const NOTE_LABEL = { field_notes: "Field notes", customer_comments: "Customer comments" };
@@ -173,7 +173,7 @@ export default function JobSummary({ uid, job, stops, online, autoStart, notes, 
   const notesWaiting = Object.values(noteViews).filter((v) => v.status === "waiting-upload" || v.status === "transcribing").length;
   const waiting = stops.filter((s) => isTranscriptPending(s, now)).length + notesWaiting;
   // The summary is written from speech; stops without it (photo only, no speech heard) add nothing
-  const hasSpeech = stops.some((s) => stopText(s)) || !!noteViews.field.text || !!noteViews.customer.text;
+  const hasSpeech = stops.some((s) => stopText(s) || photoText(s)) || !!noteViews.field.text || !!noteViews.customer.text;
   const used = summaryDoc?.generationCount || 0;
   const left = Math.max(0, PER_JOB_LIMIT - used);
 
@@ -240,7 +240,7 @@ export default function JobSummary({ uid, job, stops, online, autoStart, notes, 
     if (busy) status = "Building summary… this can take up to a minute.";
     else if (waiting) status = `Waiting for ${waiting} voice note${waiting === 1 ? "" : "s"} to upload and be written down…`;
     else if (!hasSpeech) {
-      status = "No summary for this job: the AI summary is written from what you say at each stop or in wrap-up notes, and this job has none.";
+      status = "No summary for this job: the AI summary is written from what you say at each stop, photo descriptions, or wrap-up notes, and this job has none.";
     } else if (!online) status = "Building a summary needs signal.";
     return (
       <section className="summary-card" aria-label="AI summary">
@@ -269,11 +269,17 @@ export default function JobSummary({ uid, job, stops, online, autoStart, notes, 
   const stopsChanged =
     !!stopsUsed &&
     stops.some((s) => !s.isPending && Object.hasOwn(stopsUsed, s.id) && (stopsUsed[s.id] || "") !== stopText(s));
+  // ...or a photo description was added, corrected, or deleted
+  const photosUsed = summaryDoc.photosUsed;
+  const photosChanged =
+    !!photosUsed &&
+    stops.some((s) => !s.isPending && Object.hasOwn(photosUsed, s.id) && (photosUsed[s.id] || "") !== photoText(s));
   const outOfDate =
     !notesWaiting &&
     ((notesUsed.field || "") !== noteViews.field.text ||
       (notesUsed.customer || "") !== noteViews.customer.text ||
-      stopsChanged);
+      stopsChanged ||
+      photosChanged);
   const handEdited = !!summaryDoc.editedAt;
   return (
     <section className="summary-card" aria-label="AI summary">
@@ -290,7 +296,7 @@ export default function JobSummary({ uid, job, stops, online, autoStart, notes, 
           Approved by {summaryDoc.approvedBy || ANONYMOUS_NAME} · {when(summaryDoc.approvedAt)}. Editing puts it back to draft.
         </p>
       ) : (
-        <p className="summary-meta">Written by AI from your voice notes. Check it, tap Edit to fix anything wrong, then approve it.</p>
+        <p className="summary-meta">Written by AI from your voice notes and photo descriptions. Check it, tap Edit to fix anything wrong, then approve it.</p>
       )}
       {outOfDate && !busy && (
         <div className="summary-stale" role="status">

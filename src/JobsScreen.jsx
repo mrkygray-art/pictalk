@@ -59,7 +59,7 @@ function jumpToStop(id) {
   return true;
 }
 
-function JobDetail({ uid, job, stops, isActive, online, autoSummary, onBack, onCamera, onReopen, onSaveDetails, onStopSelect, onStopEdit, onExport, onNotice }) {
+function JobDetail({ uid, job, stops, isActive, online, autoSummary, onBack, onCamera, onReopen, onSaveDetails, onStopSelect, onStopEdit, photoDesc, onExport, onNotice }) {
   const notes = useWrapUpNotes(uid, job.id);
   const hasNotes = !!(notes.notes.field || notes.notes.customer || notes.pending.field.length || notes.pending.customer.length);
   return (
@@ -115,7 +115,7 @@ function JobDetail({ uid, job, stops, isActive, online, autoSummary, onBack, onC
         ) : (
           <>
             <p className="hint">Tap Move or Delete on a stop to put it in a different job.</p>
-            <StopList stops={stops} online={online} onSelect={onStopSelect} onEdit={onStopEdit} />
+            <StopList stops={stops} online={online} onSelect={onStopSelect} onEdit={onStopEdit} photoDesc={photoDesc} />
           </>
         )}
       </section>
@@ -170,7 +170,7 @@ function JobHeading({ job, onSaveDetails }) {
 /** My Jobs list, and the page for one job. */
 export default function JobsScreen({
   uid, jobs, stops, activeJobId, online, initialJobId, autoSummaryJobId,
-  onClose, onReopen, onSaveDetails, onStopSelect, onStopEdit, onExport, onNotice,
+  onClose, onReopen, onSaveDetails, onStopSelect, onStopEdit, photoDesc, onExport, onNotice,
 }) {
   const [openId, setOpenId] = useState(initialJobId ?? null);
   const stopsOf = (id) => stops.filter((s) => s.jobId === id);
@@ -193,6 +193,7 @@ export default function JobsScreen({
         onSaveDetails={onSaveDetails}
         onStopSelect={onStopSelect}
         onStopEdit={onStopEdit}
+        photoDesc={photoDesc}
         onExport={onExport}
         onNotice={onNotice}
         uid={uid}

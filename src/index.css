@@ -1611,3 +1611,224 @@ button:focus-visible {
   padding-top: 4px;
   border-top: 1px solid var(--surface-2);
 }
+
+/* ---------- Piccolo: pane switcher, account, team ---------- */
+
+.pane-bar {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: calc(12px + env(safe-area-inset-top)) 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pane-switch {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface);
+  border-radius: 16px;
+}
+
+.pane-switch button {
+  min-height: 48px;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pane-switch button.is-on {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.account-chip {
+  flex-shrink: 0;
+  max-width: 40%;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 2px solid var(--surface-2);
+  border-radius: 16px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.account-chip.is-guest {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+/* The pane bar sits above each pane, so panes need less top space */
+.pane-body > .app,
+.pane-bar ~ .app {
+  padding-top: 16px;
+}
+
+.google-btn {
+  background: #ffffff;
+  color: #1f1f1f;
+  border: 3px solid #ffffff;
+  min-height: 72px;
+  font-size: 22px;
+}
+
+.or-line {
+  text-align: center;
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.sent-note {
+  background: var(--surface-2);
+  border-radius: 14px;
+  padding: 14px 16px;
+  line-height: 1.4;
+}
+
+.detail-fields select {
+  width: 100%;
+  min-height: 60px;
+  padding: 14px 16px;
+  font-family: inherit;
+  font-size: 18px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 3px solid var(--surface-2);
+  border-radius: 16px;
+}
+
+.detail-fields select:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.account-who {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 19px;
+  overflow-wrap: anywhere;
+}
+
+.account-who span {
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.account-section {
+  border-top: 1px solid var(--surface-2);
+  padding-top: 14px;
+}
+
+.account-section h3,
+.team-box h2,
+.team-list h2,
+.section-title {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.section-title {
+  margin: 4px 0 12px;
+}
+
+.team-box,
+.invite-ready {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 18px;
+}
+
+.invite-ready {
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  line-height: 1.4;
+}
+
+.team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.team-row {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.team-row > strong {
+  font-size: 19px;
+}
+
+.team-row > span {
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.team-row.is-off {
+  opacity: 0.6;
+}
+
+.team-row .pill {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 14px;
+  vertical-align: 2px;
+}
+
+.team-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.team-actions .text-btn {
+  margin: 0;
+}
+
+.text-btn.is-danger {
+  color: var(--red);
+}
+
+.piccolo-callout {
+  background: var(--surface);
+  border: 2px solid var(--blue);
+  border-radius: 20px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.job-card.is-static {
+  cursor: default;
+}

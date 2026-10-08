@@ -1,7 +1,7 @@
 import { StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import App from './App.jsx'
+import Shell from './Shell.jsx' // PicTalk and Piccolo panes
 import LabPage from './lab/LazyLabPage.jsx' // the public Evaluation Lab page at /lab
 
 const isLab = window.location.pathname.replace(/\/+$/, '') === '/lab'
@@ -13,7 +13,7 @@ createRoot(document.getElementById('root')).render(
         <LabPage />
       </Suspense>
     ) : (
-      <App />
+      <Shell />
     )}
   </StrictMode>,
 )

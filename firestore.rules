@@ -1,10 +1,49 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Piccolo: the caller's profile (users/{uid}) decides their company and role.
+    // Profiles, companies, invites, and the audit log are written only by the account
+    // functions (Admin SDK), so nobody can give themselves a role.
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function activeMemberOf(orgId) {
+      return request.auth != null && orgId is string
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && myProfile().get('orgId', null) == orgId
+        && myProfile().get('status', 'active') == 'active';
+    }
+    function adminOf(orgId) {
+      return activeMemberOf(orgId) && myProfile().get('role', null) == 'admin';
+    }
+
+    match /orgs/{orgId} {
+      allow read: if activeMemberOf(orgId);
+      // Admins edit the company name and quote defaults; everything else is function-only
+      allow update: if adminOf(orgId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'defaults', 'updatedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+        && request.resource.data.defaults is map
+        && request.resource.data.defaults.keys().hasOnly(['markupPct', 'taxPct', 'terms', 'quotePrefix'])
+        && request.resource.data.updatedAt is number;
+    }
+
+    match /invites/{inviteId} {
+      allow read: if adminOf(resource.data.orgId);
+    }
+
+    match /auditLog/{entryId} {
+      allow read: if adminOf(resource.data.orgId);
+    }
+
     match /users/{uid} {
       function isOwner() {
         return request.auth != null && request.auth.uid == uid;
       }
+
+      // The profile itself: you read your own; a company admin reads their team's
+      allow read: if isOwner() || adminOf(resource.data.get('orgId', null));
 
       match /stops/{stopId} {
         // Includes the fields the transcribeStop function adds, so the app can

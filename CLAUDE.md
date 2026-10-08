@@ -2,6 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Piccolo branch (feature/piccolo) — read first
+
+This checkout (`~/projects/pictalk-dev`, a git worktree) is where Piccolo is built: a second pane that turns finished PicTalk jobs into a work order, BOM, and quote. Spec: `docs/PICCOLO_SPEC.md`. Public PicTalk stays on `master` in `~/projects/pictalk`.
+
+- **Never deploy from here.** `.firebaserc` default is `demo-pictalk` (offline-only emulator project; deploys fail). Production is the `prod` alias — don't use it on this branch. Switch the default back to `pictalk-6cbff` only when merging to master.
+- `npm run emulators` — all emulators as `demo-pictalk`. `npm run dev` now always uses the emulators (`.env.development`); `src/firebase.js` swaps in the demo project's config in emulator builds. The Evaluation Lab and `e2e/` scripts point at `demo-pictalk` too.
+- `npm test` — starts the emulators and runs `tests/*.test.js` (node:test): `rules.test.js` (Firestore rules via `@firebase/rules-unit-testing` v5, which matches firebase 12) and `accounts.test.js` (signs in fake users through the Auth emulator and calls the real account functions). Stop any running emulators first (ports).
+- Don't update the public README/portfolio/resume for Piccolo work until it's merged to master.
+
+**Accounts** (Phase 1) — everyone starts as an anonymous guest (`startSession()` only signs in anonymously when nobody is signed in). "Save my work" (`src/AccountSheet.jsx`, `src/accountStore.js`) links Google (`linkWithPopup`) or an emailed link (`linkWithCredential`) to the same uid, so jobs/media never move. If that identity already has an account: an empty guest just switches to it; a guest with jobs is refused for now (merge function is Phase 1b). Email links carry `guest=<uid>` (and `invite=<id>`) in the continue URL: opened in another browser it explains instead of signing in; iPhone home-screen apps can paste the link (Mail opens Safari). `functions/accounts.js` owns all role/company changes (`ensureProfile`, `acceptInvite`, `createOrg`, `createInvite`, `revokeInvite`, `updateMember`); it reads the user from Firebase Auth (`getUser`), not the possibly stale token. Profile `users/{uid}`: `tier` guest|personal|team, `role` guest|personal|admin|estimator|field|installer, `orgId`, `status` active|disabled, `isAnonymous`, `email` (verified only). One company per account (a second company needs another email); a company always keeps one active admin; nothing is hard-deleted. Invites are links the admin copies (`/?invite=ID`, no email sending yet); a verified email with a pending invite joins on first sign-in. Rules: own profile readable, never client-writable; admins read their team's profiles, invites, `auditLog` (filter by `orgId`); members read `orgs/{orgId}`, admins edit only `name`/`defaults`. Composite indexes for invites/auditLog are in `firestore.indexes.json`.
+
+**Panes** — `src/main.jsx` renders `src/Shell.jsx`: pane bar (PicTalk | Piccolo + account chip), `App` kept mounted (hidden) while Piccolo shows so recordings/sheets survive, `src/piccolo/PiccoloPane.jsx` (Phase 1 shell: lists finished jobs read from the same `users/{uid}/jobs`), `src/TeamScreen.jsx` for admins.
+
+Known, pre-existing (also on master): on a brand-new guest's first load, `migrateEarlierStops` can hit `permission-denied` (runs before Firestore has the new token); it retries next sign-in.
+
 ## What this is
 
 PicTalk is a mobile-first, offline-first PWA for field techs (security/low-voltage trade): take a photo, record a voice note, save it as a "stop". Stops sync to Firebase and voice notes are transcribed by Deepgram in a Cloud Function. React 19 + Vite (plain JS/JSX, no TypeScript), Firebase project `pictalk-6cbff`, region `us-west2`.
@@ -25,7 +40,7 @@ Local testing without touching the live project (needs Java; installed at `C:\Pr
 - `npm run dev:emulators` (Vite mode `emulators`, reads `.env.emulators`) or `VITE_USE_EMULATORS=true npm run dev` — the app connects to the emulators (dev builds only; see `src/firebase.js`)
 - To include Functions: `firebase emulators:start --only auth,firestore,storage,functions`. Needs `functions/.secret.local` (`ANTHROPIC_API_KEY=…`, `DEEPGRAM_API_KEY=…`; dummy values are fine) and, to use the no-cost stand-in model instead of the real API, `functions/.env.local` with `PICTALK_FAKE_AI=1` (and `PICTALK_FAKE_STT=1` for a stand-in Deepgram) (only honored when `FUNCTIONS_EMULATOR` is set). Both files are git-ignored. `transcribeStop` fails locally (no Deepgram), so write transcripts into the emulator to test summaries.
 
-There is no test suite.
+There is no test suite on master (Piccolo branch: `npm test`, see above).
 
 ## Architecture
 
@@ -58,7 +73,7 @@ The client-generated UUID is the Firestore doc id, which is how `App.jsx` de-dup
 
 **Demo limit** — `STOP_LIMIT` (10 stops per job) in `App.jsx`, enforced in the UI only (capture, save, and moving stops into a full job).
 
-**Auth** — anonymous only (`startSession()` in `src/firebase.js`). Firestore uses `persistentLocalCache`.
+**Auth** — anonymous by default (`startSession()` in `src/firebase.js`); on the Piccolo branch guests can link Google / email link (see above). Firestore uses `persistentLocalCache`.
 
 **Transcription** — `functions/index.js` `transcribeStop` (v2 `onDocumentCreated` on `users/{uid}/stops/{stopId}`, CommonJS, Node 24) downloads the audio from Storage, sends it to Deepgram `nova-3` with a list of trade keyterms (brands like Verkada/Avigilon, terms like PoE/IDF/MDF), and writes `transcript` + `status` back. Deepgram key is a Functions secret: `DEEPGRAM_API_KEY`.
 

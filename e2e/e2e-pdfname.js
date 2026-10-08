@@ -72,7 +72,7 @@ const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' 
   await click('button::-p-text(Export PDF)');
   await waitText('PDF ready', 60000);
   await sleep(2500); // cleanup runs after the upload
-  const list = await (await fetch('http://127.0.0.1:9199/v0/b/pictalk-6cbff.firebasestorage.app/o?prefix=' + encodeURIComponent('exports/'), { headers: { Authorization: 'Bearer owner' } })).json();
+  const list = await (await fetch('http://127.0.0.1:9199/v0/b/demo-pictalk.appspot.com/o?prefix=' + encodeURIComponent('exports/'), { headers: { Authorization: 'Bearer owner' } })).json();
   const uid = await p.evaluate(async () => (await import('/src/firebase.js')).auth.currentUser.uid);
   const mine = (list.items || []).filter((i) => i.name.startsWith(`exports/${uid}/`)).map((i) => i.name.split('/').pop());
   check('Re-export leaves one stored copy per job (the newest)', mine.length === 1 && mine[0].includes('Beta-Builders'), mine.join(', '));

@@ -19,6 +19,15 @@ exports.transcribeWrapUpNote = require("./wrapup").transcribeWrapUpNote;
 // AI description of a stop's photo (when the user taps Describe photo)
 exports.describeStopPhoto = require("./photo").describeStopPhoto;
 
+// Piccolo accounts: profiles, companies, team invites, roles
+const accounts = require("./accounts");
+exports.ensureProfile = accounts.ensureProfile;
+exports.acceptInvite = accounts.acceptInvite;
+exports.createOrg = accounts.createOrg;
+exports.createInvite = accounts.createInvite;
+exports.revokeInvite = accounts.revokeInvite;
+exports.updateMember = accounts.updateMember;
+
 // Short-lived Deepgram token for live transcription in the browser
 exports.getDeepgramStreamToken = require("./streamtoken").getDeepgramStreamToken;
 

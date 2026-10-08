@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "pictalk-6cbff"
+    "default": "demo-pictalk",
+    "prod": "pictalk-6cbff"
   }
 }

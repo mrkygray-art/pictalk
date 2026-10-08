@@ -1,7 +1,7 @@
 // Piccolo drafts for a job. The draftPiccolo function writes versioned drafts to
 // users/{uid}/jobs/{jobId}/drafts and, for the first one, the editable copy at working/current.
 // The app reads both and copies a newer draft into working/current only when the user says so.
-import { collection, doc, limit, onSnapshot, orderBy, query, setDoc } from "firebase/firestore";
+import { collection, doc, limit, onSnapshot, orderBy, query, setDoc, updateDoc } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "../firebase";
 import { stopText, photoText } from "../stopStore";
@@ -32,20 +32,76 @@ export function watchWorking(uid, jobId, callback) {
   );
 }
 
-/** Replace the editable copy with a draft (the user chose "Use this draft"). Works offline. */
-export function applyDraft(uid, jobId, draft, existing) {
-  const now = Date.now();
-  return setDoc(doc(db, ...jobDoc(uid, jobId), "working", "current"), {
-    draftId: draft.id,
-    draftVersion: draft.version,
-    workOrder: draft.workOrder,
-    bom: draft.bom,
-    quote: draft.quote,
-    questions: draft.questions,
-    editedBy: uid,
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now,
+/** The parts of a draft that become the editable copy ("Use Draft n"). */
+export const draftToWorking = (draft) => ({
+  draftId: draft.id,
+  draftVersion: draft.version,
+  reviewedDraftVersion: draft.version,
+  workOrder: draft.workOrder,
+  bom: draft.bom,
+  quote: draft.quote,
+  questions: draft.questions,
+});
+
+const WORKING_KEYS = ["draftId", "draftVersion", "reviewedDraftVersion", "workOrder", "bom", "quote", "questions", "editedBy", "createdAt", "updatedAt"];
+
+/** Save the editable copy (only the fields the rules allow). Works offline (syncs later). */
+export function saveWorking(uid, jobId, data) {
+  const out = Object.fromEntries(WORKING_KEYS.filter((k) => data[k] !== undefined).map((k) => [k, data[k]]));
+  return setDoc(doc(db, ...jobDoc(uid, jobId), "working", "current"), out);
+}
+
+/** First edit after a draft: the job shows "Being edited". */
+export function markEditing(uid, jobId) {
+  return updateDoc(doc(db, ...jobDoc(uid, jobId)), { piccoloStatus: "editing" }).catch((err) =>
+    console.warn("Marking job as being edited failed:", err)
+  );
+}
+
+// ---------- lines ----------
+export const newId = () => crypto.randomUUID();
+
+/** A blank line the user adds (no AI source). */
+export const blankLine = (category = "equipment") => ({
+  id: newId(),
+  description: "",
+  qty: 1,
+  unit: category === "labor" ? "hr" : "ea",
+  partNumber: "",
+  partNumberStatus: "none",
+  unitCost: null,
+  unitPrice: null,
+  priceSource: "none",
+  location: "",
+  notes: "",
+  source: { stopIds: [], basis: "user", quote: "" },
+  category,
+  checked: true,
+  sortOrder: 0,
+});
+
+/** Renumber sortOrder after adding, removing, or moving lines. */
+export const renumber = (lines) => lines.map((l, i) => ({ ...l, sortOrder: i }));
+
+const squash = (t) => String(t || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const lineKey = (l) => `${squash(l.description)}|${squash(l.location)}`;
+
+/**
+ * What a newer draft has that the user's copy doesn't (and the reverse), matched by
+ * description + location. Used by the compare sheet to merge line by line.
+ */
+export function compareDraft(mine, draft) {
+  const mineKeys = new Map((mine.bom || []).map((l) => [lineKey(l), l]));
+  const theirKeys = new Map((draft.bom || []).map((l) => [lineKey(l), l]));
+  const added = (draft.bom || []).filter((l) => !mineKeys.has(lineKey(l)));
+  const changed = (draft.bom || []).filter((l) => {
+    const m = mineKeys.get(lineKey(l));
+    return m && (m.qty !== l.qty || squash(m.partNumber) !== squash(l.partNumber));
   });
+  const missing = (mine.bom || []).filter((l) => l.source?.basis !== "user" && !theirKeys.has(lineKey(l)));
+  const myQuestions = new Set((mine.questions || []).map((q) => squash(q.text)));
+  const questions = (draft.questions || []).filter((q) => !myQuestions.has(squash(q.text)));
+  return { added, changed, missing, questions };
 }
 
 const draft = httpsCallable(functions, "draftPiccolo", { timeout: 310000 });

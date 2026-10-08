@@ -5,6 +5,15 @@ import PiccoloJob from "./PiccoloJob";
 
 const day = (t) => new Date(t).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
 const STATUS = { drafted: "AI draft ready", editing: "Being edited", finalized: "Finalized" };
+const OPEN_KEY = "piccolo-open-job"; // reopen the same job after a reload (this tab only)
+
+function savedOpenJob() {
+  try {
+    return sessionStorage.getItem(OPEN_KEY);
+  } catch {
+    return null;
+  }
+}
 
 // Piccolo: turns a finished PicTalk job into a work order, parts list (BOM), and quote.
 // It reads the same jobs and stops as PicTalk (nothing is copied).
@@ -12,7 +21,7 @@ export default function PiccoloPane({ uid, isGuest, target, onAccount, onOpenInP
   const [jobs, setJobs] = useState({ uid: null, list: [] });
   const [stops, setStops] = useState({ uid: null, list: [] });
   const [pending, setPending] = useState([]);
-  const [openId, setOpenId] = useState(target?.jobId ?? null);
+  const [openId, setOpenId] = useState(() => target?.jobId ?? savedOpenJob());
   const [online, setOnline] = useState(navigator.onLine);
 
   useEffect(() => (uid ? watchJobs(uid, (list) => setJobs({ uid, list })) : undefined), [uid]);
@@ -31,6 +40,15 @@ export default function PiccoloPane({ uid, isGuest, target, onAccount, onOpenInP
       window.removeEventListener("offline", update);
     };
   }, []);
+
+  useEffect(() => {
+    try {
+      if (openId) sessionStorage.setItem(OPEN_KEY, openId);
+      else sessionStorage.removeItem(OPEN_KEY);
+    } catch {
+      // remembered for this visit only
+    }
+  }, [openId]);
 
   const list = jobs.uid === uid ? jobs.list : [];
   const finished = list.filter((j) => j.status === "finished");

@@ -75,7 +75,9 @@ test("re-drafting makes a new version and never replaces the user's copy", async
   const workingPath = `users/${uid}/jobs/jobB/working/current`;
   const working = await read(p, workingPath);
   working.bom[0].description = "Edited by me";
-  await setDoc(doc(p.db, workingPath), { ...working, updatedAt: Date.now() });
+  working.bom[0].unitPrice = 125.5;
+  await setDoc(doc(p.db, workingPath), { ...working, reviewedDraftVersion: 1, updatedAt: Date.now() });
+  await blocked(setDoc(doc(p.db, workingPath), { ...working, secret: true, updatedAt: Date.now() })); // only known fields
 
   const second = await p.call("draftPiccolo", { jobId: "jobB" });
   assert.equal(second.version, 2);

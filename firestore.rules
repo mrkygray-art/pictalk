@@ -122,8 +122,8 @@ service cloud.firestore {
           function validWorking() {
             let d = request.resource.data;
             return docId == 'current'
-              && d.keys().hasOnly(['draftId', 'draftVersion', 'workOrder', 'bom', 'quote', 'questions',
-                                   'editedBy', 'createdAt', 'updatedAt'])
+              && d.keys().hasOnly(['draftId', 'draftVersion', 'reviewedDraftVersion', 'workOrder', 'bom', 'quote',
+                                   'questions', 'editedBy', 'createdAt', 'updatedAt'])
               && d.workOrder is map && d.quote is map
               && d.bom is list && d.bom.size() <= 300
               && d.questions is list && d.questions.size() <= 100

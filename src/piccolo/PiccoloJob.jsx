@@ -5,7 +5,12 @@ import { jobTitle, setJobDetails } from "../jobStore";
 import { stopText, photoText, urlFor } from "../stopStore";
 import { watchNotes, saveNoteText } from "../wrapUpStore";
 import { watchSummary, hasSummary, saveSummaryEdits, isTranscriptPending } from "../summaryStore";
-import { watchLatestDraft, watchWorking, applyDraft, requestDraft, captureChangedSince, money, quoteTotals } from "./piccoloStore";
+import {
+  watchLatestDraft, requestDraft, captureChangedSince, money, quoteTotals, draftToWorking, blankLine, renumber, newId,
+} from "./piccoloStore";
+import useWorkingCopy from "./useWorkingCopy";
+import LineSheet from "./LineSheet";
+import { ItemSheet, CompareSheet } from "./EditSheets";
 
 const TABS = [
   ["overview", "Overview"],
@@ -15,36 +20,19 @@ const TABS = [
   ["media", "Media"],
 ];
 const NOTE_LABELS = { field_notes: "Field notes", customer_comments: "Customer notes", summary: "Summary" };
+const SAVE_TEXT = {
+  waiting: "Saving…",
+  saving: "Saving…",
+  saved: "Saved ✓",
+  offline: "Saved on this device. It syncs when you're back online.",
+  error: "Couldn't save. Check your connection and try again.",
+};
 
 function BackIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M15 5l-7 7 7 7" />
     </svg>
-  );
-}
-
-// One text box, Save or Cancel (summary, field notes, customer notes)
-function EditTextSheet({ title, initial, maxLength, onSave, onClose }) {
-  const [text, setText] = useState(initial);
-  return (
-    <Sheet title={title} onClose={onClose}>
-      <form
-        className="sheet-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSave(text.trim());
-        }}
-      >
-        <textarea className="words-field" value={text} rows={8} maxLength={maxLength} aria-label={title} onChange={(e) => setText(e.target.value)} />
-        <button type="submit" className="save-btn">
-          Save
-        </button>
-        <button type="button" className="big-btn plain-btn" onClick={onClose}>
-          Cancel
-        </button>
-      </form>
-    </Sheet>
   );
 }
 
@@ -78,49 +66,71 @@ function TextBlock({ label, text, empty, onEdit, id }) {
   );
 }
 
-function ItemList({ title, items, stopNumber, onJump }) {
-  if (!items?.length) return null;
+// A list of short items; tap one to edit it
+function EditableList({ title, items, empty, addLabel, onEditTitle, onEditItem, onAdd, stopNumber, onJump }) {
   return (
     <section className="pc-block">
-      <h3>{title}</h3>
-      <ul className="pc-items">
-        {items.map((it, i) => (
-          <li key={i}>
-            {it.text}
-            <Sources ids={it.sourceIds} stopNumber={stopNumber} onJump={onJump} />
-          </li>
-        ))}
-      </ul>
+      <div className="pc-block-head">
+        <h3>{title}</h3>
+        {onEditTitle && (
+          <button className="link-btn" onClick={onEditTitle}>
+            Edit
+          </button>
+        )}
+      </div>
+      {!items?.length && empty && <p className="pc-empty">{empty}</p>}
+      {items?.length > 0 && (
+        <ul className="pc-items">
+          {items.map((it, i) => (
+            <li key={it.id || i}>
+              <button className="pc-item-btn" onClick={() => onEditItem(i)}>
+                {it.answer !== undefined && it.answered ? "✓ " : ""}
+                {it.text}
+              </button>
+              {it.answered && it.answer && <p className="pc-answer">Answer: {it.answer}</p>}
+              <Sources ids={it.sourceIds} stopNumber={stopNumber} onJump={onJump} />
+            </li>
+          ))}
+        </ul>
+      )}
+      <button className="pc-add" onClick={onAdd}>
+        + {addLabel}
+      </button>
     </section>
   );
 }
 
-function LineCard({ line, stopNumber, onJump, showPrice }) {
+function LineCard({ line, stopNumber, onJump, showPrice, onEdit }) {
   const priced = Number.isFinite(line.unitPrice);
+  const inferred = line.source?.basis === "inferred" && !line.checked;
   return (
-    <div className={`pc-line${line.source?.basis === "inferred" ? " is-inferred" : ""}`}>
-      <div className="pc-line-top">
-        <strong>{line.description}</strong>
-        <span className="pc-qty">
-          {line.qty} {line.unit}
+    <div className={`pc-line${inferred ? " is-inferred" : ""}`}>
+      <button className="pc-line-main" onClick={onEdit} aria-label={`Edit ${line.description}`}>
+        <span className="pc-line-top">
+          <strong>{line.description}</strong>
+          <span className="pc-qty">
+            {line.qty} {line.unit}
+          </span>
         </span>
-      </div>
-      <div className="pc-badges">
-        {line.source?.basis === "inferred" && <span className="badge is-warn">Inferred · check</span>}
-        {line.source?.basis === "seen_in_photo" && <span className="badge">Seen in photo</span>}
-        {line.partNumberStatus === "ai_suggested" && <span className="badge is-warn">Verify part #</span>}
-        {line.priceSource === "ai_estimate" && <span className="badge is-warn">ESTIMATE</span>}
-        {!priced && <span className="badge is-muted">Needs price</span>}
-      </div>
-      {line.partNumber && <p className="pc-meta">Part #: {line.partNumber}</p>}
-      {line.location && <p className="pc-meta">Where: {line.location}</p>}
-      {line.notes && <p className="pc-meta">{line.notes}</p>}
-      {line.source?.quote && <p className="pc-quote">“{line.source.quote}”</p>}
-      {showPrice && priced && (
-        <p className="pc-meta">
-          {money(line.unitPrice)} each · {money(line.unitPrice * line.qty)}
-        </p>
-      )}
+        <span className="pc-badges">
+          {inferred && <span className="badge is-warn">Inferred · check</span>}
+          {line.source?.basis === "seen_in_photo" && <span className="badge">Seen in photo</span>}
+          {line.partNumberStatus === "ai_suggested" && <span className="badge is-warn">Verify part #</span>}
+          {line.priceSource === "ai_estimate" && <span className="badge is-warn">ESTIMATE</span>}
+          {!priced && <span className="badge is-muted">Needs price</span>}
+        </span>
+        {line.partNumber && <span className="pc-meta">Part #: {line.partNumber}</span>}
+        {line.location && <span className="pc-meta">Where: {line.location}</span>}
+        {line.notes && <span className="pc-meta">{line.notes}</span>}
+        {line.source?.quote && <span className="pc-quote">“{line.source.quote}”</span>}
+        {showPrice && priced && (
+          <span className="pc-meta">
+            {money(line.unitPrice)} each · {money(line.unitPrice * line.qty)}
+            {Number.isFinite(line.unitCost) ? ` · cost ${money(line.unitCost)}` : ""}
+          </span>
+        )}
+        <span className="pc-edit-hint">Tap to edit</span>
+      </button>
       <Sources ids={line.source?.stopIds} stopNumber={stopNumber} onJump={onJump} />
     </div>
   );
@@ -149,20 +159,85 @@ function MediaStop({ stop, number }) {
   );
 }
 
-/** One job in Piccolo: draft with AI, then the work order, BOM, quote, and media. */
+// Markup, tax, and terms for the quote (one Save = one undo step)
+function QuoteSettings({ quote, onSave }) {
+  const [f, setF] = useState({ markupPct: String(quote?.markupPct ?? 0), taxPct: String(quote?.taxPct ?? 0), terms: quote?.terms || "" });
+  const [error, setError] = useState("");
+  const dirty = f.markupPct !== String(quote?.markupPct ?? 0) || f.taxPct !== String(quote?.taxPct ?? 0) || f.terms !== (quote?.terms || "");
+  return (
+    <form
+      className="pc-block"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const markupPct = Number(f.markupPct || 0);
+        const taxPct = Number(f.taxPct || 0);
+        if (!Number.isFinite(markupPct) || !Number.isFinite(taxPct) || markupPct < 0 || taxPct < 0 || markupPct > 1000 || taxPct > 100) {
+          return setError("Markup and tax need to be numbers (tax up to 100).");
+        }
+        setError("");
+        onSave({ markupPct, taxPct, terms: f.terms.trim() });
+      }}
+    >
+      <h3>Markup, tax, and terms</h3>
+      {error && <p className="error" role="alert">{error}</p>}
+      <div className="detail-fields">
+        <div className="pc-field-row">
+          <label>
+            Markup %
+            <input value={f.markupPct} inputMode="decimal" maxLength={6} onChange={(e) => setF({ ...f, markupPct: e.target.value })} />
+          </label>
+          <label>
+            Tax %
+            <input value={f.taxPct} inputMode="decimal" maxLength={6} onChange={(e) => setF({ ...f, taxPct: e.target.value })} />
+          </label>
+        </div>
+        <label>
+          Terms
+          <textarea className="words-field" rows={3} maxLength={2000} value={f.terms} onChange={(e) => setF({ ...f, terms: e.target.value })} />
+        </label>
+      </div>
+      <button type="submit" className="save-btn" disabled={!dirty}>
+        Save Quote Settings
+      </button>
+    </form>
+  );
+}
+
+function DetailsSheet({ job, onSave, onClose }) {
+  const [details, setDetails] = useState({ customer: job.customer || "", location: job.location || "" });
+  return (
+    <Sheet title="Customer & location" onClose={onClose}>
+      <form
+        className="sheet-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSave(details);
+        }}
+      >
+        <JobDetailsFields customer={details.customer} location={details.location} onChange={setDetails} />
+        <button type="submit" className="save-btn">
+          Save
+        </button>
+        <button type="button" className="big-btn plain-btn" onClick={onClose}>
+          Cancel
+        </button>
+      </form>
+    </Sheet>
+  );
+}
+
+/** One job in Piccolo: draft with AI, then edit the work order, BOM, and quote. */
 export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, online, onBack, onOpenInPicTalk, onNotice }) {
   const [tab, setTab] = useState("overview");
-  const [working, setWorking] = useState(undefined); // undefined = loading, null = none yet
+  const { working, loaded: workingLoaded, status, edit, undo, canUndo, replace } = useWorkingCopy(uid, job);
   const [latest, setLatest] = useState(undefined);
   const [notes, setNotes] = useState({});
   const [summary, setSummary] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [editing, setEditing] = useState(null); // "details" | "summary" | "field" | "customer"
-  const [keptVersion, setKeptVersion] = useState(null); // "Keep current" for this newer draft
+  const [sheet, setSheet] = useState(null);
   const autoTried = useRef(false);
 
-  useEffect(() => watchWorking(uid, job.id, setWorking), [uid, job.id]);
   useEffect(() => watchLatestDraft(uid, job.id, setLatest), [uid, job.id]);
   useEffect(() => watchNotes(uid, job.id, setNotes), [uid, job.id]);
   useEffect(() => watchSummary(uid, job.id, setSummary), [uid, job.id]);
@@ -170,7 +245,7 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
   const sorted = [...stops].sort((a, b) => (a.clientCreatedAt || 0) - (b.clientCreatedAt || 0));
   const stopNumber = Object.fromEntries(sorted.map((s, i) => [s.id, i + 1]));
   const waiting = pendingStops + sorted.filter((s) => isTranscriptPending(s)).length;
-  const loaded = working !== undefined && latest !== undefined;
+  const loaded = workingLoaded && latest !== undefined;
 
   const draft = async () => {
     setBusy(true);
@@ -206,12 +281,53 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
     }, 60);
   };
 
-  const newer = working && latest && latest.id !== working.draftId && latest.version > (working.draftVersion || 0) && keptVersion !== latest.version;
-  const changed = latest && captureChangedSince(latest, { stops: sorted, notes });
+  // ---------- edits (each is one undo step) ----------
   const bom = working?.bom || [];
+  const saveLine = (line, isNew) =>
+    edit((w) => {
+      w.bom = isNew ? renumber([...w.bom, line]) : w.bom.map((l) => (l.id === line.id ? line : l));
+    });
+  const deleteLine = (id) => edit((w) => void (w.bom = renumber(w.bom.filter((l) => l.id !== id))));
+  const duplicateLine = (line) =>
+    edit((w) => {
+      const i = w.bom.findIndex((l) => l.id === line.id);
+      w.bom.splice(i + 1, 0, { ...structuredClone(line), id: newId() });
+      w.bom = renumber(w.bom);
+    });
+  // Move among the lines on screen (the BOM tab hides labor), swapping with the neighbor there
+  const moveLine = (id, dir, visibleIds) =>
+    edit((w) => {
+      const v = visibleIds.indexOf(id);
+      const otherId = visibleIds[v + dir];
+      if (!otherId) return;
+      const a = w.bom.findIndex((l) => l.id === id);
+      const b = w.bom.findIndex((l) => l.id === otherId);
+      [w.bom[a], w.bom[b]] = [w.bom[b], w.bom[a]];
+      w.bom = renumber(w.bom);
+    });
+  const openLine = (line, visible) => setSheet({ type: "line", line, visibleIds: visible.map((l) => l.id) });
+
+  // Text items: scope, location names, tasks, requirements, installation notes, questions
+  const itemSheet = (title, initial, apply, remove, extra = {}) => setSheet({ type: "item", title, initial, apply, remove, ...extra });
+  const wo = working?.workOrder;
+  const listEditor = (key, title) => ({
+    items: wo?.[key],
+    onEditItem: (i) =>
+      itemSheet(
+        title,
+        wo[key][i].text,
+        (w, text) => void (w.workOrder[key][i].text = text),
+        (w) => void w.workOrder[key].splice(i, 1)
+      ),
+    onAdd: () => itemSheet(title, "", (w, text) => void w.workOrder[key].push({ text, sourceIds: [] })),
+  });
+
+  const newer = working && latest && latest.version > Math.max(working.draftVersion || 0, working.reviewedDraftVersion || 0);
+  const changed = latest && captureChangedSince(latest, { stops: sorted, notes });
   const parts = bom.filter((l) => l.category !== "labor");
   const totals = quoteTotals(bom, working?.quote);
-  const wo = working?.workOrder;
+  const questions = working?.questions || [];
+  const openQuestions = questions.filter((q) => !q.answered).length;
 
   return (
     <>
@@ -245,23 +361,20 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
 
       {newer && (
         <div className="pc-banner" role="status">
-          <p>Draft {latest.version} is ready. Using it replaces the version you have now.</p>
+          <p>Draft {latest.version} is ready. Compare it with your version, or replace yours with it.</p>
           <div className="pc-banner-actions">
-            <button
-              className="save-btn"
-              onClick={() => applyDraft(uid, job.id, latest, working).then(() => onNotice(`Now using draft ${latest.version}`))}
-            >
-              Use Draft {latest.version}
+            <button className="save-btn" onClick={() => setSheet({ type: "compare" })}>
+              Compare
             </button>
-            <button className="text-btn" onClick={() => setKeptVersion(latest.version)}>
-              Keep the current one
+            <button className="text-btn" onClick={() => edit((w) => void (w.reviewedDraftVersion = latest.version))}>
+              Keep mine
             </button>
           </div>
         </div>
       )}
       {working && !newer && changed && !busy && (
         <div className="pc-banner" role="status">
-          <p>New photos or notes since this draft. Re-draft to include them? Your current version stays until you choose.</p>
+          <p>New photos or notes since this draft. Re-draft to include them? Your version stays until you choose.</p>
           <button className="big-btn plain-btn" onClick={draft} disabled={waiting > 0 || !online}>
             Re-draft
           </button>
@@ -277,14 +390,21 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
               </button>
             ))}
           </div>
-          <p className="pc-draft-note">
-            AI draft {working.draftVersion ? `v${working.draftVersion}` : ""} · Check everything before you send it.
-            {!newer && !changed && (
+          <div className="pc-savebar">
+            <span className={`pc-save is-${status}`} role="status">
+              {SAVE_TEXT[status] || `AI draft ${working.draftVersion ? `v${working.draftVersion}` : ""} · Check everything before you send it.`}
+            </span>
+            {canUndo && (
+              <button className="link-btn" onClick={undo}>
+                Undo
+              </button>
+            )}
+            {!canUndo && !newer && !changed && (
               <button className="text-btn pc-inline" onClick={draft} disabled={busy || waiting > 0 || !online}>
                 Re-draft
               </button>
             )}
-          </p>
+          </div>
         </>
       )}
 
@@ -293,7 +413,7 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
           <section className="pc-block">
             <div className="pc-block-head">
               <h3>Customer &amp; location</h3>
-              <button className="link-btn" onClick={() => setEditing("details")}>
+              <button className="link-btn" onClick={() => setSheet({ type: "details" })}>
                 Edit
               </button>
             </div>
@@ -307,18 +427,37 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
             label="Summary"
             text={hasSummary(summary) ? summary.summary : ""}
             empty="No AI summary yet. It's built on the job page in PicTalk."
-            onEdit={hasSummary(summary) ? () => setEditing("summary") : null}
+            onEdit={hasSummary(summary) ? () => setSheet({ type: "summary" }) : null}
           />
-          <TextBlock id="pc-note-field_notes" label="Field notes" text={notes.field?.text} empty="No field notes." onEdit={() => setEditing("field")} />
+          <TextBlock id="pc-note-field_notes" label="Field notes" text={notes.field?.text} empty="No field notes." onEdit={() => setSheet({ type: "note", note: "field" })} />
           <TextBlock
             id="pc-note-customer_comments"
             label="Customer notes"
             text={notes.customer?.text}
             empty="No customer notes."
-            onEdit={() => setEditing("customer")}
+            onEdit={() => setSheet({ type: "note", note: "customer" })}
           />
           {working && (
-            <ItemList title="Open questions" items={working.questions} stopNumber={stopNumber} onJump={jump} />
+            <EditableList
+              title={`Open questions${openQuestions ? ` (${openQuestions})` : ""}`}
+              items={questions}
+              empty="No questions."
+              addLabel="Add a question"
+              stopNumber={stopNumber}
+              onJump={jump}
+              onEditItem={(i) =>
+                itemSheet(
+                  "Open question",
+                  questions[i].text,
+                  (w, text, answer) => void Object.assign(w.questions[i], { text, answer, answered: !!answer }),
+                  (w) => void w.questions.splice(i, 1),
+                  { answer: questions[i].answer || "" }
+                )
+              }
+              onAdd={() =>
+                itemSheet("Open question", "", (w, text, answer) => void w.questions.push({ id: newId(), text, sourceIds: [], answer, answered: !!answer }), null, { answer: "" })
+              }
+            />
           )}
           <button className="text-btn" onClick={() => onOpenInPicTalk(job.id)}>
             Add photos or notes in PicTalk
@@ -328,10 +467,41 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
 
       {working && tab === "workorder" && wo && (
         <>
-          <TextBlock label="Scope of work" text={wo.scope} empty="" />
-          {wo.locations.map((loc, i) => (
-            <ItemList key={i} title={loc.name} items={loc.tasks} stopNumber={stopNumber} onJump={jump} />
+          <TextBlock
+            label="Scope of work"
+            text={wo.scope}
+            empty="No scope yet."
+            onEdit={() => itemSheet("Scope of work", wo.scope, (w, text) => void (w.workOrder.scope = text), null, { multiline: true, maxLength: 4000 })}
+          />
+          {wo.locations.map((loc, li) => (
+            <EditableList
+              key={li}
+              title={loc.name}
+              items={loc.tasks}
+              empty="No tasks here."
+              addLabel="Add a task"
+              stopNumber={stopNumber}
+              onJump={jump}
+              onEditTitle={() =>
+                itemSheet("Location name", loc.name, (w, text) => void (w.workOrder.locations[li].name = text), (w) => void w.workOrder.locations.splice(li, 1))
+              }
+              onEditItem={(ti) =>
+                itemSheet(
+                  `Task at ${loc.name}`,
+                  loc.tasks[ti].text,
+                  (w, text) => void (w.workOrder.locations[li].tasks[ti].text = text),
+                  (w) => void w.workOrder.locations[li].tasks.splice(ti, 1)
+                )
+              }
+              onAdd={() => itemSheet(`Task at ${loc.name}`, "", (w, text) => void w.workOrder.locations[li].tasks.push({ text, sourceIds: [] }))}
+            />
           ))}
+          <button
+            className="pc-add pc-add-block"
+            onClick={() => itemSheet("New location", "", (w, text) => void w.workOrder.locations.push({ name: text, tasks: [] }))}
+          >
+            + Add a location
+          </button>
           {parts.length > 0 && (
             <section className="pc-block">
               <h3>Devices and materials</h3>
@@ -343,29 +513,40 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
                   </li>
                 ))}
               </ul>
+              <p className="pc-hint">Edit these on the Parts tab.</p>
             </section>
           )}
-          <ItemList title="Installation notes" items={wo.installNotes} stopNumber={stopNumber} onJump={jump} />
-          <ItemList title="Customer requirements" items={wo.constraints} stopNumber={stopNumber} onJump={jump} />
-          <ItemList title="Open questions" items={working.questions} stopNumber={stopNumber} onJump={jump} />
+          <EditableList title="Installation notes" empty="None yet." addLabel="Add a note" stopNumber={stopNumber} onJump={jump} {...listEditor("installNotes", "Installation note")} />
+          <EditableList title="Customer requirements" empty="None yet." addLabel="Add a requirement" stopNumber={stopNumber} onJump={jump} {...listEditor("constraints", "Customer requirement")} />
         </>
       )}
 
       {working && tab === "bom" && (
         <section aria-label="Parts list">
-          {parts.length === 0 && <p className="empty">No parts in this draft.</p>}
+          {parts.length === 0 && <p className="empty">No parts yet.</p>}
           {parts.map((l) => (
-            <LineCard key={l.id} line={l} stopNumber={stopNumber} onJump={jump} />
+            <LineCard key={l.id} line={l} stopNumber={stopNumber} onJump={jump} onEdit={() => openLine(l, parts)} />
           ))}
-          <p className="demo-note">Editing lines comes next. Part numbers marked Verify weren't said in the job; check them.</p>
+          <button className="pc-add pc-add-block" onClick={() => setSheet({ type: "line", line: blankLine("equipment"), isNew: true })}>
+            + Add a part
+          </button>
+          <p className="demo-note">Verify means nobody said that part number in the job. Tap the line to check it.</p>
         </section>
       )}
 
       {working && tab === "quote" && (
         <section aria-label="Quote">
           {bom.map((l) => (
-            <LineCard key={l.id} line={l} stopNumber={stopNumber} onJump={jump} showPrice />
+            <LineCard key={l.id} line={l} stopNumber={stopNumber} onJump={jump} showPrice onEdit={() => openLine(l, bom)} />
           ))}
+          <div className="pc-add-row">
+            <button className="pc-add pc-add-block" onClick={() => setSheet({ type: "line", line: blankLine("labor"), isNew: true })}>
+              + Add labor
+            </button>
+            <button className="pc-add pc-add-block" onClick={() => setSheet({ type: "line", line: blankLine("equipment"), isNew: true })}>
+              + Add a line
+            </button>
+          </div>
           <div className="pc-totals">
             <p>
               <span>Subtotal</span>
@@ -385,11 +566,18 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
             </p>
             {totals.unpriced > 0 && (
               <p className="pc-empty">
-                {totals.unpriced} line{totals.unpriced === 1 ? " needs a price" : "s need prices"}. Prices are left blank on purpose; adding them comes next.
+                {totals.unpriced} line{totals.unpriced === 1 ? " needs a price" : "s need prices"}. Tap a line to add one.
               </p>
             )}
           </div>
-          {working.quote?.terms && <TextBlock label="Terms" text={working.quote.terms} empty="" />}
+          <QuoteSettings
+            key={working.updatedAt}
+            quote={working.quote}
+            onSave={(q) => {
+              edit((w) => void (w.quote = { ...w.quote, ...q }));
+              onNotice("Quote settings saved");
+            }}
+          />
         </section>
       )}
 
@@ -403,66 +591,113 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
         </section>
       )}
 
-      {editing === "details" && (
+      {sheet?.type === "line" && (
+        <LineSheet
+          key={sheet.line.id}
+          line={sheet.line}
+          isNew={!!sheet.isNew}
+          showPrices
+          position={sheet.visibleIds?.indexOf(sheet.line.id) ?? 0}
+          count={sheet.visibleIds?.length ?? 1}
+          onClose={() => setSheet(null)}
+          onSave={(line) => {
+            saveLine(line, sheet.isNew);
+            setSheet(null);
+          }}
+          onDelete={() => {
+            deleteLine(sheet.line.id);
+            setSheet(null);
+            onNotice("Line deleted. Tap Undo to bring it back.");
+          }}
+          onDuplicate={() => {
+            duplicateLine(sheet.line);
+            setSheet(null);
+          }}
+          onMove={(dir) => {
+            moveLine(sheet.line.id, dir, sheet.visibleIds);
+            setSheet(null);
+          }}
+        />
+      )}
+      {sheet?.type === "item" && (
+        <ItemSheet
+          title={sheet.title}
+          initial={sheet.initial}
+          answer={sheet.answer}
+          multiline={sheet.multiline}
+          maxLength={sheet.maxLength}
+          onClose={() => setSheet(null)}
+          onSave={(text, answer) => {
+            edit((w) => sheet.apply(w, text, answer));
+            setSheet(null);
+          }}
+          onDelete={
+            sheet.remove
+              ? () => {
+                  edit((w) => sheet.remove(w));
+                  setSheet(null);
+                }
+              : null
+          }
+        />
+      )}
+      {sheet?.type === "compare" && newer && (
+        <CompareSheet
+          mine={working}
+          draft={latest}
+          onAddLine={(l) => edit((w) => void (w.bom = renumber([...w.bom, { ...structuredClone(l), id: newId() }])))}
+          onAddQuestion={(q) => edit((w) => void w.questions.push({ ...q, id: newId() }))}
+          onReplace={() => {
+            replace(draftToWorking(latest));
+            setSheet(null);
+            onNotice(`Now using draft ${latest.version}. Tap Undo to go back.`);
+          }}
+          onClose={() => {
+            edit((w) => void (w.reviewedDraftVersion = latest.version));
+            setSheet(null);
+          }}
+        />
+      )}
+      {sheet?.type === "details" && (
         <DetailsSheet
           job={job}
-          onClose={() => setEditing(null)}
+          onClose={() => setSheet(null)}
           onSave={(details) => {
             setJobDetails(uid, job.id, details);
-            setEditing(null);
+            setSheet(null);
             onNotice("Customer and location saved");
           }}
         />
       )}
-      {editing === "summary" && (
-        <EditTextSheet
+      {sheet?.type === "summary" && (
+        <ItemSheet
           title="Summary"
           initial={summary.summary}
+          multiline
           maxLength={4000}
-          onClose={() => setEditing(null)}
+          onClose={() => setSheet(null)}
           onSave={(text) => {
             saveSummaryEdits(uid, job.id, { summary: text, action_items: summary.action_items || [], open_questions: summary.open_questions || [] });
-            setEditing(null);
+            setSheet(null);
             onNotice("Summary saved");
           }}
         />
       )}
-      {(editing === "field" || editing === "customer") && (
-        <EditTextSheet
-          title={editing === "field" ? "Field notes" : "Customer notes"}
-          initial={notes[editing]?.text || ""}
+      {sheet?.type === "note" && (
+        <ItemSheet
+          title={sheet.note === "field" ? "Field notes" : "Customer notes"}
+          initial={notes[sheet.note]?.text || ""}
+          multiline
+          allowEmpty
           maxLength={20000}
-          onClose={() => setEditing(null)}
+          onClose={() => setSheet(null)}
           onSave={(text) => {
-            saveNoteText(uid, job.id, editing, text);
-            setEditing(null);
+            saveNoteText(uid, job.id, sheet.note, text);
+            setSheet(null);
             onNotice("Notes saved");
           }}
         />
       )}
     </>
-  );
-}
-
-function DetailsSheet({ job, onSave, onClose }) {
-  const [details, setDetails] = useState({ customer: job.customer || "", location: job.location || "" });
-  return (
-    <Sheet title="Customer & location" onClose={onClose}>
-      <form
-        className="sheet-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSave(details);
-        }}
-      >
-        <JobDetailsFields customer={details.customer} location={details.location} onChange={setDetails} />
-        <button type="submit" className="save-btn">
-          Save
-        </button>
-        <button type="button" className="big-btn plain-btn" onClick={onClose}>
-          Cancel
-        </button>
-      </form>
-    </Sheet>
   );
 }

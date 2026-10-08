@@ -1614,13 +1614,23 @@ button:focus-visible {
 
 /* ---------- Piccolo: pane switcher, account, team ---------- */
 
+/* Always on screen (the spec's persistent switcher); the job bar sticks just below it */
 .pane-bar {
+  --pane-bar-h: 68px;
+  position: sticky;
+  top: 0;
+  z-index: 6;
   max-width: 480px;
   margin: 0 auto;
   padding: calc(12px + env(safe-area-inset-top)) 20px 0;
   display: flex;
   align-items: center;
   gap: 10px;
+  background: var(--bg);
+}
+
+.pane-body .job-bar {
+  top: calc(68px + env(safe-area-inset-top, 0px));
 }
 
 .pane-switch {

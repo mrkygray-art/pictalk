@@ -134,20 +134,31 @@ export default function ExportSheet({ job, uid, onClose, onDone }) {
     );
   }
 
-  // ready
+  // ready. Computers download first (Windows' share window can't save a file);
+  // phones share first, since that's how a PDF gets sent from a phone.
   const share = canShareFile(file);
+  const computer = window.matchMedia?.("(pointer: fine)").matches;
+  const deliver = async (download) => {
+    const how = await deliverFile(file, title, remoteUrl, { download });
+    if (how !== "cancelled") onDone(how);
+  };
   return (
     <Sheet title="PDF ready" onClose={onClose}>
       <p>{file.name}</p>
-      <button
-        className="big-btn photo-btn"
-        onClick={async () => {
-          const how = await deliverFile(file, title, remoteUrl);
-          if (how !== "cancelled") onDone(how);
-        }}
-      >
-        {share ? "Share PDF" : "Download PDF"}
-      </button>
+      {share && computer ? (
+        <>
+          <button className="big-btn photo-btn" onClick={() => deliver(true)}>
+            Download PDF
+          </button>
+          <button className="big-btn plain-btn" onClick={() => deliver(false)}>
+            Share PDF
+          </button>
+        </>
+      ) : (
+        <button className="big-btn photo-btn" onClick={() => deliver(false)}>
+          {share ? "Share PDF" : "Download PDF"}
+        </button>
+      )}
       <button className="big-btn plain-btn" onClick={onClose}>
         Close
       </button>

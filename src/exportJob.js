@@ -284,9 +284,10 @@ export function canShareFile(file) {
 /**
  * Must be called directly from a tap. Shares when the phone can; otherwise downloads,
  * from the uploaded copy when there is one (keeps the file name) or from the page.
+ * { download: true } skips sharing (the Download PDF button on computers).
  */
-export async function deliverFile(file, title, remoteUrl) {
-  if (canShareFile(file)) {
+export async function deliverFile(file, title, remoteUrl, { download = false } = {}) {
+  if (!download && canShareFile(file)) {
     try {
       await navigator.share({ files: [file], title });
       return 'shared';

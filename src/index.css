@@ -2412,3 +2412,119 @@ button:focus-visible {
   background: var(--violet);
   color: #000000;
 }
+
+/* ---------- admin console ---------- */
+
+.adm-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.adm-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 6px;
+  background: var(--surface);
+  border: 2px solid transparent;
+  border-radius: 16px;
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+div.adm-stat {
+  cursor: default;
+}
+
+.adm-stat.is-on {
+  border-color: var(--blue);
+}
+
+.adm-stat strong {
+  font-size: 24px;
+}
+
+.adm-stat span {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.adm-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.adm-filters select {
+  min-height: 52px;
+  padding: 10px 12px;
+  font-size: 16px;
+}
+
+.job-card .pill.is-captured { background: var(--surface-2); color: var(--text); }
+.job-card .pill.is-drafted { background: var(--blue); color: #ffffff; }
+.job-card .pill.is-quoted { background: var(--orange); color: #000000; }
+.job-card .pill.is-won { background: var(--live); color: #000000; }
+.job-card .pill.is-lost { background: var(--red); color: #ffffff; }
+.job-card .pill.is-installed { background: var(--violet); color: #000000; }
+
+.job-card.is-archived {
+  opacity: 0.6;
+}
+
+.adm-contact {
+  border: 1px solid var(--surface-2);
+  border-radius: 16px;
+  padding: 12px;
+  margin: 0;
+}
+
+.adm-contact legend {
+  padding: 0 6px;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.adm-toggle {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.adm-toggle input {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.adm-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.adm-log li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border-radius: 14px;
+  font-size: 16px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.adm-when {
+  font-size: 14px;
+  color: var(--muted);
+}

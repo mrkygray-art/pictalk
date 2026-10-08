@@ -4,7 +4,7 @@ import { auth } from "./firebase";
 import App from "./App";
 import PiccoloPane from "./piccolo/PiccoloPane";
 import AccountSheet from "./AccountSheet";
-import TeamScreen from "./TeamScreen";
+import AdminConsole from "./admin/AdminConsole";
 import { watchProfile, ensureProfile, acceptInvite, isEmailLinkVisit, roleLabel, errorText, retryGuestMerge } from "./accountStore";
 import { watchJobs } from "./jobStore";
 
@@ -262,7 +262,16 @@ export default function Shell() {
       )}
       {view === "team" && isAdmin && (
         <main className="app">
-          <TeamScreen uid={user.uid} profile={profile} onBack={() => setView("panes")} onNotice={showToast} />
+          <AdminConsole
+            uid={user.uid}
+            profile={profile}
+            onBack={() => setView("panes")}
+            onNotice={showToast}
+            onOpenJob={(job) => {
+              setPiccoloTarget((t) => ({ jobId: job.id, ownerUid: job.ownerUid, key: (t?.key ?? 0) + 1 }));
+              choosePane("piccolo");
+            }}
+          />
         </main>
       )}
 

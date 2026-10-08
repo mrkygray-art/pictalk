@@ -32,6 +32,12 @@ exports.workOrderView = teams.workOrderView;
 exports.setJobSharing = teams.setJobSharing;
 exports.assignJob = teams.assignJob;
 
+// Admin console: sales status and customer on team jobs, storage used
+exports.updateTeamJob = require("./admin").updateTeamJob;
+exports.orgStorageUsage = require("./admin").orgStorageUsage;
+exports.auditOrgSettings = require("./admin").auditOrgSettings;
+exports.recordExport = require("./admin").recordExport;
+
 // Guests: 7-day expiry, daily cleanup, merging into an existing account, sample job
 const guests = require("./guests");
 exports.setGuestExpiry = guests.setGuestExpiry;

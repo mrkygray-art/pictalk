@@ -39,7 +39,7 @@ async function sendLink(id, email, onNotice) {
 }
 
 // Admins only (the rules and functions check too): invite people, change roles, turn access off
-export default function TeamScreen({ uid, profile, onBack, onNotice }) {
+export default function TeamScreen({ uid, profile, onBack, onNotice, embedded = false }) {
   const orgId = profile.orgId;
   const [team, setTeam] = useState({ orgId: null, list: [] });
   const [invites, setInvites] = useState({ orgId: null, list: [] });
@@ -73,12 +73,16 @@ export default function TeamScreen({ uid, profile, onBack, onNotice }) {
 
   return (
     <>
-      <button className="link-btn" onClick={onBack}>
-        <BackIcon />
-        Back
-      </button>
-      <h1 className="page-title">Team</h1>
-      {org?.name && <p className="subtitle">{org.name}</p>}
+      {!embedded && (
+        <>
+          <button className="link-btn" onClick={onBack}>
+            <BackIcon />
+            Back
+          </button>
+          <h1 className="page-title">Team</h1>
+          {org?.name && <p className="subtitle">{org.name}</p>}
+        </>
+      )}
       {error && <p className="error" role="alert">{error}</p>}
 
       <form

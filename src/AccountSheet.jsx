@@ -263,7 +263,7 @@ function AccountInfo({ user, profile, onTeam, onNotice, onClose }) {
       )}
       {orgId && profile.role === "admin" && (
         <button className="big-btn photo-btn" onClick={onTeam}>
-          Manage Team
+          Admin Console
         </button>
       )}
       {profile?.loaded && !profile.missing && !profile.orgId && <StartCompany onNotice={onNotice} />}

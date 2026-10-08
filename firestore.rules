@@ -48,8 +48,31 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
         && request.resource.data.defaults is map
-        && request.resource.data.defaults.keys().hasOnly(['markupPct', 'taxPct', 'terms', 'quotePrefix'])
+        && request.resource.data.defaults.keys().hasOnly(['markupPct', 'taxPct', 'terms', 'quotePrefix', 'laborRate', 'aiPriceEstimates'])
+        && request.resource.data.defaults.get('aiPriceEstimates', false) is bool
         && request.resource.data.updatedAt is number;
+    }
+
+    // The company's customers. Members read them; admins and estimators add and edit them
+    // (archive instead of delete, so old jobs keep their customer).
+    match /customers/{customerId} {
+      function validCustomer() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['name', 'contacts', 'address', 'notes', 'archived', 'orgId',
+                                 'createdAt', 'createdBy', 'updatedAt'])
+          && d.name is string && d.name.size() > 0 && d.name.size() <= 120
+          && d.get('contacts', []) is list && d.get('contacts', []).size() <= 20
+          && d.get('address', '') is string && d.get('address', '').size() <= 300
+          && d.get('notes', '') is string && d.get('notes', '').size() <= 2000
+          && d.get('archived', false) is bool
+          && d.updatedAt is number;
+      }
+      allow read: if activeMemberOf(resource.data.orgId);
+      allow create: if pricesFor(request.resource.data.orgId) && validCustomer()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if pricesFor(resource.data.orgId) && validCustomer()
+        && request.resource.data.orgId == resource.data.orgId
+        && request.resource.data.createdBy == resource.data.createdBy;
     }
 
     match /invites/{inviteId} {
@@ -121,7 +144,7 @@ service cloud.firestore {
                                    'customer', 'location', 'exportCount',
                                    'piccoloStatus', 'latestDraftId', 'piccoloDraftedAt', 'piccoloDraftCount',
                                    'latestFinalVersion', 'finalizedAt', 'expiresAt', 'isDemo',
-                                   'orgId', 'assignedTo'])
+                                   'orgId', 'assignedTo', 'customerId', 'salesStatus'])
             && (d.get('piccoloStatus', null) == null
                 || d.piccoloStatus in ['none', 'drafted', 'editing', 'finalized'])
             && (d.get('latestDraftId', null) == null || (d.latestDraftId is string && d.latestDraftId.size() <= 64))
@@ -159,7 +182,9 @@ service cloud.firestore {
           && request.resource.data.get('expiresAt', null) == null
           && request.resource.data.get('isDemo', false) == false
           && request.resource.data.get('orgId', null) == null
-          && request.resource.data.get('assignedTo', null) == null;
+          && request.resource.data.get('assignedTo', null) == null
+          && request.resource.data.get('customerId', null) == null
+          && request.resource.data.get('salesStatus', null) == null;
         allow update: if isOwner() && validJob()
           && request.resource.data.get('piccoloDraftCount', 0) == resource.data.get('piccoloDraftCount', 0)
           && request.resource.data.get('latestFinalVersion', 0) == resource.data.get('latestFinalVersion', 0)
@@ -167,7 +192,9 @@ service cloud.firestore {
           && request.resource.data.get('expiresAt', null) == resource.data.get('expiresAt', null)
           && request.resource.data.get('isDemo', false) == resource.data.get('isDemo', false)
           && request.resource.data.get('orgId', null) == resource.data.get('orgId', null)
-          && request.resource.data.get('assignedTo', null) == resource.data.get('assignedTo', null);
+          && request.resource.data.get('assignedTo', null) == resource.data.get('assignedTo', null)
+          && request.resource.data.get('customerId', null) == resource.data.get('customerId', null)
+          && request.resource.data.get('salesStatus', null) == resource.data.get('salesStatus', null);
 
         // Piccolo finals: immutable numbered snapshots, written only by finalizePiccolo
         match /finals/{versionId} {

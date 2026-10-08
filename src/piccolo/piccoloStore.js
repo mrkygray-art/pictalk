@@ -274,5 +274,8 @@ export function watchWorkOrderView(ownerUid, jobId, callback) {
 
 const sharing = httpsCallable(functions, "setJobSharing");
 const assigning = httpsCallable(functions, "assignJob");
+const exportLog = httpsCallable(functions, "recordExport");
+/** Activity log entry for an export (fire and forget; never blocks the download). */
+export const logExport = (ownerUid, jobId, what, version) => exportLog({ ownerUid, jobId, what, version }).catch(() => {});
 export const setJobSharing = (jobId, shared) => sharing({ jobId, shared }).then((r) => r.data);
 export const assignJob = (ownerUid, jobId, assignees) => assigning({ ownerUid, jobId, assignees }).then((r) => r.data);

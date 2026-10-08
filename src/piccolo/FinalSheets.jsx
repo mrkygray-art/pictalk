@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Sheet from "../Sheet";
 import { canShareFile, deliverFile } from "../exportJob";
-import { finalMediaLinks } from "./piccoloStore";
+import { finalMediaLinks, logExport } from "./piccoloStore";
 import { exportSource, piccoloFileName, partsCsv, quoteCsv, packageJson } from "./piccoloExport";
 
 const fmt = (t) => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -108,6 +108,7 @@ export function ExportSheet({ jobId, ownerUid, base, finals, isGuest, initialCho
         name = piccoloFileName(src, "Package", ext);
       }
       setFile({ file: new File([body], name, { type }), label });
+      if (!isGuest) logExport(ownerUid, jobId, format, final ? `v${final.version}` : null);
     } catch (err) {
       console.error("Piccolo export failed:", err);
       setError("Couldn't build that file. Please try again.");

@@ -192,7 +192,7 @@ export function TeamBlock({ uid, job, profile, orgName, onNotice }) {
   );
 }
 
-function AssignSheet({ job, orgId, onNotice, onClose }) {
+export function AssignSheet({ job, orgId, onNotice, onClose }) {
   const [team, setTeam] = useState([]);
   const [chosen, setChosen] = useState(() => new Set(job.assignedTo || []));
   const [busy, setBusy] = useState(false);

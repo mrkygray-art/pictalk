@@ -45,7 +45,7 @@ export default function PiccoloPane({ uid, isGuest, profile, target, onAccount, 
   const [stops, setStops] = useState({ uid: null, list: [] });
   const [teamStops, setTeamStops] = useState({ key: null, list: [] });
   const [pending, setPending] = useState([]);
-  const [openKey, setOpenKey] = useState(() => (target?.jobId && uid ? `${uid}/${target.jobId}` : savedOpenJob()));
+  const [openKey, setOpenKey] = useState(() => (target?.jobId && uid ? `${target.ownerUid || uid}/${target.jobId}` : savedOpenJob()));
   const [online, setOnline] = useState(navigator.onLine);
   const [org, setOrg] = useState(null);
   const [demo, setDemo] = useState({ busy: false, jobId: null, error: "" }); // "Try Piccolo"

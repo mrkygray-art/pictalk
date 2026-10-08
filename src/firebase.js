@@ -15,6 +15,18 @@ const liveConfig = {
   measurementId: "G-DH60FS6YBW"
 };
 
+// Piccolo test site (`npm run deploy:dev`): builds with `--mode devcloud` use the separate
+// test project pictalk-dev-52368, never the live one.
+const devCloudConfig = {
+  apiKey: "AIzaSyBESQfTp9kD_DcwusITDVG7h8muu13G90Q",
+  authDomain: "pictalk-dev-52368.firebaseapp.com",
+  projectId: "pictalk-dev-52368",
+  storageBucket: "pictalk-dev-52368.firebasestorage.app",
+  messagingSenderId: "31334707851",
+  appId: "1:31334707851:web:011dd076d70619d94dda8e",
+};
+const devCloud = import.meta.env.MODE === "devcloud";
+
 // Local testing only: `npm run dev` (via .env.development), `npm run dev:emulators`, or
 // `VITE_USE_EMULATORS=true npm run dev` talks to the Firebase emulators (npm run emulators)
 // instead of the live project. The Evaluation Lab also builds with `vite build --mode emulators`
@@ -28,7 +40,9 @@ const useEmulators = emulatorBuild && import.meta.env.VITE_USE_EMULATORS === "tr
 const DEV_PROJECT = "demo-pictalk";
 const firebaseConfig = useEmulators
   ? { ...liveConfig, projectId: DEV_PROJECT, authDomain: `${DEV_PROJECT}.firebaseapp.com`, storageBucket: `${DEV_PROJECT}.appspot.com` }
-  : liveConfig;
+  : devCloud
+    ? devCloudConfig
+    : liveConfig;
 
 const app = initializeApp(firebaseConfig);
 

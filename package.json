@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "setup:emulator": "node scripts/setup-emulator.mjs",
     "dev:emulators": "vite --mode emulators",
+    "build:dev": "vite build --mode devcloud && node scripts/check-dev-build.mjs",
+    "deploy:dev": "npm run build:dev && firebase deploy --project pictalk-dev-52368",
     "emulators": "firebase emulators:start --project demo-pictalk --only auth,firestore,storage,functions",
     "test": "firebase emulators:exec --project demo-pictalk --only auth,firestore,storage,functions \"node --test --test-concurrency=1 tests/*.test.js\""
   },

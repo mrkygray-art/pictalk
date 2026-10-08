@@ -198,8 +198,8 @@ let PAGE;
   // Moving a stop from the Acme job into the full job is blocked
   await openMyJobs();
   await page.locator('button.job-card::-p-text(Acme Corp)').click();
-  await waitText('Move or Delete');
-  await page.locator('button.stop-more').click();
+  await waitText('Move or delete this stop');
+  await page.locator('button.stop-move').click();
   await click('Move to a Different Job');
   await sleep(500);
   const fullCardDisabled = await page.evaluate(() =>

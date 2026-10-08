@@ -26,14 +26,22 @@ function photoDescState(stop, online) {
   }
 }
 
-// The AI's description of the photo, under the voice note's words
-function PhotoDescription({ stop, number, online, actions }) {
+// The AI's description of the photo, under the voice note. Before there is one,
+// a dashed Describe photo button sits where it will appear.
+function PhotoDescription({ stop, number, online, hasPhoto, actions }) {
   const state = photoDescState(stop, online);
-  if (state === "none") return null;
+  if (state === "none") {
+    return hasPhoto ? (
+      <button className="describe-btn" onClick={() => actions.onDescribe(stop)}>
+        <SparkleIcon />
+        Describe photo
+      </button>
+    ) : null;
+  }
   if (state === "described") {
     return (
-      <div className="photo-desc">
-        <span className="photo-desc-label">Photo description</span>
+      <div className="stop-box photo-desc">
+        <span className="stop-box-label">Photo description</span>
         <p>{stop.photoDescription}</p>
         <div className="stop-actions">
           <button className="stop-more" onClick={() => actions.onEdit(stop, number)}>
@@ -55,8 +63,8 @@ function PhotoDescription({ stop, number, online, actions }) {
     failed: stop.photoDescError || "Couldn't describe the photo.",
   }[state];
   return (
-    <div className={`photo-desc is-${problem ? "problem" : "waiting"}`} role="status">
-      <span className="photo-desc-label">Photo description</span>
+    <div className={`stop-box photo-desc is-${problem ? "problem" : "waiting"}`} role="status">
+      <span className="stop-box-label">Photo description</span>
       <p>{text}</p>
       {problem && (
         <div className="stop-actions">
@@ -72,10 +80,19 @@ function PhotoDescription({ stop, number, online, actions }) {
   );
 }
 
-// One row in a list of stops
+function SparkleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8zM19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9z" />
+    </svg>
+  );
+}
+
+// One row in a list of stops. Each box holds the buttons for what's in it:
+// the voice note (words, audio, Edit words), then the photo description;
+// actions for the whole stop sit at the bottom.
 function StopCard({ stop, anchor, number, time, photoUrl, audioUrl, audioExpired, status, statusText, transcript, online, photoDesc, onSelect, onEdit }) {
-  // Describe photo shows once there's a photo and no description asked for yet
-  const canDescribe = photoDesc && stop && photoUrl && photoDescState(stop, online) === "none";
+  const hasVoice = transcript || audioUrl || audioExpired;
   return (
     <article className="stop" id={anchor ? `stop-${anchor}` : undefined}>
       {photoUrl && <img src={photoUrl} alt="" className="thumb" />}
@@ -83,28 +100,30 @@ function StopCard({ stop, anchor, number, time, photoUrl, audioUrl, audioExpired
         <strong>Stop {number}</strong>
         <span>{whenLabel(time)}</span>
         <span className={`stop-status is-${status}`}>{statusText}</span>
-        {transcript && <p className="stop-transcript">{transcript}</p>}
-        {photoDesc && stop && <PhotoDescription stop={stop} number={number} online={online} actions={photoDesc} />}
-        {audioUrl && <audio controls src={audioUrl} />}
-        {audioExpired && <span className="stop-note">Voice note expired</span>}
-        {stop && <StopEngLine stop={stop} />}
-        {(onEdit || onSelect || canDescribe) && (
-          <div className="stop-actions">
+        {hasVoice && (
+          <div className="stop-box voice-box">
+            <span className="stop-box-label">Voice note</span>
+            {transcript && <p>{transcript}</p>}
+            {audioUrl && <audio controls src={audioUrl} />}
+            {audioExpired && <span className="stop-note">Recording expired</span>}
             {onEdit && (
-              <button className="stop-more" onClick={onEdit}>
-                Edit words
-              </button>
+              <div className="stop-actions">
+                <button className="stop-more" onClick={onEdit}>
+                  Edit words
+                </button>
+              </div>
             )}
-            {canDescribe && (
-              <button className="stop-more" onClick={() => photoDesc.onDescribe(stop)}>
-                Describe photo
-              </button>
-            )}
-            {onSelect && (
-              <button className="stop-more" onClick={() => onSelect({ number, photoUrl })}>
-                Move or Delete
-              </button>
-            )}
+          </div>
+        )}
+        {photoDesc && stop && (
+          <PhotoDescription stop={stop} number={number} online={online} hasPhoto={!!photoUrl} actions={photoDesc} />
+        )}
+        {stop && <StopEngLine stop={stop} />}
+        {onSelect && (
+          <div className="stop-footer">
+            <button className="stop-more stop-move" onClick={() => onSelect({ number, photoUrl })}>
+              Move or delete this stop
+            </button>
           </div>
         )}
       </div>
@@ -173,7 +192,7 @@ function CloudStop({ stop, number, online, photoDesc, onSelect, onEdit }) {
 
 // Phone-only and cloud stops together. Stops are numbered in the order they were
 // taken (Stop 1 is the first); newestFirst only changes the display order.
-// onSelect(stop, { number, photoUrl }) adds a "Move or Delete" button to each card.
+// onSelect(stop, { number, photoUrl }) adds a "Move or delete this stop" button to each card.
 // photoDesc { onDescribe(stop), onEdit(stop, number), onDelete(stop, number) } adds
 // Describe photo and shows the photo description with its Edit and Delete buttons.
 export function StopList({ stops, online, newestFirst = false, onSelect, onEdit, photoDesc }) {

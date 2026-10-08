@@ -114,7 +114,7 @@ function JobDetail({ uid, job, stops, isActive, online, autoSummary, onBack, onC
           <p className="empty">This job has no stops.</p>
         ) : (
           <>
-            <p className="hint">Tap Move or Delete on a stop to put it in a different job.</p>
+            <p className="hint">Tap Move or delete this stop to put it in a different job.</p>
             <StopList stops={stops} online={online} onSelect={onStopSelect} onEdit={onStopEdit} photoDesc={photoDesc} />
           </>
         )}

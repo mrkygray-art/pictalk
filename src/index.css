@@ -11,6 +11,8 @@
   --green: #1e8e3e; /* button fill: dark enough for white text */
   --live: #30d158; /* bright green for text, dots and outlines on black */
   --orange: #ff9f0a;
+  --violet: #bf5af2; /* AI photo descriptions */
+  --violet-soft: rgba(191, 90, 242, 0.12);
   --shade: rgba(0, 0, 0, 0.7);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: var(--text);
@@ -175,7 +177,7 @@ button:focus-visible {
   display: flex;
   gap: 14px;
   padding: 12px;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 12px;
 }
 
@@ -632,16 +634,6 @@ button:focus-visible {
 .stop-info .stop-note { font-size: 0.85rem; color: var(--muted); font-style: italic; }
 .stop-info .stop-status.is-working { color: var(--blue); }
 .stop-info .stop-status.is-problem { color: var(--red); }
-.stop-transcript {
-  margin: 6px 0 2px;
-  padding: 10px 12px;
-  font-size: 0.95rem;
-  line-height: 1.4;
-  color: var(--text);
-  background: var(--surface-2);
-  border-radius: 10px;
-  white-space: pre-wrap;
-}
 /* ---------- AI summary ---------- */
 
 .summary-card {
@@ -1557,26 +1549,26 @@ button:focus-visible {
 .install-step-icon svg { width: 24px; height: 24px; }
 .install-steps small { display: block; color: var(--muted); font-size: 15px; margin-top: 3px; }
 
-/* ---------- photo description (under a stop's words) ---------- */
+/* ---------- stop card boxes: voice note, photo description ---------- */
 
-.photo-desc {
+.stop-box {
   margin: 6px 0 2px;
   padding: 10px 12px;
-  border-left: 3px solid var(--blue);
+  border-left: 3px solid var(--muted);
   border-radius: 10px;
   background: var(--surface-2);
 }
 
-.photo-desc-label {
+.stop-info .stop-box-label {
   display: block;
   font-size: 0.8rem;
   font-weight: 700;
-  color: var(--blue);
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
-.photo-desc p {
+.stop-box p {
   margin: 4px 0 0;
   font-size: 0.95rem;
   line-height: 1.4;
@@ -1584,8 +1576,38 @@ button:focus-visible {
   white-space: pre-wrap;
 }
 
+.stop-box .stop-more { background: var(--surface); }
+
+/* AI photo description: purple, like the Describe photo button that makes it */
+.photo-desc { border-left-color: var(--violet); }
+.stop-info .photo-desc .stop-box-label { color: var(--violet); }
 .photo-desc.is-waiting p { color: var(--muted); font-style: italic; }
 .photo-desc.is-problem { border-left-color: var(--red); }
 .photo-desc.is-problem p { color: var(--red); }
-.photo-desc .stop-more { background: var(--surface); }
 .stop-more.is-danger { color: var(--red); }
+
+.describe-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 6px 0 2px;
+  min-height: 48px;
+  padding: 10px 14px;
+  background: var(--violet-soft);
+  color: var(--violet);
+  border: 2px dashed var(--violet);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.describe-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+/* Actions for the whole stop, set apart from the boxes above */
+.stop-footer {
+  margin-top: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--surface-2);
+}

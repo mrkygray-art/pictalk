@@ -82,7 +82,7 @@ PicTalk is designed to capture that information **while the technician is alread
 - **Claude-powered job summaries and action items**
 - Human review and approval before AI-generated content is included in the final report
 - PDF export with job information, photos, findings, summary, and action items
-- Web Share support for sharing completed reports from supported devices
+- PDF delivery that fits the device: on a phone, Share PDF (Web Share) comes first; on a computer, Download PDF saves the file and Share PDF is the second option
 - Automatic voice-note retention policy designed to reduce unnecessary long-term audio storage
 - **Engineering Mode:** an opt-in inside view of the capture pipeline with real timings, sync status, and AI usage
 - **Evaluation Lab:** an offline simulator with a public scorecard and fixes log

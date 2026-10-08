@@ -20,6 +20,7 @@ const Anthropic = require("@anthropic-ai/sdk");
 const sharp = require("sharp");
 const crypto = require("node:crypto");
 const { reserveGlobalAi, piccoloCallable } = require("./budget");
+const { piccoloAccess, ownerOf } = require("./teams");
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 
@@ -296,9 +297,9 @@ async function tierOf(uid) {
 }
 
 /** Reserve one draft against the per-job and per-day limits (or refuse). Returns the version number. */
-async function reserveDraft(uid, jobId, tier, isDemo) {
-  const jobRef = db().doc(`users/${uid}/jobs/${jobId}`);
-  const usageRef = db().doc(`users/${uid}/aiUsage/${new Date().toISOString().slice(0, 10)}`);
+async function reserveDraft(uid, ownerUid, jobId, tier, isDemo) {
+  const jobRef = db().doc(`users/${ownerUid}/jobs/${jobId}`); // the job's owner (a teammate's job, maybe)
+  const usageRef = db().doc(`users/${uid}/aiUsage/${new Date().toISOString().slice(0, 10)}`); // whoever asked
   const dayLimit = isDemo ? DEMO_DAY_LIMIT : tier === "guest" ? DAY_LIMITS.guest : DAY_LIMITS.personal;
   const field = isDemo ? "piccoloDemoDrafts" : "piccoloDrafts";
   return db().runTransaction(async (tx) => {
@@ -331,14 +332,13 @@ exports.draftPiccolo = onCall(
     const jobId = String(request.data?.jobId || "");
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(jobId)) throw new HttpsError("invalid-argument", "Missing job.");
 
-    // The job lives under the caller's own account, so reading it here is the ownership check
-    const jobRef = db().doc(`users/${uid}/jobs/${jobId}`);
-    const jobSnap = await jobRef.get();
-    if (!jobSnap.exists) throw new HttpsError("not-found", "This job could not be found.");
-    const job = jobSnap.data();
+    // The caller's own job, or a teammate's job shared with the caller's company (admin/estimator)
+    const owner = ownerOf(request);
+    const job = await piccoloAccess(uid, owner, jobId);
+    const jobRef = db().doc(`users/${owner}/jobs/${jobId}`);
     if (job.status !== "finished") throw new HttpsError("failed-precondition", "Finish this job in PicTalk first (End Job).");
 
-    const stops = (await db().collection(`users/${uid}/stops`).where("jobId", "==", jobId).get()).docs
+    const stops = (await db().collection(`users/${owner}/stops`).where("jobId", "==", jobId).get()).docs
       .map((d) => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (a.clientCreatedAt || 0) - (b.clientCreatedAt || 0));
     const notes = Object.fromEntries((await jobRef.collection("wrapUpNotes").get()).docs.map((d) => [d.id, d.data()]));
@@ -385,9 +385,9 @@ exports.draftPiccolo = onCall(
 
     const tier = await tierOf(uid);
     await reserveGlobalAi("draft");
-    const version = await reserveDraft(uid, jobId, tier, !!job.isDemo);
+    const version = await reserveDraft(uid, owner, jobId, tier, !!job.isDemo);
     const useFake = process.env.FUNCTIONS_EMULATOR === "true" && process.env.PICTALK_FAKE_AI === "1";
-    const photos = useFake ? new Map() : await loadPhotos(stops, uid, jobId);
+    const photos = useFake ? new Map() : await loadPhotos(stops, owner, jobId);
     const content = buildContent(input, photos);
     const client = useFake ? null : new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
 
@@ -424,7 +424,7 @@ exports.draftPiccolo = onCall(
     }
 
     // Quote settings from the company when the job belongs to one, else blank
-    const orgId = (await db().doc(`users/${uid}`).get()).get("orgId") || null;
+    const orgId = job.orgId || (await db().doc(`users/${owner}`).get()).get("orgId") || null;
     const defaults = orgId ? (await db().doc(`orgs/${orgId}`).get()).get("defaults") || {} : {};
     const quote = { markupPct: Number(defaults.markupPct) || 0, taxPct: Number(defaults.taxPct) || 0, terms: String(defaults.terms || "") };
 

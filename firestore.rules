@@ -17,6 +17,29 @@ service cloud.firestore {
       return activeMemberOf(orgId) && myProfile().get('role', null) == 'admin';
     }
 
+    // Shared team jobs (job.orgId set by the team functions):
+    //   admin, estimator  everything, including prices
+    //   field             the job, its stops, notes, summary, and the price-free work order
+    //   installer         only the price-free work order, and only for jobs assigned to them
+    function pricesFor(orgId) {
+      return activeMemberOf(orgId) && myProfile().get('role', null) in ['admin', 'estimator'];
+    }
+    function fieldUpFor(orgId) {
+      return activeMemberOf(orgId) && myProfile().get('role', null) in ['admin', 'estimator', 'field'];
+    }
+    // d: a shared job, or its work order view (both carry orgId and assignedTo)
+    function teamSees(d) {
+      return d.get('orgId', null) != null
+        && (fieldUpFor(d.orgId)
+            || (activeMemberOf(d.orgId) && myProfile().get('role', null) == 'installer'
+                && request.auth.uid in d.get('assignedTo', [])));
+    }
+
+    // The team's jobs list (collection group query on orgId)
+    match /{path=**}/jobs/{jobId} {
+      allow read: if teamSees(resource.data);
+    }
+
     match /orgs/{orgId} {
       allow read: if activeMemberOf(orgId);
       // Admins edit the company name and quote defaults; everything else is function-only
@@ -57,7 +80,7 @@ service cloud.firestore {
                                    'editedTranscript', 'transcriptEditedAt',
                                    'photoDescStatus', 'photoDescription', 'photoDescRequestedAt',
                                    'photoDescEdited', 'photoDescCount', 'photoDescModel',
-                                   'photoDescribedAt', 'photoDescError'])
+                                   'photoDescribedAt', 'photoDescError', 'orgId'])
             && d.note is string && d.note.size() < 2000
             && (d.get('photoDescStatus', null) == null
                 || d.photoDescStatus in ['requested', 'describing', 'described', 'failed'])
@@ -69,12 +92,18 @@ service cloud.firestore {
             && (d.photoPath == null || d.photoPath is string)
             && (d.audioPath == null || d.audioPath is string);
         }
-        allow read, delete: if isOwner();
-        // photoDescCount (the per-stop photo description limit) is set only by describeStopPhoto
+        // Teammates (not installers) see the stops of jobs shared with their company
+        allow read: if isOwner()
+          || (resource.data.get('orgId', null) != null && fieldUpFor(resource.data.orgId));
+        allow delete: if isOwner();
+        // photoDescCount (the per-stop photo description limit) is set only by describeStopPhoto;
+        // orgId only by the team functions
         allow create: if isOwner() && validStop()
-          && request.resource.data.get('photoDescCount', 0) == 0;
+          && request.resource.data.get('photoDescCount', 0) == 0
+          && request.resource.data.get('orgId', null) == null;
         allow update: if isOwner() && validStop()
-          && request.resource.data.get('photoDescCount', 0) == resource.data.get('photoDescCount', 0);
+          && request.resource.data.get('photoDescCount', 0) == resource.data.get('photoDescCount', 0)
+          && request.resource.data.get('orgId', null) == resource.data.get('orgId', null);
       }
 
       match /jobs/{jobId} {
@@ -91,7 +120,8 @@ service cloud.firestore {
                                    'startedAt', 'endedAt', 'lastStopAt',
                                    'customer', 'location', 'exportCount',
                                    'piccoloStatus', 'latestDraftId', 'piccoloDraftedAt', 'piccoloDraftCount',
-                                   'latestFinalVersion', 'finalizedAt', 'expiresAt', 'isDemo'])
+                                   'latestFinalVersion', 'finalizedAt', 'expiresAt', 'isDemo',
+                                   'orgId', 'assignedTo'])
             && (d.get('piccoloStatus', null) == null
                 || d.piccoloStatus in ['none', 'drafted', 'editing', 'finalized'])
             && (d.get('latestDraftId', null) == null || (d.latestDraftId is string && d.latestDraftId.size() <= 64))
@@ -106,33 +136,57 @@ service cloud.firestore {
             && optText(d, 'customer') && optText(d, 'location')
             && (d.get('exportCount', 0) is int && d.get('exportCount', 0) >= 0);
         }
-        allow read, delete: if isOwner();
+        // This job, for the rules on the documents under it
+        function job() {
+          return get(/databases/$(database)/documents/users/$(uid)/jobs/$(jobId)).data;
+        }
+        function teamPrices() {
+          return job().get('orgId', null) != null && pricesFor(job().orgId);
+        }
+        function teamFieldUp() {
+          return job().get('orgId', null) != null && fieldUpFor(job().orgId);
+        }
+
+        allow read: if isOwner() || teamSees(resource.data);
+        allow delete: if isOwner();
         // piccoloDraftCount (the per-job Piccolo draft limit) is set only by draftPiccolo
         // latestFinalVersion / finalizedAt are set only by finalizePiccolo
         // expiresAt (guest jobs) and isDemo (sample job) are set only by the guest functions
+        // orgId (shared with the company) and assignedTo are set only by the team functions
         allow create: if isOwner() && validJob()
           && request.resource.data.get('piccoloDraftCount', 0) == 0
           && request.resource.data.get('latestFinalVersion', 0) == 0
           && request.resource.data.get('expiresAt', null) == null
-          && request.resource.data.get('isDemo', false) == false;
+          && request.resource.data.get('isDemo', false) == false
+          && request.resource.data.get('orgId', null) == null
+          && request.resource.data.get('assignedTo', null) == null;
         allow update: if isOwner() && validJob()
           && request.resource.data.get('piccoloDraftCount', 0) == resource.data.get('piccoloDraftCount', 0)
           && request.resource.data.get('latestFinalVersion', 0) == resource.data.get('latestFinalVersion', 0)
           && request.resource.data.get('finalizedAt', 0) == resource.data.get('finalizedAt', 0)
           && request.resource.data.get('expiresAt', null) == resource.data.get('expiresAt', null)
-          && request.resource.data.get('isDemo', false) == resource.data.get('isDemo', false);
+          && request.resource.data.get('isDemo', false) == resource.data.get('isDemo', false)
+          && request.resource.data.get('orgId', null) == resource.data.get('orgId', null)
+          && request.resource.data.get('assignedTo', null) == resource.data.get('assignedTo', null);
 
         // Piccolo finals: immutable numbered snapshots, written only by finalizePiccolo
         match /finals/{versionId} {
-          allow read: if isOwner();
+          allow read: if isOwner() || teamPrices();
         }
 
         // Piccolo AI drafts: versioned, written only by draftPiccolo (Admin SDK)
         match /drafts/{draftId} {
-          allow read: if isOwner();
+          allow read: if isOwner() || teamPrices();
         }
 
-        // Piccolo: the user's editable copy (work order, BOM, quote, questions)
+        // The price-free work order (kept by the workOrderView function); carries the
+        // job's orgId and assignedTo, so field and installer access is checked on it directly
+        match /views/{viewId} {
+          allow read: if isOwner() || teamSees(resource.data);
+        }
+
+        // Piccolo: the editable copy (work order, BOM, quote, questions). The owner and the
+        // company's admins / estimators edit it; editedBy is whoever saved last.
         match /working/{docId} {
           function validWorking() {
             let d = request.resource.data;
@@ -142,11 +196,11 @@ service cloud.firestore {
               && d.workOrder is map && d.quote is map
               && d.bom is list && d.bom.size() <= 300
               && d.questions is list && d.questions.size() <= 100
-              && d.editedBy == uid
+              && d.editedBy == request.auth.uid
               && optNumber(d, 'createdAt') && optNumber(d, 'updatedAt');
           }
-          allow read: if isOwner();
-          allow create, update: if isOwner() && validWorking();
+          allow read: if isOwner() || teamPrices();
+          allow create, update: if (isOwner() || teamPrices()) && validWorking();
         }
 
         // AI draft summary. Only the generateJobSummary function creates it (Admin SDK);
@@ -168,7 +222,7 @@ service cloud.firestore {
                   || (d.approvedBy is string && d.approvedBy.size() <= 20))
               && (d.get('approvedByUid', null) == null || d.approvedByUid == uid);
           }
-          allow read: if isOwner();
+          allow read: if isOwner() || teamFieldUp();
           allow update: if isOwner() && validSummaryEdit();
         }
 
@@ -191,7 +245,8 @@ service cloud.firestore {
               && (d.get('createdBy', uid) == uid)
               && optNumber(d, 'createdAt') && optNumber(d, 'updatedAt');
           }
-          allow read, delete: if isOwner();
+          allow read: if isOwner() || teamFieldUp();
+          allow delete: if isOwner();
           allow create, update: if isOwner() && validNote();
         }
       }

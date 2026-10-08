@@ -229,9 +229,11 @@ function DetailsSheet({ job, onSave, onClose }) {
 }
 
 /** One job in Piccolo: draft with AI, then edit the work order, BOM, and quote. */
-export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, online, isGuest, orgName, onBack, onAccount, onOpenInPicTalk, onNotice }) {
+export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, online, isGuest, orgName, teamControls, onBack, onAccount, onOpenInPicTalk, onNotice }) {
+  const ownerUid = job.ownerUid || uid; // a teammate's job lives under its owner
+  const isOwner = ownerUid === uid;
   const [tab, setTab] = useState("overview");
-  const { working, loaded: workingLoaded, status, edit, undo, canUndo, replace, saveNow } = useWorkingCopy(uid, job);
+  const { working, loaded: workingLoaded, status, edit, undo, canUndo, replace, saveNow } = useWorkingCopy(ownerUid, uid, job);
   const [finals, setFinals] = useState([]);
   const [latest, setLatest] = useState(undefined);
   const [notes, setNotes] = useState({});
@@ -241,10 +243,10 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
   const [sheet, setSheet] = useState(null);
   const autoTried = useRef(false);
 
-  useEffect(() => watchLatestDraft(uid, job.id, setLatest), [uid, job.id]);
-  useEffect(() => watchFinals(uid, job.id, setFinals), [uid, job.id]);
-  useEffect(() => watchNotes(uid, job.id, setNotes), [uid, job.id]);
-  useEffect(() => watchSummary(uid, job.id, setSummary), [uid, job.id]);
+  useEffect(() => watchLatestDraft(ownerUid, job.id, setLatest), [ownerUid, job.id]);
+  useEffect(() => watchFinals(ownerUid, job.id, setFinals), [ownerUid, job.id]);
+  useEffect(() => watchNotes(ownerUid, job.id, setNotes), [ownerUid, job.id]);
+  useEffect(() => watchSummary(ownerUid, job.id, setSummary), [ownerUid, job.id]);
 
   const sorted = [...stops].sort((a, b) => (a.clientCreatedAt || 0) - (b.clientCreatedAt || 0));
   const stopNumber = Object.fromEntries(sorted.map((s, i) => [s.id, i + 1]));
@@ -255,7 +257,7 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
     setBusy(true);
     setError("");
     try {
-      const { version } = await requestDraft(job.id);
+      const { version } = await requestDraft(job.id, ownerUid);
       onNotice(version > 1 ? `Draft ${version} is ready` : "Draft is ready");
     } catch (err) {
       setError(err.message);
@@ -442,9 +444,11 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
           <section className="pc-block">
             <div className="pc-block-head">
               <h3>Customer &amp; location</h3>
-              <button className="link-btn" onClick={() => setSheet({ type: "details" })}>
-                Edit
-              </button>
+              {isOwner && (
+                <button className="link-btn" onClick={() => setSheet({ type: "details" })}>
+                  Edit
+                </button>
+              )}
             </div>
             <p className="pc-text">
               {job.customer || "No customer yet"}
@@ -456,15 +460,15 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
             label="Summary"
             text={hasSummary(summary) ? summary.summary : ""}
             empty="No AI summary yet. It's built on the job page in PicTalk."
-            onEdit={hasSummary(summary) ? () => setSheet({ type: "summary" }) : null}
+            onEdit={isOwner && hasSummary(summary) ? () => setSheet({ type: "summary" }) : null}
           />
-          <TextBlock id="pc-note-field_notes" label="Field notes" text={notes.field?.text} empty="No field notes." onEdit={() => setSheet({ type: "note", note: "field" })} />
+          <TextBlock id="pc-note-field_notes" label="Field notes" text={notes.field?.text} empty="No field notes." onEdit={isOwner ? () => setSheet({ type: "note", note: "field" }) : null} />
           <TextBlock
             id="pc-note-customer_comments"
             label="Customer notes"
             text={notes.customer?.text}
             empty="No customer notes."
-            onEdit={() => setSheet({ type: "note", note: "customer" })}
+            onEdit={isOwner ? () => setSheet({ type: "note", note: "customer" }) : null}
           />
           {working && (
             <EditableList
@@ -505,9 +509,12 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
               <p className="pc-hint">Each final keeps its own copy of the photos and audio.</p>
             </section>
           )}
-          <button className="text-btn" onClick={() => onOpenInPicTalk(job.id)}>
-            Add photos or notes in PicTalk
-          </button>
+          {teamControls}
+          {isOwner && (
+            <button className="text-btn" onClick={() => onOpenInPicTalk(job.id)}>
+              Add photos or notes in PicTalk
+            </button>
+          )}
         </>
       )}
 
@@ -716,7 +723,7 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
           onClose={() => setSheet(null)}
           onFinalize={async () => {
             await saveNow(); // the server finalizes what's in the cloud
-            const { version, missing } = await requestFinalize(job.id);
+            const { version, missing } = await requestFinalize(job.id, ownerUid);
             setSheet(null);
             onNotice(`Saved final v${version}${missing ? `. ${missing} expired recording${missing === 1 ? " wasn't" : "s weren't"} included` : ""}`);
           }}
@@ -725,6 +732,7 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
       {sheet?.type === "export" && working && (
         <ExportSheet
           jobId={job.id}
+          ownerUid={ownerUid}
           base={exportBase}
           finals={finals}
           isGuest={isGuest}

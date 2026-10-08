@@ -10,7 +10,9 @@ const SAVE_DELAY = 600; // ms after the last edit
  * Saves go through Firestore's offline cache, so they work without signal and sync later.
  * If another device saves something newer, that wins (newest updatedAt).
  */
-export default function useWorkingCopy(uid, job) {
+// ownerUid: whose job it is (the path); uid: who is editing (editedBy). Only the owner can
+// mark the job "Being edited" (the job document is theirs).
+export default function useWorkingCopy(ownerUid, uid, job) {
   const jobId = job.id;
   const [server, setServer] = useState(undefined); // undefined = loading, null = none yet
   const [local, setLocal] = useState(null);
@@ -25,7 +27,7 @@ export default function useWorkingCopy(uid, job) {
     statusOfJob.current = job.piccoloStatus;
   }, [job.piccoloStatus]);
 
-  useEffect(() => watchWorking(uid, jobId, setServer), [uid, jobId]);
+  useEffect(() => watchWorking(ownerUid, jobId, setServer), [ownerUid, jobId]);
 
   const working = local && (!server || (local.updatedAt || 0) >= (server.updatedAt || 0)) ? local : server;
 
@@ -35,7 +37,7 @@ export default function useWorkingCopy(uid, job) {
     if (!next) return;
     pending.current = null;
     setStatus(navigator.onLine ? "saving" : "offline");
-    lastWrite.current = saveWorking(uid, jobId, next)
+    lastWrite.current = saveWorking(ownerUid, jobId, next)
       .then(() => !pending.current && setStatus("saved"))
       .catch((err) => {
         console.warn("Saving Piccolo edits failed:", err);
@@ -43,7 +45,7 @@ export default function useWorkingCopy(uid, job) {
         throw err;
       });
     lastWrite.current.catch(() => {}); // handled above; callers of saveNow see it too
-  }, [uid, jobId]);
+  }, [ownerUid, jobId]);
 
   // Save right away when leaving the job or hiding the app
   useEffect(() => {
@@ -62,9 +64,9 @@ export default function useWorkingCopy(uid, job) {
       setStatus("waiting");
       clearTimeout(timer.current);
       timer.current = setTimeout(flush, SAVE_DELAY);
-      if (statusOfJob.current === "drafted") markEditing(uid, jobId);
+      if (statusOfJob.current === "drafted" && ownerUid === uid) markEditing(uid, jobId);
     },
-    [flush, uid, jobId]
+    [flush, uid, ownerUid, jobId]
   );
 
   /** Change the working copy: fn gets a deep copy and returns (or mutates) it. */

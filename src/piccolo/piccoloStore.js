@@ -1,7 +1,7 @@
 // Piccolo drafts for a job. The draftPiccolo function writes versioned drafts to
 // users/{uid}/jobs/{jobId}/drafts and, for the first one, the editable copy at working/current.
 // The app reads both and copies a newer draft into working/current only when the user says so.
-import { collection, doc, limit, onSnapshot, orderBy, query, setDoc, updateDoc } from "firebase/firestore";
+import { collection, collectionGroup, doc, limit, onSnapshot, orderBy, query, setDoc, updateDoc, where } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "../firebase";
 import { stopText, photoText } from "../stopStore";
@@ -106,11 +106,11 @@ export function compareDraft(mine, draft) {
 
 const draft = httpsCallable(functions, "draftPiccolo", { timeout: 310000 });
 
-/** Ask the server for a new draft. Throws an Error with a friendly message. */
-export async function requestDraft(jobId) {
+/** Ask the server for a new draft (ownerUid for a teammate's job). Throws an Error with a friendly message. */
+export async function requestDraft(jobId, ownerUid) {
   if (!navigator.onLine) throw new Error("Drafting needs signal. Try again when you're online.");
   try {
-    return (await draft({ jobId })).data;
+    return (await draft({ jobId, ownerUid })).data;
   } catch (err) {
     const code = String(err?.code || "").replace("functions/", "");
     const message = String(err.message || "").replace(/\s*[[(][^\])]*[\])]\s*$/, "");
@@ -198,10 +198,10 @@ const finalize = httpsCallable(functions, "finalizePiccolo", { timeout: 310000 }
 const mediaLinks = httpsCallable(functions, "piccoloMediaLinks", { timeout: 70000 });
 
 /** Save the current version as the next final (v1, v2, …). Throws an Error with a friendly message. */
-export async function requestFinalize(jobId) {
+export async function requestFinalize(jobId, ownerUid) {
   if (!navigator.onLine) throw new Error("Finalizing needs signal, so the photos and audio can be saved with it.");
   try {
-    return (await finalize({ jobId, acknowledged: true })).data;
+    return (await finalize({ jobId, ownerUid, acknowledged: true })).data;
   } catch (err) {
     const code = String(err?.code || "").replace("functions/", "");
     const message = String(err.message || "").replace(/\s*[[(][^\])]*[\])]\s*$/, "");
@@ -212,11 +212,67 @@ export async function requestFinalize(jobId) {
 }
 
 /** Signed, expiring links to a final's media (empty when the server can't sign them). */
-export async function finalMediaLinks(jobId, versionId) {
+export async function finalMediaLinks(jobId, versionId, ownerUid) {
   try {
-    return (await mediaLinks({ jobId, versionId })).data;
+    return (await mediaLinks({ jobId, versionId, ownerUid })).data;
   } catch (err) {
     console.warn("Media links failed:", err);
     return { links: {}, expiresAt: null };
   }
 }
+
+// ---------- team jobs ----------
+const PRICE_ROLES = ["admin", "estimator"];
+/** Can this viewer use the full Piccolo editor (with prices) on this job? */
+export const canPrice = (job, uid, profile) => job.ownerUid === uid || (!!job.orgId && PRICE_ROLES.includes(profile?.role));
+
+/**
+ * Jobs shared with the viewer's company (not their own). Installers only get the ones
+ * assigned to them; the security rules require exactly these filters.
+ */
+export function watchTeamJobs(uid, profile, callback) {
+  if (!profile?.orgId || profile.status !== "active" || profile.tier !== "team") {
+    callback([]);
+    return () => {};
+  }
+  const filters = [where("orgId", "==", profile.orgId)];
+  if (profile.role === "installer") filters.push(where("assignedTo", "array-contains", uid));
+  return onSnapshot(
+    query(collectionGroup(db, "jobs"), ...filters),
+    (snap) =>
+      callback(snap.docs.map((d) => ({ id: d.id, ownerUid: d.ref.parent.parent.id, ...d.data() })).filter((j) => j.ownerUid !== uid)),
+    (err) => {
+      console.warn("Watching team jobs failed:", err);
+      callback([]);
+    }
+  );
+}
+
+/** A teammate's stops for one job (the rules need the orgId filter). */
+export function watchJobStops(ownerUid, jobId, orgId, callback) {
+  return onSnapshot(
+    query(collection(db, "users", ownerUid, "stops"), where("jobId", "==", jobId), where("orgId", "==", orgId)),
+    (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => {
+      console.warn("Watching team stops failed:", err);
+      callback([]);
+    }
+  );
+}
+
+/** The price-free work order (field and installer roles read only this). */
+export function watchWorkOrderView(ownerUid, jobId, callback) {
+  return onSnapshot(
+    doc(db, ...jobDoc(ownerUid, jobId), "views", "workorder"),
+    (snap) => callback(snap.exists() ? snap.data() : null),
+    (err) => {
+      console.warn("Watching the work order failed:", err);
+      callback(null);
+    }
+  );
+}
+
+const sharing = httpsCallable(functions, "setJobSharing");
+const assigning = httpsCallable(functions, "assignJob");
+export const setJobSharing = (jobId, shared) => sharing({ jobId, shared }).then((r) => r.data);
+export const assignJob = (ownerUid, jobId, assignees) => assigning({ ownerUid, jobId, assignees }).then((r) => r.data);

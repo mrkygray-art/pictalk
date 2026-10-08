@@ -11,6 +11,7 @@ const { getAuth } = require("firebase-admin/auth");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 const { piccoloCallable } = require("./budget");
+const { piccoloAccess, ownerOf } = require("./teams");
 
 const LINK_DAYS = 7;
 const db = () => getFirestore();
@@ -69,11 +70,12 @@ exports.finalizePiccolo = onCall(piccoloCallable({ timeoutSeconds: 300, memory: 
     throw new HttpsError("permission-denied", "Save your work (sign in) to finalize. Guests can still export a DEMO copy.");
   }
 
-  const jobRef = db().doc(`users/${uid}/jobs/${jobId}`);
-  const [jobSnap, workingSnap] = await Promise.all([jobRef.get(), jobRef.collection("working").doc("current").get()]);
-  if (!jobSnap.exists) throw new HttpsError("not-found", "This job could not be found.");
+  // The caller's own job, or a teammate's job shared with the caller's company (admin/estimator)
+  const owner = ownerOf(request);
+  const job = await piccoloAccess(uid, owner, jobId);
+  const jobRef = db().doc(`users/${owner}/jobs/${jobId}`);
+  const workingSnap = await jobRef.collection("working").doc("current").get();
   if (!workingSnap.exists) throw new HttpsError("failed-precondition", "Draft this job in Piccolo first.");
-  const job = jobSnap.data();
   const working = workingSnap.data();
   const warnings = finalizeWarnings(working);
   if (warnings.length && request.data?.acknowledged !== true) {
@@ -87,9 +89,9 @@ exports.finalizePiccolo = onCall(piccoloCallable({ timeoutSeconds: 300, memory: 
     return n;
   });
   const versionId = `v${version}`;
-  const folder = `finals/${uid}/${jobId}/${versionId}`;
+  const folder = `finals/${owner}/${jobId}/${versionId}`;
 
-  const stops = (await db().collection(`users/${uid}/stops`).where("jobId", "==", jobId).get()).docs
+  const stops = (await db().collection(`users/${owner}/stops`).where("jobId", "==", jobId).get()).docs
     .map((d) => ({ id: d.id, ...d.data() }))
     .sort((a, b) => (a.clientCreatedAt || 0) - (b.clientCreatedAt || 0));
   const notes = Object.fromEntries((await jobRef.collection("wrapUpNotes").get()).docs.map((d) => [d.id, d.data()]));
@@ -124,7 +126,7 @@ exports.finalizePiccolo = onCall(piccoloCallable({ timeoutSeconds: 300, memory: 
     finalizedByName: profile.displayName || profile.email || null,
     createdAt: now,
     createdBy: uid,
-    orgId: profile.orgId || null,
+    orgId: job.orgId || profile.orgId || null,
     basedOnDraftId: working.draftId || null,
     draftVersion: working.draftVersion || null,
     job: {
@@ -161,7 +163,9 @@ exports.piccoloMediaLinks = onCall(piccoloCallable({ timeoutSeconds: 60 }), asyn
   const jobId = String(request.data?.jobId || "");
   const versionId = String(request.data?.versionId || "");
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(jobId) || !/^v\d{1,4}$/.test(versionId)) throw new HttpsError("invalid-argument", "Missing job or version.");
-  const final = (await db().doc(`users/${uid}/jobs/${jobId}/finals/${versionId}`).get()).data();
+  const owner = ownerOf(request);
+  await piccoloAccess(uid, owner, jobId);
+  const final = (await db().doc(`users/${owner}/jobs/${jobId}/finals/${versionId}`).get()).data();
   if (!final) throw new HttpsError("not-found", "That final version could not be found.");
   const bucket = getStorage().bucket();
   const expires = Date.now() + LINK_DAYS * 24 * 60 * 60 * 1000;

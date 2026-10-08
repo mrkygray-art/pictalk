@@ -250,7 +250,7 @@ export default function Shell() {
           key={piccoloTarget?.key ?? 0}
           uid={user?.uid}
           isGuest={!user || user.isAnonymous}
-          orgId={profile?.status === "active" ? profile?.orgId || null : null}
+          profile={profile}
           target={piccoloTarget}
           onAccount={() => setSheetOpen(true)}
           onOpenInPicTalk={(jobId) => {

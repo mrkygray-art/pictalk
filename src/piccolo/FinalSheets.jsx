@@ -74,7 +74,7 @@ const FORMATS = [
  * Export the current version (marked DRAFT) or any final as PDF, CSV, or JSON, then share
  * or download it. Sharing needs a fresh tap, so it's a second step like PicTalk's PDF.
  */
-export function ExportSheet({ jobId, base, finals, isGuest, initialChoice, onClose, onDone }) {
+export function ExportSheet({ jobId, ownerUid, base, finals, isGuest, initialChoice, onClose, onDone }) {
   const [choice, setChoice] = useState(initialChoice || (finals[0] ? finals[0].id : "current"));
   const [sections, setSections] = useState({ workorder: true, bom: true, quote: true });
   const [busy, setBusy] = useState("");
@@ -103,7 +103,7 @@ export function ExportSheet({ jobId, base, finals, isGuest, initialChoice, onClo
         body = quoteCsv(src);
         name = piccoloFileName(src, "Quote", ext);
       } else {
-        const links = final && !isGuest ? await finalMediaLinks(jobId, final.id) : {};
+        const links = final && !isGuest ? await finalMediaLinks(jobId, final.id, ownerUid) : {};
         body = packageJson(src, links);
         name = piccoloFileName(src, "Package", ext);
       }

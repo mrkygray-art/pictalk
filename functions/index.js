@@ -24,6 +24,14 @@ exports.draftPiccolo = require("./piccolo").draftPiccolo;
 exports.finalizePiccolo = require("./finalize").finalizePiccolo;
 exports.piccoloMediaLinks = require("./finalize").piccoloMediaLinks;
 
+// Teams: share jobs with the company, keep stops in step, price-free work order view, assign
+const teams = require("./teams");
+exports.shareNewJobWithTeam = teams.shareNewJobWithTeam;
+exports.syncStopOrg = teams.syncStopOrg;
+exports.workOrderView = teams.workOrderView;
+exports.setJobSharing = teams.setJobSharing;
+exports.assignJob = teams.assignJob;
+
 // Guests: 7-day expiry, daily cleanup, merging into an existing account, sample job
 const guests = require("./guests");
 exports.setGuestExpiry = guests.setGuestExpiry;

@@ -23,7 +23,7 @@ import {
   watchJobs, startJob, endJob, reopenJob, setJobDetails, touchJob, migrateEarlierStops, jobTitle,
 } from "./jobStore";
 import { StopList } from "./StopCards";
-import JobsScreen from "./JobsScreen";
+import JobsScreen, { JobCard } from "./JobsScreen";
 import JobDetailsFields from "./JobDetailsFields";
 import WrapUpNotes from "./WrapUpNotes";
 import useWrapUpNotes from "./useWrapUpNotes";
@@ -116,6 +116,7 @@ function JobBar({ job }) {
 
 // Demo limit: keeps storage and transcription costs small while PicTalk is a public demo
 const STOP_LIMIT = 10;
+const RECENT_JOBS = 7; // finished jobs listed on the front page when no job is open
 
 // Correct a stop's words (or its photo description): one text box, Save or Cancel
 function EditWordsSheet({ title, initial, maxLength = 5000, onSave, onClose }) {
@@ -724,10 +725,40 @@ export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false })
               </button>
             </section>
           ) : (
-            <button className="big-btn start-btn" onClick={beginJob}>
-              <PlusIcon />
-              Start New Job
-            </button>
+            <>
+              <button className="big-btn start-btn" onClick={beginJob}>
+                <PlusIcon />
+                Start New Job
+              </button>
+              {/* The newest finished jobs, right on the front page (a new guest's example jobs too) */}
+              {jobs.length > 0 && (
+                <section className="job-group recent-jobs" aria-label="Recent jobs">
+                  <h2>Recent jobs</h2>
+                  {jobs.slice(0, RECENT_JOBS).map((j) => (
+                    <JobCard
+                      key={j.id}
+                      job={j}
+                      stops={allStops.filter((s) => s.jobId === j.id)}
+                      onOpen={() => {
+                        setJobsTarget((t) => ({ key: (t?.key ?? 0) + 1, jobId: j.id }));
+                        showView("jobs");
+                      }}
+                    />
+                  ))}
+                  {jobs.length > RECENT_JOBS && (
+                    <button
+                      className="link-btn"
+                      onClick={() => {
+                        setJobsTarget((t) => ({ key: (t?.key ?? 0) + 1 }));
+                        showView("jobs");
+                      }}
+                    >
+                      See all {jobs.length} jobs
+                    </button>
+                  )}
+                </section>
+              )}
+            </>
           )}
           <EngineeringPanel pending={pending} online={online} uid={uid} />
           <div className="bottom-links">

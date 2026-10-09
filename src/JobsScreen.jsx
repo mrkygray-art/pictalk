@@ -29,8 +29,9 @@ function PdfIcon() {
   );
 }
 
-function JobCard({ job, stops, isActive, onOpen }) {
+export function JobCard({ job, stops, isActive, onOpen }) {
   const voiceNotes = stops.filter((s) => s.audioPath || s.audioBlob).length;
+  const photos = stops.filter((s) => s.photoPath || s.photoBlob).length;
   return (
     <button className={`job-card${isActive ? " is-live" : ""}`} onClick={onOpen}>
       <strong>
@@ -38,7 +39,7 @@ function JobCard({ job, stops, isActive, onOpen }) {
         {isActive && <span className="pill">Open now</span>}
       </strong>
       <span>
-        {plural(stops.length, "stop")}, {plural(voiceNotes, "voice note")}
+        {[plural(stops.length, "stop"), photos && plural(photos, "photo"), voiceNotes && plural(voiceNotes, "voice note")].filter(Boolean).join(", ")}
       </span>
       <span>
         Started {day(job.startedAt)} at {clock(job.startedAt)}

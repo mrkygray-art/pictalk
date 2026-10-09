@@ -2616,3 +2616,8 @@ div.adm-stat {
 .example-jobs-btn {
   margin-top: 20px;
 }
+
+/* Front page: recent jobs under Start New Job */
+.recent-jobs {
+  margin-top: 28px;
+}

@@ -14,6 +14,7 @@ const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 const { piccoloCallable } = require("./budget");
 const DEMO = require("./demoJob");
+const EXAMPLES = require("./exampleJobs");
 const { isUnlimited } = require("./limits");
 const path = require("node:path");
 
@@ -308,6 +309,76 @@ exports.createDemoJob = onCall(piccoloCallable({ timeoutSeconds: 60 }), async (r
   }
   await batch.commit();
   return { jobId, created: true, sample: sample.id, trade: sample.trade };
+});
+
+/**
+ * Example jobs (functions/exampleJobs.js) for the app owner's accounts only (isUnlimited),
+ * so the owner's PicTalk doesn't open empty. Ordinary finished jobs: they never expire and
+ * can be edited, sent to Piccolo, or deleted. Job ids are fixed (example-<id>), so running
+ * it again only adds the ones that were deleted.
+ */
+exports.createExampleJobs = onCall(piccoloCallable({ timeoutSeconds: 120 }), async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign-in is required.");
+  if (!(await isUnlimited(uid))) throw new HttpsError("permission-denied", "Example jobs are only for the app owner.");
+  const bucket = getStorage().bucket();
+  const now = Date.now();
+  const created = [];
+  for (const ex of EXAMPLES.examples) {
+    const jobId = `example-${ex.id}`;
+    const jobRef = db().doc(`users/${uid}/jobs/${jobId}`);
+    if ((await jobRef.get()).exists) continue;
+    // Morning or early afternoon Pacific time on that day, about 45 minutes on site
+    const day = new Date(now - ex.daysAgo * DAY);
+    day.setUTCHours(16 + (ex.daysAgo % 5), 15, 0, 0);
+    const start = day.getTime();
+    const photoPaths = [];
+    for (let i = 0; i < ex.stops.length; i++) {
+      const dest = `photos/${uid}/${jobId}-s${i + 1}.jpg`;
+      try {
+        await bucket.upload(path.join(__dirname, "example-photos", `${ex.id}-${i + 1}.jpg`), { destination: dest, contentType: "image/jpeg" });
+        photoPaths[i] = dest;
+      } catch (err) {
+        logger.warn("Example photo upload failed", { uid, jobId, error: String(err?.message || err) });
+      }
+    }
+    const batch = db().batch();
+    batch.set(jobRef, {
+      name: `${ex.customer} – ${ex.location}`,
+      customer: ex.customer,
+      location: ex.location,
+      address: null,
+      lat: null,
+      lng: null,
+      status: "finished",
+      startedAt: start,
+      endedAt: start + 45 * 60 * 1000,
+      lastStopAt: start + 40 * 60 * 1000,
+    });
+    ex.stops.forEach((s, i) => {
+      batch.set(db().doc(`users/${uid}/stops/${jobId}-s${i + 1}`), {
+        jobId,
+        note: "",
+        photoPath: photoPaths[i] || null,
+        place: s.place || null,
+        audioPath: null,
+        status: "transcribed",
+        transcript: s.words,
+        photoDescStatus: "described",
+        photoDescription: s.photo,
+        photoDescEdited: false,
+        clientCreatedAt: start + (i + 1) * 12 * 60 * 1000,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    });
+    for (const [type, text] of [["field", ex.fieldNotes], ["customer", ex.customerComments]]) {
+      batch.set(jobRef.collection("wrapUpNotes").doc(type), { type, text, edited: true, segments: [], createdBy: uid, createdAt: now, updatedAt: now });
+    }
+    await batch.commit();
+    created.push(jobId);
+  }
+  logger.info("Example jobs added", { uid, count: created.length });
+  return { created: created.length };
 });
 
 /**

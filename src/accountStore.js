@@ -17,6 +17,8 @@ export const createInvite = (email, role) => call("createInvite")({ email, role 
 export const revokeInvite = (inviteId) => call("revokeInvite")({ inviteId });
 export const updateMember = (uid, change) => call("updateMember")({ uid, ...change });
 export const createDemoJob = (different = false) => call("createDemoJob")(different ? { different: true } : {});
+// The app owner's accounts only: adds the example jobs (functions/exampleJobs.js) that are missing
+export const createExampleJobs = () => call("createExampleJobs")();
 const mergeGuest = (guestToken) => call("mergeGuestIntoAccount")({ guestToken });
 
 export const TEAM_ROLES = [

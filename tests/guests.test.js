@@ -268,3 +268,33 @@ test("sample prices: accessories are priced as accessories, not as the main item
   assert.equal(price("appraisal-repairs", "Concrete anchors and mounting hardware for handrail", "misc"), 25);
   assert.equal(price("security-dental", "Camera junction box", "misc"), 25);
 });
+
+test("Example jobs: only the app owner's accounts; ordinary jobs they can edit and delete", async () => {
+  const reg = await personal("noexamples");
+  await rejects(reg.call("createExampleJobs"), "permission-denied");
+
+  const p = phone();
+  await signInWithCredential(p.auth, google("unlimited@example.com"));
+  await p.call("ensureProfile");
+  const uid = p.auth.currentUser.uid;
+  const EX = fnRequire("./exampleJobs.js").examples;
+  // Clear any left from an earlier test in this run
+  for (const ex of EX) await p.call("deleteJob", { jobId: `example-${ex.id}` }).catch(() => {});
+
+  assert.deepEqual(await p.call("createExampleJobs"), { created: EX.length });
+  assert.equal(EX.length, 7);
+  for (const ex of EX) {
+    const job = await read(p, `users/${uid}/jobs/example-${ex.id}`);
+    assert.deepEqual([job.status, job.customer, job.isDemo, job.expiresAt], ["finished", ex.customer, undefined, undefined]);
+    const stops = (await getDocs(query(collection(p.db, `users/${uid}/stops`), where("jobId", "==", `example-${ex.id}`)))).docs;
+    assert.equal(stops.length, ex.stops.length);
+    for (const s of stops) await getMetadata(ref(p.storage, s.get("photoPath"))); // the photo is there
+    assert.equal((await read(p, `users/${uid}/jobs/example-${ex.id}/wrapUpNotes/field`)).text, ex.fieldNotes);
+  }
+  // Running it again adds nothing; a deleted one comes back
+  assert.deepEqual(await p.call("createExampleJobs"), { created: 0 });
+  await updateDoc(doc(p.db, `users/${uid}/jobs/example-fence-gate`), { customer: "Renamed", location: "Back fence" });
+  assert.deepEqual(await p.call("deleteJob", { jobId: "example-flooring" }), { stops: 3 });
+  assert.deepEqual(await p.call("createExampleJobs"), { created: 1 });
+  assert.equal((await read(p, `users/${uid}/jobs/example-fence-gate`)).customer, "Renamed");
+});

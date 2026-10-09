@@ -2,6 +2,7 @@ import { useState } from "react";
 import { StopList } from "./StopCards";
 import JobDetailsFields from "./JobDetailsFields";
 import { jobTitle, deleteJob } from "./jobStore";
+import { createExampleJobs } from "./accountStore";
 import Sheet from "./Sheet";
 import JobSummary from "./JobSummary";
 import WrapUpNotes from "./WrapUpNotes";
@@ -212,6 +213,29 @@ function JobHeading({ job, onSaveDetails }) {
   );
 }
 
+// The app owner's accounts only (canDeleteJobs): adds the example jobs that are missing,
+// so an empty My Jobs can be filled with realistic jobs to show
+function ExampleJobsButton({ online, onNotice }) {
+  const [busy, setBusy] = useState(false);
+  const add = async () => {
+    setBusy(true);
+    try {
+      const { created } = (await createExampleJobs()).data;
+      onNotice(created ? `Added ${plural(created, "example job")}` : "All the example jobs are already here");
+    } catch (err) {
+      console.warn("Example jobs failed:", err);
+      onNotice("Couldn't add the example jobs. Try again in a minute.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button type="button" className="big-btn plain-btn example-jobs-btn" disabled={busy || !online} onClick={add}>
+      {busy ? "Adding example jobs…" : "Add Example Jobs"}
+    </button>
+  );
+}
+
 /** My Jobs list, and the page for one job. */
 export default function JobsScreen({
   uid, jobs, stops, activeJobId, online, initialJobId, autoSummaryJobId, canDeleteJobs = false,
@@ -275,6 +299,7 @@ export default function JobsScreen({
           {finished.map(card)}
         </section>
       )}
+      {canDeleteJobs && <ExampleJobsButton online={online} onNotice={onNotice} />}
     </>
   );
 }

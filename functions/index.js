@@ -44,6 +44,7 @@ const guests = require("./guests");
 exports.setGuestExpiry = guests.setGuestExpiry;
 exports.cleanupGuestJobs = guests.cleanupGuestJobs;
 exports.mergeGuestIntoAccount = guests.mergeGuestIntoAccount;
+exports.createExampleJobs = guests.createExampleJobs;
 exports.createDemoJob = guests.createDemoJob;
 exports.deleteJob = guests.deleteJob;
 

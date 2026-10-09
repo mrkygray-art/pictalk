@@ -149,7 +149,7 @@ exports.finalizePiccolo = onCall(piccoloCallable({ timeoutSeconds: 300, memory: 
     questions: working.questions || [],
     summary: typeof summaryDoc?.summary === "string" ? summaryDoc.summary : null,
     notes: { field: (notes.field?.text || "").trim() || null, customer: (notes.customer?.text || "").trim() || null },
-    stops: stops.map((s, i) => ({ id: s.id, index: i + 1, words: stopWords(s) || null, photoDescription: photoWords(s) || null })),
+    stops: stops.map((s, i) => ({ id: s.id, index: i + 1, place: s.place || null, words: stopWords(s) || null, photoDescription: photoWords(s) || null })),
     mediaManifest,
     warningsAcknowledged: warnings,
     editDiff,

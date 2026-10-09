@@ -133,7 +133,7 @@ function formatNotes(input) {
   if (input.field_notes) lines.push("", 'FIELD NOTES (source id "field_notes"):', input.field_notes);
   if (input.customer_comments) lines.push("", 'CUSTOMER COMMENTS (source id "customer_comments"):', input.customer_comments);
   for (const st of input.stops) {
-    lines.push("", `STOP ${st.index} (id "${st.id}"; ${st.photo ? "1 photo" : "no photo"}; ${st.timestamp || "time unknown"}):`);
+    lines.push("", `STOP ${st.index} (id "${st.id}"; ${st.place ? `location "${st.place}"; ` : ""}${st.photo ? "1 photo" : "no photo"}; ${st.timestamp || "time unknown"}):`);
     lines.push(st.transcript || "(no transcript)");
     if (st.photo_description) lines.push("PHOTO DESCRIPTION:", st.photo_description);
   }
@@ -245,6 +245,7 @@ exports.generateJobSummary = onCall(
         id: s.id,
         photo: !!s.photoPath,
         timestamp: s.clientCreatedAt ? new Date(s.clientCreatedAt).toISOString() : null,
+        place: typeof s.place === "string" && s.place.trim() ? s.place.trim().slice(0, 120) : null,
         transcript: stopWords(s) || null,
         ...(stopWords(s) ? {} : { note: "no transcript" }),
         photo_description: photoWords(s) || null,

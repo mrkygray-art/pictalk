@@ -104,7 +104,7 @@ The trade could be security, low voltage, electrical, HVAC, plumbing, or another
 
 Write:
 - scope: 2 to 4 plain sentences describing the work.
-- locations: the places work happens (use the names the worker used, e.g. "North exterior wall", "IDF closet"), each with short imperative tasks for the installer.
+- locations: the places work happens (use the names the worker used, e.g. "North exterior wall", "IDF closet"), each with short imperative tasks for the installer. When a stop has a location the worker typed (location "…" in its header), use exactly that name for the work at that stop, and for its lines' location.
 - constraints: customer limits or requirements (access hours, finishes, things to avoid).
 - install_notes: mounting, cable routing, power, and similar details the installer needs.
 - lines: the BOM and labor. One line per distinct item and location. category is equipment, cable, labor, or misc. Labor lines describe the work (e.g. "Install and aim cameras") with unit "hr" when hours were mentioned, otherwise "lot" and qty 1.
@@ -151,7 +151,7 @@ function buildContent(input, photos) {
   if (input.summary) head.push("", 'JOB SUMMARY (source id "summary"):', input.summary);
   const content = [{ type: "text", text: head.join("\n") }];
   for (const st of input.stops) {
-    const lines = [`STOP ${st.index} (id "${st.id}"; ${st.photo ? "photo below" : "no photo"}):`, st.transcript || "(no transcript)"];
+    const lines = [`STOP ${st.index} (id "${st.id}"; ${st.place ? `location "${st.place}"; ` : ""}${st.photo ? "photo below" : "no photo"}):`, st.transcript || "(no transcript)"];
     if (st.photo_description) lines.push("PHOTO DESCRIPTION:", st.photo_description);
     content.push({ type: "text", text: lines.join("\n") });
     const jpeg = photos.get(st.id);
@@ -190,7 +190,7 @@ function fakeModel(input) {
       qty: (words.match(/\b(\d{1,3})\b/) || [0, 1])[1] * 1,
       unit: "ea",
       part_number: heardPart || (i === 0 ? "DEMO-4MP-DOME" : ""),
-      location: `Stop ${s.index}`,
+      location: s.place || `Stop ${s.index}`,
       notes: "",
       category: "equipment",
       source_ids: [s.id],
@@ -213,7 +213,7 @@ function fakeModel(input) {
   return {
     text: JSON.stringify({
       scope: `Test draft for ${input.job_name} from the emulator stand-in, not the AI. ${said.length} of ${input.stops.length} stops had words.`,
-      locations: said.map((s) => ({ name: `Stop ${s.index}`, tasks: [{ text: `Do the work described at stop ${s.index}`, source_ids: [s.id] }] })),
+      locations: said.map((s) => ({ name: s.place || `Stop ${s.index}`, tasks: [{ text: `Do the work described at stop ${s.index}`, source_ids: [s.id] }] })),
       constraints: input.customer_comments ? [{ text: `Customer said: ${input.customer_comments.slice(0, 80)}`, source_ids: ["customer_comments"] }] : [],
       install_notes: input.field_notes ? [{ text: `Field notes: ${input.field_notes.slice(0, 80)}`, source_ids: ["field_notes"] }] : [],
       lines,
@@ -438,6 +438,7 @@ exports.draftPiccolo = onCall(
         index: i + 1,
         id: s.id,
         photo: !!s.photoPath,
+        place: typeof s.place === "string" && s.place.trim() ? s.place.trim().slice(0, 120) : null,
         transcript: stopWords(s) || null,
         photo_description: photoWords(s) || null,
       })),

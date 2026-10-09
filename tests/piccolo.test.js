@@ -148,3 +148,19 @@ test("postProcess keeps only real sources and blanks prices", () => {
   assert.ok(data.bom.every((l) => l.unitPrice === null && l.unitCost === null && l.priceSource === "none"));
   assert.equal(data.questions[0].id, "q1");
 });
+
+test("a stop's location (where on the site) is saved by its owner and used by the draft", async () => {
+  const p = await personal("placer");
+  const uid = await seedJob(p, "pl1");
+  const stopPath = `users/${uid}/stops/pl1-s2`;
+  await updateDoc(doc(p.db, stopPath), { place: "North exterior wall" });
+  await blocked(updateDoc(doc(p.db, stopPath), { place: "x".repeat(121) }));
+  const other = await personal("notplacer");
+  await blocked(updateDoc(doc(other.db, stopPath), { place: "Somewhere" }));
+
+  await p.call("draftPiccolo", { jobId: "pl1" });
+  const w = (await getDoc(doc(p.db, `users/${uid}/jobs/pl1/working/current`))).data();
+  // The stand-in model names locations the way the real one is told to: the worker's own name first
+  assert.ok(w.bom.some((l) => l.location === "North exterior wall"));
+  assert.ok(w.workOrder.locations.some((l) => l.name === "North exterior wall"));
+});

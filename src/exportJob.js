@@ -6,7 +6,7 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, listAll, deleteObject } from 'firebase/storage';
 import { db, storage } from './firebase';
-import { getPendingStops, urlFor, stopText } from './stopStore';
+import { getPendingStops, urlFor, stopText, stopPlace } from './stopStore';
 import { jobTitle } from './jobStore';
 
 // ---------- initials shown as "Captured by" / "Exported by" ----------
@@ -133,6 +133,7 @@ export async function buildJobExport({ uid, jobId, initials }) {
       photoUrl: photoSources.get(s.id)?.url || null,
       hasPhoto: photoSources.has(s.id),
       transcript: stopText(s) || null, // the user's corrected words when there are any
+      place: stopPlace(s) || null, // where on the site, as the user typed it
       transcriptStatus: transcriptStatus(s),
       photoDescription: s.photoDescStatus === 'described' ? s.photoDescription || null : null,
       hasAudio: !!(s.audioPath || s.audioBlob),

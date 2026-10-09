@@ -286,6 +286,7 @@ exports.createDemoJob = onCall(piccoloCallable({ timeoutSeconds: 60 }), async (r
       jobId,
       note: "",
       photoPath: photoPaths[i] || null,
+      place: s.place || null,
       audioPath: null,
       status: "transcribed",
       transcript: s.words,

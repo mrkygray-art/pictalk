@@ -45,7 +45,10 @@ function Photo({ stop, number }) {
     <div className="pc-media">
       {url && <img src={url} alt={`Stop ${number}`} className="pc-photo" />}
       <div className="pc-media-text">
-        <strong>Stop {number}</strong>
+        <strong>
+          Stop {number}
+          {stop.place ? ` · ${stop.place}` : ""}
+        </strong>
         {stopText(stop) && <p>{stopText(stop)}</p>}
         {photoText(stop) && <p className="pc-seen">Photo: {photoText(stop)}</p>}
       </div>

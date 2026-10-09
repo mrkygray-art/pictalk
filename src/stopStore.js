@@ -73,6 +73,20 @@ export async function updatePendingStop(id, patch) {
 /** The words for a stop: the user's correction if there is one, else the transcript. */
 export const stopText = (stop) => (stop?.editedTranscript ?? stop?.transcript ?? '').trim();
 
+/** Where on the site the stop was ("Reception desk"), as the user typed it. */
+export const stopPlace = (stop) => (stop?.place || '').trim();
+
+/**
+ * Set (or clear, with blank text) where a stop was. A stop still on this phone keeps it
+ * until it uploads; an uploaded stop's change waits in Firestore's local cache offline.
+ */
+export async function setStopPlace(uid, stop, text) {
+  const place = String(text || '').trim().slice(0, 120) || null;
+  if (stop.isPending && (await updatePendingStop(stop.id, { place }))) return;
+  updateDoc(doc(db, 'users', uid, 'stops', stop.id), { place })
+    .catch((err) => console.warn('Saving the stop location failed:', err));
+}
+
 /** What the AI saw in the stop's photo (as the user left it), once it's written. */
 export const photoText = (stop) =>
   stop?.photoDescStatus === 'described' ? (stop.photoDescription || '').trim() : '';
@@ -307,6 +321,7 @@ async function uploadStop(uid, stop) {
     audioType,
     audioExpiresAt: audioPath ? stop.clientCreatedAt + VOICE_DAYS * 86400000 : null,
     note: stop.note || '',
+    ...(stop.place ? { place: stop.place } : {}),
     transcript: null, // filled in later by Cloud Functions
     status: 'uploaded',
     clientCreatedAt: stop.clientCreatedAt,

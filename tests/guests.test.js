@@ -212,6 +212,6 @@ test("Try Piccolo replaces an older sample with the current one", async () => {
   assert.equal(created, true);
   assert.notEqual(second, first);
   assert.equal(await read(p, `users/${uid}/jobs/${first}`), undefined);
-  assert.equal((await read(p, `users/${uid}/jobs/${second}`)).demoVersion, 2);
+  assert.equal((await read(p, `users/${uid}/jobs/${second}`)).demoVersion, 3);
   await blocked(updateDoc(doc(p.db, `users/${uid}/jobs/${second}`), { demoVersion: 9 }));
 });

@@ -113,13 +113,14 @@ service cloud.firestore {
                                    'editedTranscript', 'transcriptEditedAt',
                                    'photoDescStatus', 'photoDescription', 'photoDescRequestedAt',
                                    'photoDescEdited', 'photoDescCount', 'photoDescModel',
-                                   'photoDescribedAt', 'photoDescError', 'orgId'])
+                                   'photoDescribedAt', 'photoDescError', 'orgId', 'place'])
             && d.note is string && d.note.size() < 2000
             && (d.get('photoDescStatus', null) == null
                 || d.photoDescStatus in ['requested', 'describing', 'described', 'failed'])
             && (d.get('photoDescription', null) == null
                 || (d.photoDescription is string && d.photoDescription.size() <= 3000))
             && (d.get('jobId', null) == null || (d.jobId is string && d.jobId.size() <= 64))
+            && (d.get('place', null) == null || (d.place is string && d.place.size() <= 120))
             && (d.get('editedTranscript', null) == null
                 || (d.editedTranscript is string && d.editedTranscript.size() <= 5000))
             && (d.photoPath == null || d.photoPath is string)

@@ -2,26 +2,30 @@
 // Words are written the way a tech talks into the phone. No real customer data.
 module.exports = {
   // Bump when the sample changes: Try Piccolo replaces an older sample with the new one
-  version: 2,
+  version: 3,
   customer: "Sample: Riverside Dental",
   location: "Front office and parking lot",
   stops: [
     {
+      place: "Front entrance",
       words:
         "Front entrance. The card reader by the glass door is cracked and the door strike sticks when you pull. They want a mobile credential reader here instead, something like an HID Signo.",
       photo: "A wall-mounted card reader beside an aluminum glass door frame. The reader's front cover has a visible crack across it.",
     },
     {
+      place: "North soffit",
       words:
         "North side, facing the parking lot. They want two cameras up on the soffit to cover the lot and the walkway to the door. Soffit is about twelve feet. Cable run back to the IDF is about a hundred and twenty feet through the hallway drop ceiling.",
       photo: "An exterior wall with a soffit roughly 12 feet up. Beyond the walkway is a parking lot with about 20 spaces and two light poles.",
     },
     {
+      place: "IDF closet",
       words:
         "IDF closet in the back hallway. Twenty-four port switch, maybe six ports open, and it's not PoE, so we'll swap it for a twenty-four port PoE switch. There's room in the rack, and the alarm panel is on the wall in this same closet.",
       photo: "A small wall-mounted rack with a 24-port network switch, a patch panel, and loose patch cables. A label on the rack reads IDF-1.",
     },
     {
+      place: "Reception desk",
       words: "Reception desk. Office manager wants a panic button under the desk, tied into the alarm panel as a silent hold-up zone. About forty feet of wire back to the closet.",
       photo: "A reception desk with an open knee space under the counter and a computer on top.",
     },

@@ -156,7 +156,10 @@ function MediaStop({ stop, number }) {
     <div className="pc-media" id={`pc-stop-${stop.id}`}>
       {url && <img src={url} alt={`Stop ${number}`} className="pc-photo" />}
       <div className="pc-media-text">
-        <strong>Stop {number}</strong>
+        <strong>
+          Stop {number}
+          {stop.place ? ` · ${stop.place}` : ""}
+        </strong>
         <p>{words || (stop.audioPath ? "No words in this voice note." : "No voice note.")}</p>
         {seen && <p className="pc-seen">Photo: {seen}</p>}
       </div>

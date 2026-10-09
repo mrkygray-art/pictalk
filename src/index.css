@@ -2563,3 +2563,32 @@ div.adm-stat {
 .text-btn.is-danger {
   color: var(--red);
 }
+
+/* A stop's location (where on the site), next to its number, and the quick picks */
+.stop-place {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.place-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.place-chip {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--surface-2);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.place-chip.is-on {
+  background: var(--text);
+  color: var(--bg);
+}

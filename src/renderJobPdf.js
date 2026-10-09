@@ -166,7 +166,7 @@ export async function renderJobPdf(data, photos) {
     }
     // Keep a stop's heading and photo together on one page
     ensure(28 + (photo ? photoH + 10 : 0));
-    text(`Stop ${stop.index}${stop.timestamp ? ` · ${fmtDateTime(stop.timestamp)}` : ''}`, { size: 14, bold: true, gap: 6 });
+    text(`Stop ${stop.index}${stop.place ? ` · ${stop.place}` : ''}${stop.timestamp ? ` · ${fmtDateTime(stop.timestamp)}` : ''}`, { size: 14, bold: true, gap: 6 });
     if (photo) {
       pdf.addImage(photo.dataUrl, 'JPEG', M, y, photoW, photoH, `stop-${stop.id}`, 'NONE');
       y += photoH + 10;

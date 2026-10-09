@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { urlFor, stopText } from "./stopStore";
+import { urlFor, stopText, stopPlace } from "./stopStore";
 import { StopEngLine } from "./EngineeringPanel";
 
 // "7:24 PM" for today, "Sep 28, 7:24 PM" for other days
@@ -95,11 +95,15 @@ function SparkleIcon() {
 function StopCard({ stop, anchor, number, time, photoUrl, photoWaiting, audioUrl, audioExpired, status, statusText, transcript, online, photoDesc, onSelect, onEdit }) {
   const hasVoice = transcript || audioUrl || audioExpired;
   const onPhoto = photoDesc?.onPhoto && stop ? () => photoDesc.onPhoto(stop, number, !!photoUrl) : null;
+  const onPlace = photoDesc?.onPlace && stop ? () => photoDesc.onPlace(stop, number) : null;
   return (
     <article className="stop" id={anchor ? `stop-${anchor}` : undefined}>
       {photoUrl && <img src={photoUrl} alt="" className="thumb" />}
       <div className="stop-info">
-        <strong>Stop {number}</strong>
+        <strong>
+          Stop {number}
+          {stopPlace(stop) && <span className="stop-place"> · {stopPlace(stop)}</span>}
+        </strong>
         <span>{whenLabel(time)}</span>
         <span className={`stop-status is-${status}`}>{statusText}</span>
         {hasVoice && (
@@ -121,8 +125,13 @@ function StopCard({ stop, anchor, number, time, photoUrl, photoWaiting, audioUrl
           <PhotoDescription stop={stop} number={number} online={online} hasPhoto={!!photoUrl && !photoWaiting} actions={photoDesc} />
         )}
         {stop && <StopEngLine stop={stop} />}
-        {(onSelect || onPhoto) && (
+        {(onSelect || onPhoto || onPlace) && (
           <div className="stop-footer">
+            {onPlace && (
+              <button className="stop-more stop-place-btn" onClick={onPlace}>
+                {stopPlace(stop) ? "Edit location" : "Add location"}
+              </button>
+            )}
             {onPhoto && (
               <button className="stop-more stop-photo" onClick={onPhoto}>
                 {photoUrl ? "Replace photo" : "Add photo"}
@@ -228,7 +237,8 @@ function CloudStop({ stop, number, online, photoDesc, onSelect, onEdit }) {
 // onSelect(stop, { number, photoUrl }) adds a "Move or delete this stop" button to each card.
 // photoDesc { onDescribe(stop), onEdit(stop, number), onDelete(stop, number) } adds
 // Describe photo and shows the photo description with its Edit and Delete buttons;
-// its onPhoto(stop, number, hasPhoto) adds Add photo / Replace photo, and localPhotos
+// its onPhoto(stop, number, hasPhoto) adds Add photo / Replace photo, onPlace(stop, number)
+// adds Add / Edit location (where on the site the stop was), and localPhotos
 // (Map stop id -> preview link) shows new photos still waiting on this phone.
 export function StopList({ stops, online, newestFirst = false, onSelect, onEdit, photoDesc }) {
   const inOrder = [...stops].sort((a, b) => a.clientCreatedAt - b.clientCreatedAt);

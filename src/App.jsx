@@ -16,6 +16,8 @@ import {
   deletePhotoDescription,
   setStopPhoto,
   getPendingPhotos,
+  setStopPlace,
+  stopPlace,
 } from "./stopStore";
 import {
   watchJobs, startJob, endJob, reopenJob, setJobDetails, touchJob, migrateEarlierStops, jobTitle,
@@ -138,6 +140,54 @@ function EditWordsSheet({ title, initial, maxLength = 5000, onSave, onClose }) {
         <button type="submit" className="save-btn">
           Save
         </button>
+        <button type="button" className="big-btn plain-btn" onClick={onClose}>
+          Cancel
+        </button>
+      </form>
+    </Sheet>
+  );
+}
+
+// Where on the site a stop was ("Reception desk"). Places already used in the job are one tap.
+function StopPlaceSheet({ number, initial, used, onSave, onClose }) {
+  const [place, setPlace] = useState(initial);
+  return (
+    <Sheet title={`Stop ${number} location`} onClose={onClose}>
+      <form
+        className="sheet-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSave(place);
+        }}
+      >
+        <label className="detail-fields">
+          Where on the site
+          <input
+            value={place}
+            maxLength={120}
+            placeholder="e.g. Reception desk, IDF closet, North soffit"
+            autoCapitalize="sentences"
+            autoFocus
+            onChange={(e) => setPlace(e.target.value)}
+          />
+        </label>
+        {used.length > 0 && (
+          <div className="place-chips" aria-label="Locations already used in this job">
+            {used.map((u) => (
+              <button key={u} type="button" className={`place-chip${u === place.trim() ? " is-on" : ""}`} onClick={() => setPlace(u)}>
+                {u}
+              </button>
+            ))}
+          </div>
+        )}
+        <button type="submit" className="save-btn">
+          Save Location
+        </button>
+        {initial && (
+          <button type="button" className="big-btn plain-btn is-danger" onClick={() => onSave("")}>
+            Remove Location
+          </button>
+        )}
         <button type="button" className="big-btn plain-btn" onClick={onClose}>
           Cancel
         </button>
@@ -490,6 +540,8 @@ export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false })
     onDelete: (stop, number) => setSheet({ type: "photodesc-delete", stop, number }),
     // Add a photo to a saved stop, or replace it (asks first: the old photo is deleted)
     onPhoto: (stop, number, hasPhoto) => (hasPhoto ? setSheet({ type: "replacephoto", stop, number }) : pickStopPhoto(stop)),
+    // Where on the site the stop was
+    onPlace: (stop, number) => setSheet({ type: "place", stop, number }),
     localPhotos,
   };
 
@@ -833,6 +885,20 @@ export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false })
 
       {/* Add photo / Replace photo on a saved stop: camera or photo library */}
       <input ref={addPhotoInput} type="file" accept="image/*" hidden onChange={handleStopPhoto} />
+
+      {sheet?.type === "place" && (
+        <StopPlaceSheet
+          number={sheet.number}
+          initial={stopPlace(sheet.stop)}
+          used={[...new Set(allStops.filter((s) => s.jobId === sheet.stop.jobId).map(stopPlace).filter(Boolean))]}
+          onClose={() => setSheet(null)}
+          onSave={(text) => {
+            setStopPlace(uid, sheet.stop, text);
+            setSheet(null);
+            showToast(text.trim() ? `Stop ${sheet.number}: ${text.trim()}` : "Location removed");
+          }}
+        />
+      )}
 
       {sheet?.type === "replacephoto" && (
         <Sheet title={`Replace the photo for Stop ${sheet.number}?`} onClose={() => setSheet(null)}>

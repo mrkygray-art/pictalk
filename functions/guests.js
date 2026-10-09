@@ -377,6 +377,8 @@ exports.createExampleJobs = onCall(piccoloCallable({ timeoutSeconds: 120 }), asy
     await batch.commit();
     created.push(jobId);
   }
+  // Marks the profile so the app adds them on its own only once
+  await db().doc(`users/${uid}`).set({ exampleJobsAt: now }, { merge: true });
   logger.info("Example jobs added", { uid, count: created.length });
   return { created: created.length };
 });

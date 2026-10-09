@@ -5,7 +5,7 @@ import App from "./App";
 import PiccoloPane from "./piccolo/PiccoloPane";
 import AccountSheet from "./AccountSheet";
 import AdminConsole from "./admin/AdminConsole";
-import { watchProfile, ensureProfile, acceptInvite, isEmailLinkVisit, roleLabel, errorText, retryGuestMerge } from "./accountStore";
+import { watchProfile, ensureProfile, createExampleJobs, acceptInvite, isEmailLinkVisit, roleLabel, errorText, retryGuestMerge } from "./accountStore";
 import { watchJobs } from "./jobStore";
 
 const PANE_KEY = "pictalk-pane";
@@ -136,6 +136,19 @@ function useAccount() {
     ensureProfile().catch((err) => {
       asked.current = ""; // try again next time (e.g. back online)
       console.warn("Profile setup failed:", err);
+    });
+  }, [user, profile]);
+
+  // The app owner's accounts get the example jobs once, the first time the app opens
+  // (the server marks the profile with exampleJobsAt; deleted ones stay deleted)
+  const examplesAsked = useRef("");
+  useEffect(() => {
+    if (!user || user.isAnonymous || !profile?.canDeleteJobs || profile.exampleJobsAt) return;
+    if (examplesAsked.current === user.uid) return;
+    examplesAsked.current = user.uid;
+    createExampleJobs().catch((err) => {
+      examplesAsked.current = ""; // try again next time (e.g. back online)
+      console.warn("Example jobs failed:", err);
     });
   }, [user, profile]);
 

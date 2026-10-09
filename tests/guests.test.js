@@ -283,6 +283,7 @@ test("Example jobs: only the app owner's accounts; ordinary jobs they can edit a
 
   assert.deepEqual(await p.call("createExampleJobs"), { created: EX.length });
   assert.equal(EX.length, 7);
+  assert.ok((await read(p, `users/${uid}`)).exampleJobsAt > 0); // the app adds them on its own only once
   for (const ex of EX) {
     const job = await read(p, `users/${uid}/jobs/example-${ex.id}`);
     assert.deepEqual([job.status, job.customer, job.isDemo, job.expiresAt], ["finished", ex.customer, undefined, undefined]);

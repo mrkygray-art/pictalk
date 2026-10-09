@@ -45,6 +45,7 @@ exports.setGuestExpiry = guests.setGuestExpiry;
 exports.cleanupGuestJobs = guests.cleanupGuestJobs;
 exports.mergeGuestIntoAccount = guests.mergeGuestIntoAccount;
 exports.createDemoJob = guests.createDemoJob;
+exports.deleteJob = guests.deleteJob;
 
 // Piccolo accounts: profiles, companies, team invites, roles
 const accounts = require("./accounts");

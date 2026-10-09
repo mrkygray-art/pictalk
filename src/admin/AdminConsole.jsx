@@ -427,6 +427,7 @@ const ACTIONS = {
   "org.settings": "company settings changed",
   "account.mergeGuest": "added guest jobs to their account",
   "learning.clear": "cleared what drafts learned",
+  "job.delete": "deleted a job",
 };
 
 function ActivityTab({ entries, team, jobs }) {

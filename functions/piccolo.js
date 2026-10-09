@@ -26,6 +26,8 @@ const { reserveGlobalAi, piccoloCallable } = require("./budget");
 const { piccoloAccess, ownerOf } = require("./teams");
 const { learnedFor, findLearned } = require("./learning");
 const { isUnlimited } = require("./limits");
+const DEMO = require("./demoJob");
+const { samplePrice } = DEMO;
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 
@@ -408,14 +410,17 @@ exports.draftPiccolo = onCall(
 
     // Company settings: quote defaults, labor rate, AI price estimates (off unless turned on)
     const orgId = job.orgId || (await db().doc(`users/${owner}`).get()).get("orgId") || null;
-    const defaults = orgId ? (await db().doc(`orgs/${orgId}`).get()).get("defaults") || {} : {};
+    // The sample job uses its own sample quote settings, never the company's
+    const defaults = job.isDemo
+      ? { ...DEMO.quote, aiPriceEstimates: false }
+      : orgId ? (await db().doc(`orgs/${orgId}`).get()).get("defaults") || {} : {};
     const record = job.customerId && orgId ? (await db().doc(`customers/${job.customerId}`).get()).data() : null;
     const customerRecord = record && record.orgId === orgId
       ? [record.name, record.address, record.notes].filter(Boolean).join(" · ").slice(0, 1000) || null
       : null;
 
     // The company's (or this account's) recent finalized lines, unless the company turned learning off
-    const learned = await learnedFor(orgId, owner, defaults);
+    const learned = job.isDemo ? [] : await learnedFor(orgId, owner, defaults);
 
     const customer = job.customer || null;
     const location = job.location || null;
@@ -467,6 +472,14 @@ exports.draftPiccolo = onCall(
           lastError = new Error("some lines had no valid source");
           logger.warn("Piccolo retry: lines without a valid source", { uid, jobId });
           continue;
+        }
+        // The sample job's quote comes out complete: any line still unpriced gets a sample price
+        if (job.isDemo) {
+          for (const ln of data.bom) {
+            if (Number.isFinite(ln.unitPrice)) continue;
+            ln.unitPrice = samplePrice(ln);
+            ln.priceSource = "sample";
+          }
         }
         result = { ...data, model: out.model };
         usage = out.usage || null;

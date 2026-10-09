@@ -14,6 +14,7 @@ const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 const { piccoloCallable } = require("./budget");
 const DEMO = require("./demoJob");
+const path = require("node:path");
 
 const DAY = 24 * 60 * 60 * 1000;
 const GUEST_DAYS = 7;
@@ -262,11 +263,24 @@ exports.createDemoJob = onCall(piccoloCallable({ timeoutSeconds: 60 }), async (r
     isDemo: true,
     expiresAt: now + GUEST_DAYS * DAY,
   });
+  // The sample photos (AI-generated images matching each stop), copied into the user's own
+  // photos/ folder first so the stop records never point at a missing file
+  const bucket = getStorage().bucket();
+  const photoPaths = [];
+  for (const [i, file] of (DEMO.photos || []).entries()) {
+    const dest = `photos/${uid}/${jobId}-s${i + 1}.jpg`;
+    try {
+      await bucket.upload(path.join(__dirname, "demo-photos", file), { destination: dest, contentType: "image/jpeg" });
+      photoPaths[i] = dest;
+    } catch (err) {
+      logger.warn("Sample photo upload failed", { uid, file, error: String(err?.message || err) });
+    }
+  }
   DEMO.stops.forEach((s, i) => {
     batch.set(db().doc(`users/${uid}/stops/${jobId}-s${i + 1}`), {
       jobId,
       note: "",
-      photoPath: null,
+      photoPath: photoPaths[i] || null,
       audioPath: null,
       status: "transcribed",
       transcript: s.words,
@@ -282,4 +296,25 @@ exports.createDemoJob = onCall(piccoloCallable({ timeoutSeconds: 60 }), async (r
   }
   await batch.commit();
   return { jobId, created: true };
+});
+
+/**
+ * Delete one of the caller's finished jobs for good: its stops, photos, voice notes,
+ * wrap-up recordings, Piccolo drafts and finals (with their media copies), and exports.
+ * Only the owner; the open job must be ended first.
+ */
+exports.deleteJob = onCall(piccoloCallable({ timeoutSeconds: 120 }), async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign-in is required.");
+  const jobId = String(request.data?.jobId || "");
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(jobId)) throw new HttpsError("invalid-argument", "Missing job.");
+  const job = (await db().doc(`users/${uid}/jobs/${jobId}`).get()).data();
+  if (!job) throw new HttpsError("not-found", "This job could not be found.");
+  if (job.status === "open") throw new HttpsError("failed-precondition", "End this job before deleting it.");
+  const stops = await deleteJobData(uid, jobId);
+  if (job.orgId) {
+    await db().collection("auditLog").add({ uid, orgId: job.orgId, action: "job.delete", jobId, after: { name: job.name || null, stops }, at: Date.now() });
+  }
+  logger.info("Job deleted", { uid, jobId, stops });
+  return { stops };
 });

@@ -6,10 +6,21 @@
 import {
   doc, getDoc, getDocs, setDoc, updateDoc, writeBatch, collection, query, orderBy, onSnapshot,
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from './firebase';
 import { EARLIER_JOB_ID, getPendingStops, updatePendingStop } from './stopStore';
 
 export { EARLIER_JOB_ID };
+
+/**
+ * Delete a finished job for good, with its stops, photos, voice notes, wrap-up recordings,
+ * Piccolo drafts and finals, and exports (functions/guests.js deleteJob). Needs signal.
+ */
+export async function deleteJob(job) {
+  if (!navigator.onLine) throw new Error('offline');
+  if ((await getPendingStops()).some((s) => s.jobId === job.id)) throw new Error('pending');
+  return (await httpsCallable(functions, 'deleteJob', { timeout: 130000 })({ jobId: job.id })).data;
+}
 
 const jobRef = (uid, id) => doc(db, 'users', uid, 'jobs', id);
 const warn = (what) => (err) => console.warn(`${what} failed:`, err);

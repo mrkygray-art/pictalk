@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { StopList } from "./StopCards";
 import JobDetailsFields from "./JobDetailsFields";
-import { jobTitle } from "./jobStore";
+import { jobTitle, deleteJob } from "./jobStore";
+import Sheet from "./Sheet";
 import JobSummary from "./JobSummary";
 import WrapUpNotes from "./WrapUpNotes";
 import useWrapUpNotes from "./useWrapUpNotes";
@@ -62,6 +63,25 @@ function jumpToStop(id) {
 function JobDetail({ uid, job, stops, isActive, online, autoSummary, onBack, onCamera, onReopen, onSaveDetails, onStopSelect, onStopEdit, photoDesc, onExport, onNotice, onSendToPiccolo }) {
   const notes = useWrapUpNotes(uid, job.id);
   const hasNotes = !!(notes.notes.field || notes.notes.customer || notes.pending.field.length || notes.pending.customer.length);
+  const [deleting, setDeleting] = useState(null); // null | "ask" | "busy"
+  const removeJob = async () => {
+    setDeleting("busy");
+    try {
+      const { stops: n } = await deleteJob(job);
+      onNotice(`Job deleted${n ? ` with its ${plural(n, "stop")}` : ""}`);
+      onBack();
+    } catch (err) {
+      setDeleting(null);
+      const why = String(err?.message || err);
+      onNotice(
+        why === "offline"
+          ? "Deleting a job needs signal. Try again when you're online."
+          : why === "pending"
+            ? "Some stops in this job are still uploading. Try again once they're saved."
+            : "Couldn't delete the job. Please try again."
+      );
+    }
+  };
   return (
     <>
       <button className="link-btn" onClick={onBack}>
@@ -124,6 +144,25 @@ function JobDetail({ uid, job, stops, isActive, online, autoSummary, onBack, onC
           </>
         )}
       </section>
+      {job.status !== "open" && (
+        <button className="text-btn is-danger" onClick={() => setDeleting("ask")}>
+          Delete This Job
+        </button>
+      )}
+      {deleting && (
+        <Sheet title="Delete this job?" onClose={() => deleting !== "busy" && setDeleting(null)}>
+          <p>
+            {jobTitle(job)} and its {plural(stops.length, "stop")}, photos, voice notes, wrap-up notes, and any Piccolo drafts and finals will be gone for
+            good.
+          </p>
+          <button className="big-btn danger-btn" onClick={removeJob} disabled={deleting === "busy"}>
+            {deleting === "busy" ? "Deleting…" : "Delete Job"}
+          </button>
+          <button className="big-btn plain-btn" onClick={() => setDeleting(null)} disabled={deleting === "busy"}>
+            Keep It
+          </button>
+        </Sheet>
+      )}
     </>
   );
 }

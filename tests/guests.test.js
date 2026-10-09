@@ -139,7 +139,18 @@ test("Try Piccolo: signed-in only; a sample job with its own draft allowance tha
   assert.equal(stops.size, 4);
   assert.match((await read(g, `users/${uid}/jobs/${jobId}/wrapUpNotes/customer`)).text, /after 5 pm/);
 
+  // Each stop has its sample photo in the user's own photos/ folder
+  for (const d of stops.docs) {
+    assert.ok(d.get("photoPath")?.startsWith(`photos/${uid}/${jobId}-s`) && d.get("photoPath").endsWith(".jpg"));
+    assert.ok(await getMetadata(ref(g.storage, d.get("photoPath"))));
+  }
+
   await g.call("draftPiccolo", { jobId });
+  // The sample quote comes out complete: every line priced, sample prices marked, sample settings
+  const w = await read(g, `users/${uid}/jobs/${jobId}/working/current`);
+  assert.ok(w.bom.length > 0 && w.bom.every((l) => Number.isFinite(l.unitPrice)), "every line priced");
+  assert.ok(w.bom.some((l) => l.priceSource === "sample"));
+  assert.deepEqual([w.quote.prefix, w.quote.markupPct, w.quote.taxPct], ["SAMPLE-", 15, 9.5]);
   // Sample drafts don't count toward the account's own drafts
   assert.equal((await adminDb().doc(`users/${uid}/aiUsage/${new Date().toISOString().slice(0, 10)}`).get()).get("piccoloDrafts"), undefined);
   await jobWithPhoto(g, "own1");
@@ -161,4 +172,18 @@ test("the global daily AI cap stops drafts for everyone", async () => {
     await day.set({ count: before.count || 0 }, { merge: true });
   }
   await blocked(getDoc(doc(phone().db, "usage/global/days/x"))); // not readable by the app
+});
+
+test("Delete Job: the owner deletes a finished job with its stops and files; not the open one, not someone else's", async () => {
+  const p = await personal("deleter");
+  const { uid, photoPath } = await jobWithPhoto(p, "del1");
+  await setDoc(doc(p.db, `users/${uid}/jobs/del2`), { name: "Open", status: "open", startedAt: 1 });
+  await rejects(p.call("deleteJob", { jobId: "del2" }), "failed-precondition");
+  const other = await personal("notmine");
+  await rejects(other.call("deleteJob", { jobId: "del1" }), "not-found");
+
+  assert.deepEqual(await p.call("deleteJob", { jobId: "del1" }), { stops: 1 });
+  assert.equal(await read(p, `users/${uid}/jobs/del1`), undefined);
+  assert.equal(await read(p, `users/${uid}/stops/del1-s1`), undefined);
+  await rejects(getMetadata(ref(p.storage, photoPath)), "storage/object-not-found");
 });

@@ -205,6 +205,7 @@ export async function renderPiccoloPdf(src, sections = { workorder: true, bom: t
     y += 6;
     if (t.unpriced) text(`${t.unpriced} line${t.unpriced === 1 ? " is" : "s are"} not priced yet (TBD) and not included in the total.`, { size: 10, color: MUTED });
     if (src.bom.some((l) => l.priceSource === "ai_estimate")) text("Some prices are AI estimates and must be confirmed.", { size: 10, bold: true });
+    if (src.bom.some((l) => l.priceSource === "sample")) text("Sample prices for demonstration only.", { size: 10, bold: true });
     if (src.quote.terms) {
       heading("Terms");
       text(src.quote.terms);

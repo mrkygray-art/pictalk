@@ -121,6 +121,7 @@ function LineCard({ line, stopNumber, onJump, showPrice, onEdit }) {
           {line.priceSource === "ai_estimate" && <span className="badge is-warn">ESTIMATE</span>}
           {line.partNumberStatus === "history" && <span className="badge">Part # from a past quote</span>}
           {showPrice && line.priceSource === "history" && <span className="badge">Last quoted price</span>}
+          {showPrice && line.priceSource === "sample" && <span className="badge">Sample price</span>}
           {!priced && <span className="badge is-muted">Needs price</span>}
         </span>
         {line.partNumber && <span className="pc-meta">Part #: {line.partNumber}</span>}

@@ -105,7 +105,7 @@ Piccolo turns a finished PicTalk job into the documents that come next, with the
 
 - **Mobile-first PWA** designed for field use: installs to the home screen and opens with no signal
 - **Offline-first capture** using IndexedDB so a technician can save work before cloud connectivity is available
-- Job-based organization with multiple photo/voice stops: a My Jobs list, rename and reopen jobs, customer and location names, moving or deleting stops, and adding or replacing a saved stop's photo (moving and photos work offline)
+- Job-based organization with multiple photo/voice stops: a My Jobs list, rename and reopen jobs, customer and location names, moving or deleting stops, adding or replacing a saved stop's photo, and labeling each stop with where it was on the site, which the PDF, the AI summary, and Piccolo's work order use (all of these work offline)
 - Browser microphone selection for field laptops and external microphones
 - Cloud synchronization of photos, audio, jobs, and transcripts
 - **Deepgram Nova-3 speech-to-text** with security/low-voltage terminology

@@ -38,6 +38,7 @@ exports.orgStorageUsage = require("./admin").orgStorageUsage;
 exports.auditOrgSettings = require("./admin").auditOrgSettings;
 exports.recordExport = require("./admin").recordExport;
 exports.clearLearning = require("./learning").clearLearning;
+exports.askPicTalkHelp = require("./help").askPicTalkHelp;
 
 // Guests: 7-day expiry, daily cleanup, merging into an existing account, sample job
 const guests = require("./guests");

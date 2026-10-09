@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PicTalk Quick-Start Guide</title>
+<!-- Source of public/PicTalk-Quick-Start.pdf. Only the core flow and tips that rarely change;
+     feature details live in the Ask PicTalk help guide (functions/helpGuide.js).
+     Rebuild: print this page to PDF (Letter, no margins, background graphics on), e.g. with
+     headless Chrome: page.pdf({ format: "Letter", printBackground: true }). -->
+<style>
+  @page { size: Letter; margin: 0; }
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1c1c1e; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .page { width: 8.5in; height: 11in; padding: 0.55in 0.6in 0.5in; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 16px; padding-bottom: 14px; border-bottom: 3px solid #0a84ff; }
+  .logo { width: 52px; height: 52px; border-radius: 14px; background: #000; display: grid; place-items: center; }
+  .logo svg { width: 30px; height: 30px; }
+  h1 { font-size: 30px; letter-spacing: -0.02em; }
+  .sub { color: #5d6470; font-size: 14px; margin-top: 2px; }
+  .what { font-size: 14.5px; line-height: 1.5; margin: 14px 0 6px; }
+  h2 { font-size: 17px; margin: 14px 0 8px; color: #0a5fcf; text-transform: uppercase; letter-spacing: 0.06em; }
+  .steps { display: grid; gap: 8px; }
+  .step { display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; background: #f2f5f9; border-radius: 12px; padding: 10px 14px; }
+  .num { width: 34px; height: 34px; border-radius: 50%; background: #0a84ff; color: #fff; font-weight: 700; font-size: 17px; display: grid; place-items: center; }
+  .step b { display: block; font-size: 15.5px; }
+  .step .desc { display: block; font-size: 13.5px; color: #3a3f47; line-height: 1.4; }
+  .btn { font-weight: 700; color: #0a5fcf; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  ul { padding-left: 18px; }
+  li { font-size: 13.2px; line-height: 1.42; margin-bottom: 5px; }
+  .help { margin-top: auto; display: flex; gap: 14px; align-items: center; background: #0b1f36; color: #fff; border-radius: 14px; padding: 14px 18px; }
+  .help .q { flex: none; width: 38px; height: 38px; border-radius: 50%; background: #0a84ff; display: grid; place-items: center; font-weight: 800; font-size: 20px; }
+  .help p { font-size: 13.5px; line-height: 1.45; }
+  .help b { color: #8cc4ff; }
+  footer { margin-top: 8px; font-size: 11px; color: #7a818c; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></div>
+    <div>
+      <h1>PicTalk Quick-Start Guide</h1>
+      <p class="sub">Take a picture. Say what you see. Your site walk is saved together.</p>
+    </div>
+  </header>
+
+  <p class="what">PicTalk keeps each photo, your voice note, and a written copy of your words together as a <b>stop</b>, and groups the stops into a <b>job</b>. It works with no signal: everything saves on your phone first and uploads when signal comes back.</p>
+
+  <h2>Your first job in five steps</h2>
+  <div class="steps">
+    <div class="step"><div class="num">1</div><div><b>Tap <span class="btn">Start New Job</span></b><span class="desc">The bar at the top shows the job your stops are saving to.</span></div></div>
+    <div class="step"><div class="num">2</div><div><b>Tap <span class="btn">Take Photo</span></b><span class="desc">Take a picture of the spot you're looking at.</span></div></div>
+    <div class="step"><div class="num">3</div><div><b>Tap the <span class="btn">Tap to Talk</span> button and say what you see</b><span class="desc">Tap it again to stop. PicTalk writes your words down for you.</span></div></div>
+    <div class="step"><div class="num">4</div><div><b>Tap <span class="btn">Save This Stop</span></b><span class="desc">Repeat steps 2 to 4 at each spot on the site.</span></div></div>
+    <div class="step"><div class="num">5</div><div><b>Tap <span class="btn">End Job</span> when the walk is done</b><span class="desc">Add the customer and location, then finish. You get an AI summary to review and a PDF report to share.</span></div></div>
+  </div>
+
+  <div class="cols">
+    <div>
+      <h2>Tips for great results</h2>
+      <ul>
+        <li><b>One stop per spot.</b> Photo first, then talk about that spot.</li>
+        <li><b>Say where you are first:</b> "Front entrance, east side."</li>
+        <li><b>Talk like you're briefing a coworker:</b> what you see, what's wrong, what needs to be done.</li>
+        <li><b>Give numbers:</b> how many, how far, how big.</li>
+        <li><b>Read model and part numbers slowly,</b> and spell letters that sound alike.</li>
+        <li><b>Keep notes short:</b> several short stops beat one long one.</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Good to know</h2>
+      <ul>
+        <li><b>Before you go:</b> put PicTalk on your home screen so it opens with no signal.</li>
+        <li><b>Quiet spot, phone close:</b> wind and running equipment make words harder to catch.</li>
+        <li><b>Check your words</b> before you leave the site and fix anything that came out wrong.</li>
+        <li><b>Use wrap-up notes</b> at the end for the big picture and what the customer asked for.</li>
+        <li><b>Review the AI summary</b> before you share the report.</li>
+        <li><b>Save your work</b> (sign in) so your jobs are kept.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="help">
+    <div class="q">?</div>
+    <p><b>Need help with something else?</b> In PicTalk, tap <b>?</b> at the top of the main screen and ask <b>Ask PicTalk</b>, by typing or by voice: how to do something, what a message means, or tips for better results.</p>
+  </div>
+  <footer><span>PicTalk is a free demo. Please don't record real customer information.</span><span>pictalk-6cbff.web.app</span></footer>
+</div>
+</body>
+</html>

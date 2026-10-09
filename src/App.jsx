@@ -24,6 +24,7 @@ import {
 } from "./jobStore";
 import { StopList } from "./StopCards";
 import JobsScreen, { JobCard } from "./JobsScreen";
+import HelpScreen from "./HelpScreen";
 import JobDetailsFields from "./JobDetailsFields";
 import WrapUpNotes from "./WrapUpNotes";
 import useWrapUpNotes from "./useWrapUpNotes";
@@ -254,7 +255,8 @@ export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false })
   const [jobs, setJobs] = useState([]); // newest first
   const [sheet, setSheet] = useState(null); // { type: "nojob", next } | { type: "end" }
   const [toast, setToast] = useState(null);
-  const [view, setView] = useState("camera"); // "camera" | "jobs"
+  const [view, setView] = useState("camera"); // "camera" | "jobs" | "help"
+  const [helpChat, setHelpChat] = useState([]); // the Ask PicTalk conversation (kept while switching screens)
   const [jobsTarget, setJobsTarget] = useState(null); // { jobId, autoSummary, key } when opening a job directly
   const [deleting, setDeleting] = useState(false);
   const [seenOpenJob, setSeenOpenJob] = useState(null);
@@ -607,7 +609,9 @@ export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false })
     <main className="app">
       <JobBar job={activeJob} />
 
-      {view === "jobs" ? (
+      {view === "help" ? (
+        <HelpScreen online={online} chat={helpChat} setChat={setHelpChat} onClose={() => showView("camera")} />
+      ) : view === "jobs" ? (
         <JobsScreen
           key={jobsTarget?.key ?? 0}
           canDeleteJobs={canDeleteJobs}
@@ -633,6 +637,9 @@ export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false })
           <header className="header">
             <div className="header-row">
               <h1>PicTalk</h1>
+              <button className="link-btn help-btn" onClick={() => showView("help")} disabled={recording} aria-label="Help: how to use PicTalk">
+                ?
+              </button>
               <button
                 className="link-btn"
                 onClick={() => {
@@ -762,6 +769,9 @@ export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false })
           )}
           <EngineeringPanel pending={pending} online={online} uid={uid} />
           <div className="bottom-links">
+            <button type="button" className="text-btn help-link" onClick={() => showView("help")} disabled={recording}>
+              How to use PicTalk
+            </button>
             <InstallLink />
             <EngineeringToggle />
             <a className="text-btn lab-link" href="/lab">Evaluation Lab</a>

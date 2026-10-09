@@ -52,6 +52,15 @@ PicTalk is designed to capture that information **while the technician is alread
 
 Piccolo turns a finished PicTalk job into the documents that come next, with the estimator in charge of every line.
 
+<p>
+  <img src="docs/piccolo-workorder.webp" alt="Piccolo work order: scope of work and front-entrance tasks, each linked to the stop it came from" width="200">
+  <img src="docs/piccolo-parts.webp" alt="Piccolo parts list: card reader, door strike, and cameras, each quoting the tech's words and linking to its stop" width="200">
+  <img src="docs/piccolo-quote.webp" alt="Piccolo quote: subtotal, markup, tax, total, and terms" width="200">
+  <img src="docs/piccolo-finalize.webp" alt="Finalize sheet listing what still needs checking before version 1 is saved" width="200">
+</p>
+
+<sub>The made-up "Try Piccolo" sample job, drafted by Claude on the test project; prices entered by hand.</sub>
+
 - **AI draft from the job itself.** Claude reads the stops (words, photo descriptions, and the photos), the wrap-up notes, and the job summary, and writes a work order (scope, locations with tasks, customer requirements, installation notes), a parts and labor list, and open questions. There's no parts catalog to set up.
 - **Guardrails enforced in code, not just asked for.** Every line links back to the stop or note it came from (tap to jump to the photo). A part number counts as the technician's only if it was actually said or written; anything else is marked **Verify part #**. Lines the AI assumed are marked **Inferred · check**. Prices stay blank unless they come from the company's labor rate, the same item on an earlier final, or AI estimates the company turned on (always marked **ESTIMATE**).
 - **Edit everything.** Lines, quantities, part numbers, prices, scope, tasks, and questions, with undo, saving on the phone first. A newer draft never overwrites the user's copy; they can compare and pull in only what they want.

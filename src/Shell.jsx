@@ -139,11 +139,12 @@ function useAccount() {
     });
   }, [user, profile]);
 
-  // The app owner's accounts get the example jobs once, the first time the app opens
+  // A new guest (and the app owner) gets the example jobs once, the first time the app opens
   // (the server marks the profile with exampleJobsAt; deleted ones stay deleted)
   const examplesAsked = useRef("");
   useEffect(() => {
-    if (!user || user.isAnonymous || !profile?.canDeleteJobs || profile.exampleJobsAt) return;
+    if (!user || !profile?.loaded || profile.missing || profile.exampleJobsAt) return;
+    if (!user.isAnonymous && !profile.canDeleteJobs) return;
     if (examplesAsked.current === user.uid) return;
     examplesAsked.current = user.uid;
     createExampleJobs().catch((err) => {

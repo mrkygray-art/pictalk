@@ -174,7 +174,8 @@ exports.mergeGuestIntoAccount = onCall(piccoloCallable({ timeoutSeconds: 540, me
   const bucket = getStorage().bucket();
   const now = Date.now();
   const targetOpen = !(await db().collection(`users/${to}/jobs`).where("status", "==", "open").limit(1).get()).empty;
-  const jobs = (await db().collection(`users/${from}/jobs`).get()).docs.filter((d) => !d.get("isDemo"));
+  // Sample and example jobs stay behind (the account has, or gets, its own)
+  const jobs = (await db().collection(`users/${from}/jobs`).get()).docs.filter((d) => !d.get("isDemo") && !isExampleJob(d.id));
   const newId = {};
   for (const j of jobs) {
     const exists = (await db().doc(`users/${to}/jobs/${j.id}`).get()).exists;
@@ -185,6 +186,7 @@ exports.mergeGuestIntoAccount = onCall(piccoloCallable({ timeoutSeconds: 540, me
   let stopCount = 0;
   for (const s of (await db().collection(`users/${from}/stops`).get()).docs) {
     const stop = s.data();
+    if (isExampleJob(stop.jobId)) continue;
     const jobId = newId[stop.jobId] || stop.jobId;
     const photoPath = await copyFile(bucket, stop.photoPath, movePath(stop.photoPath, from, to));
     const audioPath = await copyFile(bucket, stop.audioPath, movePath(stop.audioPath, from, to));
@@ -312,75 +314,96 @@ exports.createDemoJob = onCall(piccoloCallable({ timeoutSeconds: 60 }), async (r
 });
 
 /**
- * Example jobs (functions/exampleJobs.js) for the app owner's accounts only (isUnlimited),
- * so the owner's PicTalk doesn't open empty. Ordinary finished jobs: they never expire and
- * can be edited, sent to Piccolo, or deleted. Job ids are fixed (example-<id>), so running
- * it again only adds the ones that were deleted.
+ * Example jobs (functions/exampleJobs.js): each new guest gets their own copy the first time
+ * the app opens, to play with (edit, send to Piccolo, delete). They're ordinary finished jobs
+ * with fixed ids (example-<id>); a guest's copies expire with their other jobs (setGuestExpiry)
+ * and aren't moved when a guest merges into an existing account. Added once per account
+ * (profile exampleJobsAt), and never to an account that already has jobs of its own.
+ * The app owner's accounts (isUnlimited) always get them, and { reset: true } deletes their
+ * example jobs and adds fresh copies (Reset Example Jobs in My Jobs).
  */
+const isExampleJob = (jobId) => String(jobId || "").startsWith("example-");
+exports.isExampleJob = isExampleJob;
+
+async function addExampleJob(uid, ex, now) {
+  const jobId = `example-${ex.id}`;
+  const jobRef = db().doc(`users/${uid}/jobs/${jobId}`);
+  if ((await jobRef.get()).exists) return false;
+  // Morning or early afternoon Pacific time on that day, about 45 minutes on site
+  const day = new Date(now - ex.daysAgo * DAY);
+  day.setUTCHours(16 + (ex.daysAgo % 5), 15, 0, 0);
+  const start = day.getTime();
+  const bucket = getStorage().bucket();
+  const photoPaths = await Promise.all(ex.stops.map(async (s, i) => {
+    const dest = `photos/${uid}/${jobId}-s${i + 1}.jpg`;
+    try {
+      await bucket.upload(path.join(__dirname, "example-photos", `${ex.id}-${i + 1}.jpg`), { destination: dest, contentType: "image/jpeg" });
+      return dest;
+    } catch (err) {
+      logger.warn("Example photo upload failed", { uid, jobId, error: String(err?.message || err) });
+      return null;
+    }
+  }));
+  const batch = db().batch();
+  batch.set(jobRef, {
+    name: `${ex.customer} – ${ex.location}`,
+    customer: ex.customer,
+    location: ex.location,
+    address: null,
+    lat: null,
+    lng: null,
+    status: "finished",
+    startedAt: start,
+    endedAt: start + 45 * 60 * 1000,
+    lastStopAt: start + 40 * 60 * 1000,
+  });
+  ex.stops.forEach((s, i) => {
+    batch.set(db().doc(`users/${uid}/stops/${jobId}-s${i + 1}`), {
+      jobId,
+      note: "",
+      photoPath: photoPaths[i],
+      place: s.place || null,
+      audioPath: null,
+      status: "transcribed",
+      transcript: s.words,
+      photoDescStatus: "described",
+      photoDescription: s.photo,
+      photoDescEdited: false,
+      clientCreatedAt: start + (i + 1) * 12 * 60 * 1000,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+  for (const [type, text] of [["field", ex.fieldNotes], ["customer", ex.customerComments]]) {
+    batch.set(jobRef.collection("wrapUpNotes").doc(type), { type, text, edited: true, segments: [], createdBy: uid, createdAt: now, updatedAt: now });
+  }
+  await batch.commit();
+  return true;
+}
+
 exports.createExampleJobs = onCall(piccoloCallable({ timeoutSeconds: 120 }), async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign-in is required.");
-  if (!(await isUnlimited(uid))) throw new HttpsError("permission-denied", "Example jobs are only for the app owner.");
-  const bucket = getStorage().bucket();
+  const owner = await isUnlimited(uid);
+  const reset = request.data?.reset === true;
+  if (reset && !owner) throw new HttpsError("permission-denied", "Only the app owner can reset the example jobs.");
+  const userRef = db().doc(`users/${uid}`);
   const now = Date.now();
-  const created = [];
-  for (const ex of EXAMPLES.examples) {
-    const jobId = `example-${ex.id}`;
-    const jobRef = db().doc(`users/${uid}/jobs/${jobId}`);
-    if ((await jobRef.get()).exists) continue;
-    // Morning or early afternoon Pacific time on that day, about 45 minutes on site
-    const day = new Date(now - ex.daysAgo * DAY);
-    day.setUTCHours(16 + (ex.daysAgo % 5), 15, 0, 0);
-    const start = day.getTime();
-    const photoPaths = [];
-    for (let i = 0; i < ex.stops.length; i++) {
-      const dest = `photos/${uid}/${jobId}-s${i + 1}.jpg`;
-      try {
-        await bucket.upload(path.join(__dirname, "example-photos", `${ex.id}-${i + 1}.jpg`), { destination: dest, contentType: "image/jpeg" });
-        photoPaths[i] = dest;
-      } catch (err) {
-        logger.warn("Example photo upload failed", { uid, jobId, error: String(err?.message || err) });
-      }
+  const jobs = (await db().collection(`users/${uid}/jobs`).get()).docs;
+  if (!owner) {
+    if (!isAnon(await getAuth().getUser(uid))) throw new HttpsError("permission-denied", "Example jobs are for guests.");
+    // Once per account, and not for a guest who already has jobs of their own
+    if ((await userRef.get()).get("exampleJobsAt")) return { created: 0 };
+    if (jobs.some((d) => !isExampleJob(d.id) && !d.get("isDemo"))) {
+      await userRef.set({ exampleJobsAt: now }, { merge: true });
+      return { created: 0 };
     }
-    const batch = db().batch();
-    batch.set(jobRef, {
-      name: `${ex.customer} – ${ex.location}`,
-      customer: ex.customer,
-      location: ex.location,
-      address: null,
-      lat: null,
-      lng: null,
-      status: "finished",
-      startedAt: start,
-      endedAt: start + 45 * 60 * 1000,
-      lastStopAt: start + 40 * 60 * 1000,
-    });
-    ex.stops.forEach((s, i) => {
-      batch.set(db().doc(`users/${uid}/stops/${jobId}-s${i + 1}`), {
-        jobId,
-        note: "",
-        photoPath: photoPaths[i] || null,
-        place: s.place || null,
-        audioPath: null,
-        status: "transcribed",
-        transcript: s.words,
-        photoDescStatus: "described",
-        photoDescription: s.photo,
-        photoDescEdited: false,
-        clientCreatedAt: start + (i + 1) * 12 * 60 * 1000,
-        createdAt: FieldValue.serverTimestamp(),
-      });
-    });
-    for (const [type, text] of [["field", ex.fieldNotes], ["customer", ex.customerComments]]) {
-      batch.set(jobRef.collection("wrapUpNotes").doc(type), { type, text, edited: true, segments: [], createdBy: uid, createdAt: now, updatedAt: now });
-    }
-    await batch.commit();
-    created.push(jobId);
   }
-  // Marks the profile so the app adds them on its own only once
-  await db().doc(`users/${uid}`).set({ exampleJobsAt: now }, { merge: true });
-  logger.info("Example jobs added", { uid, count: created.length });
-  return { created: created.length };
+  if (reset) for (const d of jobs.filter((j) => isExampleJob(j.id))) await deleteJobData(uid, d.id);
+  const added = await Promise.all(EXAMPLES.examples.map((ex) => addExampleJob(uid, ex, now)));
+  const created = added.filter(Boolean).length;
+  await userRef.set({ exampleJobsAt: now }, { merge: true });
+  logger.info("Example jobs added", { uid, created, reset });
+  return { created };
 });
 
 /**
@@ -396,8 +419,10 @@ exports.deleteJob = onCall(piccoloCallable({ timeoutSeconds: 120 }), async (requ
   const job = (await db().doc(`users/${uid}/jobs/${jobId}`).get()).data();
   if (!job) throw new HttpsError("not-found", "This job could not be found.");
   if (job.status === "open") throw new HttpsError("failed-precondition", "End this job before deleting it.");
-  // Anyone can delete their own sample job; deleting real jobs is for the app owner's accounts
-  if (!job.isDemo && !(await isUnlimited(uid))) throw new HttpsError("permission-denied", "Only the sample job can be deleted.");
+  // Anyone can delete their own sample and example jobs; deleting real jobs is for the app owner's accounts
+  if (!job.isDemo && !isExampleJob(jobId) && !(await isUnlimited(uid))) {
+    throw new HttpsError("permission-denied", "Only the sample and example jobs can be deleted.");
+  }
   const stops = await deleteJobData(uid, jobId);
   if (job.orgId) {
     await db().collection("auditLog").add({ uid, orgId: job.orgId, action: "job.delete", jobId, after: { name: job.name || null, stops }, at: Date.now() });

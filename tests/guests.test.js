@@ -269,33 +269,50 @@ test("sample prices: accessories are priced as accessories, not as the main item
   assert.equal(price("security-dental", "Camera junction box", "misc"), 25);
 });
 
-test("Example jobs: only the app owner's accounts; ordinary jobs they can edit and delete", async () => {
-  const reg = await personal("noexamples");
-  await rejects(reg.call("createExampleJobs"), "permission-denied");
+test("Example jobs: each new guest gets their own copy once; the app owner can reset theirs", async () => {
+  const EX = fnRequire("./exampleJobs.js").examples;
+  assert.equal(EX.length, 7);
 
+  // A new guest: seven ordinary jobs with photos and notes, expiring like their other jobs
+  const g = phone();
+  await signInAnonymously(g.auth);
+  await g.call("ensureProfile");
+  const guid = g.auth.currentUser.uid;
+  assert.deepEqual(await g.call("createExampleJobs"), { created: 7 });
+  for (const ex of EX) {
+    const job = await read(g, `users/${guid}/jobs/example-${ex.id}`);
+    assert.deepEqual([job.status, job.customer, job.isDemo], ["finished", ex.customer, undefined]);
+    const stops = (await getDocs(query(collection(g.db, `users/${guid}/stops`), where("jobId", "==", `example-${ex.id}`)))).docs;
+    assert.equal(stops.length, ex.stops.length);
+    for (const s of stops) await getMetadata(ref(g.storage, s.get("photoPath"))); // the photo is there
+    assert.equal((await read(g, `users/${guid}/jobs/example-${ex.id}/wrapUpNotes/field`)).text, ex.fieldNotes);
+  }
+  await waitFor(async () => (await read(g, `users/${guid}/jobs/example-irrigation`)).expiresAt > 0);
+  // Only once: a deleted one doesn't come back; a guest can edit and delete them; no reset
+  await updateDoc(doc(g.db, `users/${guid}/jobs/example-fence-gate`), { customer: "Renamed", location: "Back fence" });
+  assert.deepEqual(await g.call("deleteJob", { jobId: "example-flooring" }), { stops: 3 });
+  assert.deepEqual(await g.call("createExampleJobs"), { created: 0 });
+  await rejects(g.call("createExampleJobs", { reset: true }), "permission-denied");
+
+  // A guest who already has jobs of their own doesn't get them; nor does a signed-in account
+  const busy = phone();
+  await signInAnonymously(busy.auth);
+  await busy.call("ensureProfile");
+  await jobWithPhoto(busy, "mine1");
+  assert.deepEqual(await busy.call("createExampleJobs"), { created: 0 });
+  await rejects((await personal("noexamples")).call("createExampleJobs"), "permission-denied");
+
+  // The app owner: gets them, and Reset puts edited and deleted ones back the way they started
   const p = phone();
   await signInWithCredential(p.auth, google("unlimited@example.com"));
   await p.call("ensureProfile");
   const uid = p.auth.currentUser.uid;
-  const EX = fnRequire("./exampleJobs.js").examples;
-  // Clear any left from an earlier test in this run
-  for (const ex of EX) await p.call("deleteJob", { jobId: `example-${ex.id}` }).catch(() => {});
-
-  assert.deepEqual(await p.call("createExampleJobs"), { created: EX.length });
-  assert.equal(EX.length, 7);
-  assert.ok((await read(p, `users/${uid}`)).exampleJobsAt > 0); // the app adds them on its own only once
-  for (const ex of EX) {
-    const job = await read(p, `users/${uid}/jobs/example-${ex.id}`);
-    assert.deepEqual([job.status, job.customer, job.isDemo, job.expiresAt], ["finished", ex.customer, undefined, undefined]);
-    const stops = (await getDocs(query(collection(p.db, `users/${uid}/stops`), where("jobId", "==", `example-${ex.id}`)))).docs;
-    assert.equal(stops.length, ex.stops.length);
-    for (const s of stops) await getMetadata(ref(p.storage, s.get("photoPath"))); // the photo is there
-    assert.equal((await read(p, `users/${uid}/jobs/example-${ex.id}/wrapUpNotes/field`)).text, ex.fieldNotes);
-  }
-  // Running it again adds nothing; a deleted one comes back
-  assert.deepEqual(await p.call("createExampleJobs"), { created: 0 });
+  for (const ex of EX) await p.call("deleteJob", { jobId: `example-${ex.id}` }).catch(() => {}); // from an earlier run
+  assert.deepEqual(await p.call("createExampleJobs"), { created: 7 });
   await updateDoc(doc(p.db, `users/${uid}/jobs/example-fence-gate`), { customer: "Renamed", location: "Back fence" });
-  assert.deepEqual(await p.call("deleteJob", { jobId: "example-flooring" }), { stops: 3 });
-  assert.deepEqual(await p.call("createExampleJobs"), { created: 1 });
-  assert.equal((await read(p, `users/${uid}/jobs/example-fence-gate`)).customer, "Renamed");
+  await p.call("deleteJob", { jobId: "example-flooring" });
+  assert.deepEqual(await p.call("createExampleJobs", { reset: true }), { created: 7 });
+  assert.equal((await read(p, `users/${uid}/jobs/example-fence-gate`)).customer, "Morales residence");
+  assert.ok(await read(p, `users/${uid}/jobs/example-flooring`));
+  assert.ok((await read(p, `users/${uid}`)).exampleJobsAt > 0);
 });

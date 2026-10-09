@@ -146,7 +146,7 @@ function JobDetail({ uid, job, stops, isActive, online, autoSummary, canDeleteJo
         )}
       </section>
       {/* Anyone can delete their sample job; real jobs only on the app owner's accounts */}
-      {job.status !== "open" && (job.isDemo || canDeleteJobs) && (
+      {job.status !== "open" && (job.isDemo || job.id.startsWith("example-") || canDeleteJobs) && (
         <button className="text-btn is-danger" onClick={() => setDeleting("ask")}>
           Delete This Job
         </button>
@@ -213,26 +213,39 @@ function JobHeading({ job, onSaveDetails }) {
   );
 }
 
-// The app owner's accounts only (canDeleteJobs): adds the example jobs that are missing,
-// so an empty My Jobs can be filled with realistic jobs to show
-function ExampleJobsButton({ online, onNotice }) {
-  const [busy, setBusy] = useState(false);
-  const add = async () => {
-    setBusy(true);
+// The app owner's accounts only (canDeleteJobs): puts the example jobs back the way they
+// started (deletes this account's example jobs, edits and all, and adds fresh copies)
+function ResetExamplesButton({ online, onNotice }) {
+  const [state, setState] = useState(null); // null | "ask" | "busy"
+  const reset = async () => {
+    setState("busy");
     try {
-      const { created } = (await createExampleJobs()).data;
-      onNotice(created ? `Added ${plural(created, "example job")}` : "All the example jobs are already here");
+      const { created } = (await createExampleJobs(true)).data;
+      onNotice(`Example jobs reset (${plural(created, "job")})`);
     } catch (err) {
-      console.warn("Example jobs failed:", err);
-      onNotice("Couldn't add the example jobs. Try again in a minute.");
+      console.warn("Example jobs reset failed:", err);
+      onNotice("Couldn't reset the example jobs. Try again in a minute.");
     } finally {
-      setBusy(false);
+      setState(null);
     }
   };
   return (
-    <button type="button" className="big-btn plain-btn example-jobs-btn" disabled={busy || !online} onClick={add}>
-      {busy ? "Adding example jobs…" : "Add Example Jobs"}
-    </button>
+    <>
+      <button type="button" className="big-btn plain-btn example-jobs-btn" disabled={!online} onClick={() => setState("ask")}>
+        Reset Example Jobs
+      </button>
+      {state && (
+        <Sheet title="Reset the example jobs?" onClose={() => state !== "busy" && setState(null)}>
+          <p>The seven example jobs go back to how they started. Changes you made to them are lost. Your other jobs aren't touched.</p>
+          <button className="big-btn danger-btn" onClick={reset} disabled={state === "busy"}>
+            {state === "busy" ? "Resetting…" : "Reset Example Jobs"}
+          </button>
+          <button className="big-btn plain-btn" onClick={() => setState(null)} disabled={state === "busy"}>
+            Cancel
+          </button>
+        </Sheet>
+      )}
+    </>
   );
 }
 
@@ -299,7 +312,7 @@ export default function JobsScreen({
           {finished.map(card)}
         </section>
       )}
-      {canDeleteJobs && <ExampleJobsButton online={online} onNotice={onNotice} />}
+      {canDeleteJobs && <ResetExamplesButton online={online} onNotice={onNotice} />}
     </>
   );
 }

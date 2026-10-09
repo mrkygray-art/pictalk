@@ -17,8 +17,8 @@ export const createInvite = (email, role) => call("createInvite")({ email, role 
 export const revokeInvite = (inviteId) => call("revokeInvite")({ inviteId });
 export const updateMember = (uid, change) => call("updateMember")({ uid, ...change });
 export const createDemoJob = (different = false) => call("createDemoJob")(different ? { different: true } : {});
-// The app owner's accounts only: adds the example jobs (functions/exampleJobs.js) that are missing
-export const createExampleJobs = () => call("createExampleJobs")();
+// Example jobs (functions/exampleJobs.js): a new guest's own copy; { reset: true } is the app owner's Reset
+export const createExampleJobs = (reset = false) => call("createExampleJobs")(reset ? { reset: true } : {});
 const mergeGuest = (guestToken) => call("mergeGuestIntoAccount")({ guestToken });
 
 export const TEAM_ROLES = [
@@ -69,10 +69,10 @@ export function watchProfile(uid, callback) {
 }
 
 // Does this guest have anything that would be lost by switching to another account?
-// (The sample job doesn't count; it isn't moved.)
+// (The sample and example jobs don't count; they aren't moved.)
 async function guestHasWork(uid) {
-  const jobs = await getDocs(query(collection(db, "users", uid, "jobs"), limit(10)));
-  return jobs.docs.some((d) => !d.get("isDemo"));
+  const jobs = await getDocs(query(collection(db, "users", uid, "jobs"), limit(20)));
+  return jobs.docs.some((d) => !d.get("isDemo") && !d.id.startsWith("example-"));
 }
 
 const MERGE_KEY = "pictalk-pending-merge"; // { token, at }: retried for an hour if the move fails

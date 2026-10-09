@@ -1878,25 +1878,26 @@ button:focus-visible {
   gap: 4px;
 }
 
+/* Tabs wrap onto a second row on narrow phones instead of scrolling out of sight */
 .pc-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  overflow-x: auto;
   padding-bottom: 4px;
-  scrollbar-width: none;
 }
 
 .pc-tabs button {
-  flex-shrink: 0;
+  flex: 1 1 auto;
   min-height: 48px;
-  padding: 10px 14px;
+  padding: 10px 12px;
   border: none;
   border-radius: 14px;
   background: var(--surface);
   color: var(--muted);
   font-family: inherit;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
 }
 

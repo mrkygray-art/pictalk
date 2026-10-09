@@ -52,7 +52,10 @@ export default function HelpScreen({ online, chat, setChat, onClose }) {
   const heard = useRef("");
   const endRef = useRef(null);
 
-  useEffect(() => endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" }), [chat.length, busy]);
+  // Braces matter: Chrome's scrollIntoView returns a Promise, and React would call it as cleanup
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+  }, [chat.length, busy]);
   useEffect(() => () => rec.current?.abort(), []);
 
   const send = async (q) => {

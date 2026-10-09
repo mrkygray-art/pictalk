@@ -79,7 +79,8 @@ export function quoteCsv(src) {
     rows.push([i + 1, l.description, l.qty, l.unit, price(l.unitPrice), Number.isFinite(l.unitPrice) ? price(l.unitPrice * l.qty) : "", l.category])
   );
   const t = src.totals;
-  rows.push([], ["", "Subtotal", "", "", "", price(t.subtotal)], ["", `Markup (${src.quote.markupPct || 0}%)`, "", "", "", price(t.markup)]);
+  rows.push([], ["", "Parts & materials", "", "", "", price(t.materials)], ["", "Labor", "", "", "", t.laborLines ? price(t.labor) : "None"]);
+  rows.push(["", "Subtotal", "", "", "", price(t.subtotal)], ["", `Markup (${src.quote.markupPct || 0}%)`, "", "", "", price(t.markup)]);
   rows.push(["", `Tax (${src.quote.taxPct || 0}%)`, "", "", "", price(t.tax)], ["", "Total", "", "", "", price(t.total)]);
   if (t.unpriced) rows.push(["", `${t.unpriced} line(s) not priced yet`]);
   if (src.watermark) rows.push(["", src.watermark]);

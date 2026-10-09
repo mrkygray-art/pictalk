@@ -614,6 +614,14 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
           </div>
           <div className="pc-totals">
             <p>
+              <span>Parts &amp; materials</span>
+              <span>{money(totals.materials)}</span>
+            </p>
+            <p>
+              <span>Labor</span>
+              <span>{totals.laborLines ? money(totals.labor) : "None yet"}</span>
+            </p>
+            <p className="pc-subtotal">
               <span>Subtotal</span>
               <span>{money(totals.subtotal)}</span>
             </p>
@@ -629,6 +637,7 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
               <span>Total</span>
               <span>{money(totals.total)}</span>
             </p>
+            {totals.laborLines === 0 && <p className="pc-empty">No labor lines yet. Tap + Add labor to add some.</p>}
             {totals.unpriced > 0 && (
               <p className="pc-empty">
                 {totals.unpriced} line{totals.unpriced === 1 ? " needs a price" : "s need prices"}. Tap a line to add one.

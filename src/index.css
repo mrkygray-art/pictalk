@@ -2592,3 +2592,9 @@ div.adm-stat {
   background: var(--text);
   color: var(--bg);
 }
+
+/* Parts & materials and Labor sit above the subtotal */
+.pc-totals .pc-subtotal {
+  border-top: 1px solid var(--surface-2);
+  padding-top: 8px;
+}

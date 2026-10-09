@@ -198,6 +198,8 @@ export async function renderPiccoloPdf(src, sections = { workorder: true, bom: t
       pdf.text(pdfSafe(value), PAGE.w - M, y + 11, { align: "right" });
       y += bold ? 18 : 15;
     };
+    total("Parts & materials", money(t.materials));
+    total("Labor", t.laborLines ? money(t.labor) : "None");
     total("Subtotal", money(t.subtotal));
     total(`Markup (${src.quote.markupPct || 0}%)`, money(t.markup));
     total(`Tax (${src.quote.taxPct || 0}%)`, money(t.tax));

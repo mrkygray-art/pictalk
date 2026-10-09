@@ -144,19 +144,35 @@ export function captureChangedSince(draft, { stops, notes }) {
 export const money = (n) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { style: "currency", currency: "USD" }) : "—";
 
-/** Quote totals from the priced lines; unpriced lines are counted so the UI can say "needs price". */
+/**
+ * Quote totals from the priced lines, split into parts & materials and labor (category
+ * "labor"); unpriced lines are counted so the UI can say "needs price", and laborLines says
+ * whether any labor has been added at all.
+ */
 export function quoteTotals(bom, quote = {}) {
-  let subtotal = 0;
+  let materials = 0;
+  let labor = 0;
   let unpriced = 0;
+  let laborLines = 0;
   for (const ln of bom || []) {
-    if (Number.isFinite(ln.unitPrice)) subtotal += ln.unitPrice * (Number(ln.qty) || 0);
-    else unpriced += 1;
+    const isLabor = ln.category === "labor";
+    if (isLabor) laborLines += 1;
+    if (!Number.isFinite(ln.unitPrice)) {
+      unpriced += 1;
+      continue;
+    }
+    const amount = ln.unitPrice * (Number(ln.qty) || 0);
+    if (isLabor) labor += amount;
+    else materials += amount;
   }
   // Nothing priced yet: show dashes, not a $0.00 that looks like a real total
-  if (unpriced === (bom || []).length) return { subtotal: NaN, markup: NaN, tax: NaN, total: NaN, unpriced };
+  if (unpriced === (bom || []).length) {
+    return { materials: NaN, labor: NaN, subtotal: NaN, markup: NaN, tax: NaN, total: NaN, unpriced, laborLines };
+  }
+  const subtotal = materials + labor;
   const markup = (subtotal * (Number(quote.markupPct) || 0)) / 100;
   const tax = ((subtotal + markup) * (Number(quote.taxPct) || 0)) / 100;
-  return { subtotal, markup, tax, total: subtotal + markup + tax, unpriced };
+  return { materials, labor, subtotal, markup, tax, total: subtotal + markup + tax, unpriced, laborLines };
 }
 
 // ---------- finalize ----------

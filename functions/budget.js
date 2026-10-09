@@ -2,8 +2,9 @@
 // - A global daily cap on AI calls (all users together), so an open demo can't run up an
 //   unbounded bill. Counted in usage/global/days/{yyyy-mm-dd} (function-only). Hitting it
 //   logs an error with alert: "ai-daily-cap" (set a Cloud Logging alert on that).
-// - Piccolo callables enforce App Check when PICCOLO_ENFORCE_APP_CHECK=1 (set it in the
-//   real project once the app has an App Check site key; the emulator never enforces).
+// - Callables (Piccolo, accounts, the job summary, the live-words token) enforce App Check
+//   when PICCOLO_ENFORCE_APP_CHECK=1 (set per project in functions/.env.<project> once the
+//   app has an App Check site key; the emulator never enforces).
 const { HttpsError } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
@@ -29,7 +30,7 @@ async function reserveGlobalAi(kind) {
   });
 }
 
-/** Options for Piccolo's callable functions. */
+/** Options for the app's callable functions (App Check enforcement). */
 const piccoloCallable = (opts = {}) => ({
   ...opts,
   enforceAppCheck: process.env.PICCOLO_ENFORCE_APP_CHECK === "1" && process.env.FUNCTIONS_EMULATOR !== "true",

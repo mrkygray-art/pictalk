@@ -6,10 +6,11 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { DEEPGRAM_API_KEY, KEYTERMS, MODEL } = require("./deepgram");
+const { piccoloCallable } = require("./budget");
 
 const PER_HOUR_LIMIT = 60; // each Continue opens a new connection
 
-exports.getDeepgramStreamToken = onCall({ secrets: [DEEPGRAM_API_KEY], timeoutSeconds: 30 }, async (request) => {
+exports.getDeepgramStreamToken = onCall(piccoloCallable({ secrets: [DEEPGRAM_API_KEY], timeoutSeconds: 30 }), async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign-in is required.");
 

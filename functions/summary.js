@@ -7,7 +7,7 @@ const { defineSecret } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const Anthropic = require("@anthropic-ai/sdk");
-const { reserveGlobalAi } = require("./budget");
+const { reserveGlobalAi, piccoloCallable } = require("./budget");
 const { isUnlimited } = require("./limits");
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
@@ -201,7 +201,7 @@ async function reserveGeneration(uid, jobId, unlimited = false) {
 }
 
 exports.generateJobSummary = onCall(
-  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 120, memory: "512MiB" },
+  piccoloCallable({ secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 120, memory: "512MiB" }),
   async (request) => {
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Sign-in is required.");

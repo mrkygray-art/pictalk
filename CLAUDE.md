@@ -33,7 +33,7 @@ Piccolo is the second pane: it turns finished PicTalk jobs into a work order, BO
 0. `functions/.env` (git-ignored) has `UNLIMITED_AI_EMAILS`; it's deployed to every project from this machine.
 1. `.firebaserc`: make `pictalk-6cbff` the default again.
 2. Functions env for production (`functions/.env.pictalk-6cbff`): `GUEST_EXPIRY_START` is the launch time (ms) — never earlier, or existing users' jobs would start expiring. Optional: `GLOBAL_AI_DAILY_CAP`.
-3. App Check (not done yet): register the web app with reCAPTCHA Enterprise, set `VITE_APPCHECK_SITE_KEY` for the build, test, then set `PICCOLO_ENFORCE_APP_CHECK=1`.
+3. App Check: create a reCAPTCHA Enterprise ("Fraud Defense") score key for the site's domains (`gcloud recaptcha keys create … --web --domains=… --integration-type=score`), register the web app with it in Firebase App Check (Apps tab; not the deprecated "reCAPTCHA" classic option; registration takes a minute or two to work), put the key in the build's env file (`.env.devcloud` for the test site, `.env.production` for live), check the token exchange succeeds, then set `PICCOLO_ENFORCE_APP_CHECK=1` in `functions/.env.<project>` and redeploy functions. All callables use `piccoloCallable()` (Piccolo, accounts, `generateJobSummary`, `getDeepgramStreamToken`). Firestore / Storage App Check enforcement (console) is not on. Done on the test project 2026-10-08.
 4. Grant the functions service account "Service Account Token Creator" so `piccoloMediaLinks` can sign links.
 5. Deploy `firestore.indexes.json` (invites, auditLog, jobs.expiresAt collection group) before the functions that query them.
 6. Firebase Auth: enable Google and Email link sign-in; add the hosting domain to authorized domains.

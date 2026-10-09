@@ -120,7 +120,9 @@ export default function HelpScreen({ online, chat, setChat, onClose }) {
       </button>
       <h1 className="page-title">Help</h1>
 
-      <a className="help-guide" href={QUICK_START_PDF} target="_blank" rel="noopener" download>
+      {/* No `download`: with target=_blank, an installed desktop app opened a blank window and
+          only downloaded the file. Opening it shows the PDF; sw.js serves it offline. */}
+      <a className="help-guide" href={QUICK_START_PDF} target="_blank" rel="noopener">
         <strong>PicTalk quick-start guide</strong>
         <span>One-page PDF: your first job in five steps, plus tips. Works without signal.</span>
       </a>

@@ -14,6 +14,18 @@ const match = (req) => caches.match(req, { ignoreVary: true });
 
 const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
 
+const appPage = async (req) => {
+  try {
+    const fresh = await Promise.race([fetch(req), timeout(4000)]);
+    if (fresh.ok && fresh.headers.get('content-type')?.includes('text/html')) {
+      (await caches.open(CACHE)).put('/index.html', fresh.clone());
+    }
+    return fresh;
+  } catch {
+    return (await match('/index.html')) || Response.error();
+  }
+};
+
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
@@ -39,17 +51,15 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return; // Firebase, Google APIs: network only
   if (url.pathname.startsWith('/__/')) return;      // Firebase Hosting internals
 
+  // Opening a saved file directly (the quick-start PDF): use the saved copy
+  if (req.mode === 'navigate' && url.pathname !== '/' && url.pathname !== '/index.html') {
+    event.respondWith((async () => (await match(url.pathname)) || appPage(req))());
+    return;
+  }
+
   // Opening the app: try the network (4s max, for weak signal), else use the saved copy
   if (req.mode === 'navigate') {
-    event.respondWith((async () => {
-      try {
-        const fresh = await Promise.race([fetch(req), timeout(4000)]);
-        if (fresh.ok) (await caches.open(CACHE)).put('/index.html', fresh.clone());
-        return fresh;
-      } catch {
-        return (await match('/index.html')) || Response.error();
-      }
-    })());
+    event.respondWith(appPage(req));
     return;
   }
 

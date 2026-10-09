@@ -188,7 +188,7 @@ function EndJobSheet({ uid, job, hasDraft, online, onFinish, onClose, canSendToP
 
 // onSendToPiccolo(jobId) opens a finished job in the Piccolo pane; openJob ({ jobId, key })
 // asks PicTalk to show that job's page (from Piccolo). Both optional.
-export default function App({ onSendToPiccolo, openJob }) {
+export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false }) {
   const [pending, setPending] = useState([]); // saved on this phone, not uploaded yet
   const [localPhotos, setLocalPhotos] = useState(new Map()); // uploaded stop id -> new photo still on this phone
   const [synced, setSynced] = useState([]); // safely in the cloud
@@ -557,6 +557,7 @@ export default function App({ onSendToPiccolo, openJob }) {
       {view === "jobs" ? (
         <JobsScreen
           key={jobsTarget?.key ?? 0}
+          canDeleteJobs={canDeleteJobs}
           uid={uid}
           initialJobId={jobsTarget?.jobId}
           autoSummaryJobId={jobsTarget?.autoSummary ? jobsTarget.jobId : null}

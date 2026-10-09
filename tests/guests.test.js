@@ -177,16 +177,41 @@ test("the global daily AI cap stops drafts for everyone", async () => {
   await blocked(getDoc(doc(phone().db, "usage/global/days/x"))); // not readable by the app
 });
 
-test("Delete Job: the owner deletes a finished job with its stops and files; not the open one, not someone else's", async () => {
-  const p = await personal("deleter");
+test("Delete Job: anyone deletes their sample; real jobs only on the app owner's accounts", async () => {
+  // A regular account: real jobs are refused, the sample can go
+  const reg = await personal("regular");
+  const ruid = reg.auth.currentUser.uid;
+  await jobWithPhoto(reg, "reg1");
+  await rejects(reg.call("deleteJob", { jobId: "reg1" }), "permission-denied");
+  assert.equal((await adminDb().doc(`users/${ruid}`).get()).get("canDeleteJobs"), false);
+  const { jobId: sample } = await reg.call("createDemoJob");
+  assert.deepEqual(await reg.call("deleteJob", { jobId: sample }), { stops: 4 });
+
+  // The owner's account (UNLIMITED_AI_EMAILS; unlimited@example.com in the emulator)
+  const p = phone();
+  await signInWithCredential(p.auth, google("unlimited@example.com"));
+  await p.call("ensureProfile");
   const { uid, photoPath } = await jobWithPhoto(p, "del1");
+  assert.equal((await adminDb().doc(`users/${uid}`).get()).get("canDeleteJobs"), true);
   await setDoc(doc(p.db, `users/${uid}/jobs/del2`), { name: "Open", status: "open", startedAt: 1 });
   await rejects(p.call("deleteJob", { jobId: "del2" }), "failed-precondition");
-  const other = await personal("notmine");
-  await rejects(other.call("deleteJob", { jobId: "del1" }), "not-found");
+  await rejects(reg.call("deleteJob", { jobId: "del1" }), "not-found");
 
   assert.deepEqual(await p.call("deleteJob", { jobId: "del1" }), { stops: 1 });
   assert.equal(await read(p, `users/${uid}/jobs/del1`), undefined);
   assert.equal(await read(p, `users/${uid}/stops/del1-s1`), undefined);
   await rejects(getMetadata(ref(p.storage, photoPath)), "storage/object-not-found");
+});
+
+test("Try Piccolo replaces an older sample with the current one", async () => {
+  const p = await personal("oldsample");
+  const uid = p.auth.currentUser.uid;
+  const { jobId: first } = await p.call("createDemoJob");
+  await adminDb().doc(`users/${uid}/jobs/${first}`).update({ demoVersion: 1 }); // an old sample
+  const { jobId: second, created } = await p.call("createDemoJob");
+  assert.equal(created, true);
+  assert.notEqual(second, first);
+  assert.equal(await read(p, `users/${uid}/jobs/${first}`), undefined);
+  assert.equal((await read(p, `users/${uid}/jobs/${second}`)).demoVersion, 2);
+  await blocked(updateDoc(doc(p.db, `users/${uid}/jobs/${second}`), { demoVersion: 9 }));
 });

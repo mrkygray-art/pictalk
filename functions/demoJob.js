@@ -1,6 +1,8 @@
 // The "Try Piccolo" sample job: a short, realistic security site walk (made-up business).
 // Words are written the way a tech talks into the phone. No real customer data.
 module.exports = {
+  // Bump when the sample changes: Try Piccolo replaces an older sample with the new one
+  version: 2,
   customer: "Sample: Riverside Dental",
   location: "Front office and parking lot",
   stops: [

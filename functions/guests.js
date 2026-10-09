@@ -14,6 +14,7 @@ const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 const { piccoloCallable } = require("./budget");
 const DEMO = require("./demoJob");
+const { isUnlimited } = require("./limits");
 const path = require("node:path");
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -242,8 +243,11 @@ exports.createDemoJob = onCall(piccoloCallable({ timeoutSeconds: 60 }), async (r
     throw new HttpsError("permission-denied", "Sign in (Save my work) to use Piccolo.");
   }
   const now = Date.now();
-  const existing = (await db().collection(`users/${uid}/jobs`).where("isDemo", "==", true).get()).docs.find((d) => (d.get("expiresAt") || 0) > now);
-  if (existing) return { jobId: existing.id, created: false };
+  // One sample at a time; an older version of the sample is replaced with the current one
+  const samples = (await db().collection(`users/${uid}/jobs`).where("isDemo", "==", true).get()).docs;
+  const current = samples.find((d) => (d.get("expiresAt") || 0) > now && (d.get("demoVersion") || 1) >= DEMO.version);
+  if (current) return { jobId: current.id, created: false };
+  for (const old of samples) await deleteJobData(uid, old.id);
 
   const jobId = `demo-${now.toString(36)}`;
   const start = now - 60 * 60 * 1000;
@@ -261,6 +265,7 @@ exports.createDemoJob = onCall(piccoloCallable({ timeoutSeconds: 60 }), async (r
     endedAt: start + 40 * 60 * 1000,
     lastStopAt: start + 35 * 60 * 1000,
     isDemo: true,
+    demoVersion: DEMO.version,
     expiresAt: now + GUEST_DAYS * DAY,
   });
   // The sample photos (AI-generated images matching each stop), copied into the user's own
@@ -311,6 +316,8 @@ exports.deleteJob = onCall(piccoloCallable({ timeoutSeconds: 120 }), async (requ
   const job = (await db().doc(`users/${uid}/jobs/${jobId}`).get()).data();
   if (!job) throw new HttpsError("not-found", "This job could not be found.");
   if (job.status === "open") throw new HttpsError("failed-precondition", "End this job before deleting it.");
+  // Anyone can delete their own sample job; deleting real jobs is for the app owner's accounts
+  if (!job.isDemo && !(await isUnlimited(uid))) throw new HttpsError("permission-denied", "Only the sample job can be deleted.");
   const stops = await deleteJobData(uid, jobId);
   if (job.orgId) {
     await db().collection("auditLog").add({ uid, orgId: job.orgId, action: "job.delete", jobId, after: { name: job.name || null, stops }, at: Date.now() });

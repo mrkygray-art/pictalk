@@ -11,6 +11,7 @@ const { getAuth } = require("firebase-admin/auth");
 const { getFirestore } = require("firebase-admin/firestore");
 const { piccoloCallable } = require("./budget");
 const { clearGuestExpiry } = require("./guests");
+const { isUnlimited } = require("./limits");
 
 const TEAM_ROLES = ["admin", "estimator", "field", "installer"];
 const DEFAULTS = { markupPct: 0, taxPct: 0, terms: "", quotePrefix: "Q-" };
@@ -76,6 +77,7 @@ function applyInvite(tx, who, inviteSnap, profile) {
 exports.ensureProfile = onCall(piccoloCallable({ timeoutSeconds: 30 }), async (request) => {
   const who = await caller(request);
   const userRef = db().doc(`users/${who.uid}`);
+  const canDeleteJobs = !who.isAnonymous && (await isUnlimited(who.uid)); // the app owner's accounts
   const result = await db().runTransaction(async (tx) => {
     const snap = await tx.get(userRef);
     const profile = snap.exists ? snap.data() : null;
@@ -95,7 +97,7 @@ exports.ensureProfile = onCall(piccoloCallable({ timeoutSeconds: 30 }), async (r
       }
     }
 
-    const update = { isAnonymous: who.isAnonymous, email: who.email, lastSeenAt: now, updatedAt: now };
+    const update = { isAnonymous: who.isAnonymous, email: who.email, canDeleteJobs, lastSeenAt: now, updatedAt: now };
     if (who.displayName) update.displayName = who.displayName;
     if (!profile) {
       Object.assign(update, {

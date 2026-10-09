@@ -129,7 +129,8 @@ function useAccount() {
   useEffect(() => {
     if (!user || !profile?.loaded) return;
     const key = `${user.uid}:${user.isAnonymous}`;
-    const stale = profile.missing || profile.isAnonymous !== user.isAnonymous;
+    // Also refresh profiles made before canDeleteJobs existed
+    const stale = profile.missing || profile.isAnonymous !== user.isAnonymous || (!user.isAnonymous && profile.canDeleteJobs === undefined);
     if (!stale || asked.current === key) return;
     asked.current = key;
     ensureProfile().catch((err) => {
@@ -243,6 +244,7 @@ export default function Shell() {
             choosePane("piccolo");
           }}
           openJob={pictalkTarget}
+          canDeleteJobs={!!profile?.canDeleteJobs}
         />
       </div>
       {pane === "piccolo" && view === "panes" && (

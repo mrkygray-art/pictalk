@@ -153,7 +153,7 @@ service cloud.firestore {
                                    'startedAt', 'endedAt', 'lastStopAt',
                                    'customer', 'location', 'exportCount',
                                    'piccoloStatus', 'latestDraftId', 'piccoloDraftedAt', 'piccoloDraftCount',
-                                   'latestFinalVersion', 'finalizedAt', 'expiresAt', 'isDemo',
+                                   'latestFinalVersion', 'finalizedAt', 'expiresAt', 'isDemo', 'demoVersion',
                                    'orgId', 'assignedTo', 'customerId', 'salesStatus'])
             && (d.get('piccoloStatus', null) == null
                 || d.piccoloStatus in ['none', 'drafted', 'editing', 'finalized'])
@@ -191,6 +191,7 @@ service cloud.firestore {
           && request.resource.data.get('latestFinalVersion', 0) == 0
           && request.resource.data.get('expiresAt', null) == null
           && request.resource.data.get('isDemo', false) == false
+          && request.resource.data.get('demoVersion', null) == null
           && request.resource.data.get('orgId', null) == null
           && request.resource.data.get('assignedTo', null) == null
           && request.resource.data.get('customerId', null) == null
@@ -201,6 +202,7 @@ service cloud.firestore {
           && request.resource.data.get('finalizedAt', 0) == resource.data.get('finalizedAt', 0)
           && request.resource.data.get('expiresAt', null) == resource.data.get('expiresAt', null)
           && request.resource.data.get('isDemo', false) == resource.data.get('isDemo', false)
+          && request.resource.data.get('demoVersion', null) == resource.data.get('demoVersion', null)
           && request.resource.data.get('orgId', null) == resource.data.get('orgId', null)
           && request.resource.data.get('assignedTo', null) == resource.data.get('assignedTo', null)
           && request.resource.data.get('customerId', null) == resource.data.get('customerId', null)

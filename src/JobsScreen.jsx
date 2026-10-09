@@ -60,7 +60,7 @@ function jumpToStop(id) {
   return true;
 }
 
-function JobDetail({ uid, job, stops, isActive, online, autoSummary, onBack, onCamera, onReopen, onSaveDetails, onStopSelect, onStopEdit, photoDesc, onExport, onNotice, onSendToPiccolo }) {
+function JobDetail({ uid, job, stops, isActive, online, autoSummary, canDeleteJobs, onBack, onCamera, onReopen, onSaveDetails, onStopSelect, onStopEdit, photoDesc, onExport, onNotice, onSendToPiccolo }) {
   const notes = useWrapUpNotes(uid, job.id);
   const hasNotes = !!(notes.notes.field || notes.notes.customer || notes.pending.field.length || notes.pending.customer.length);
   const [deleting, setDeleting] = useState(null); // null | "ask" | "busy"
@@ -144,7 +144,8 @@ function JobDetail({ uid, job, stops, isActive, online, autoSummary, onBack, onC
           </>
         )}
       </section>
-      {job.status !== "open" && (
+      {/* Anyone can delete their sample job; real jobs only on the app owner's accounts */}
+      {job.status !== "open" && (job.isDemo || canDeleteJobs) && (
         <button className="text-btn is-danger" onClick={() => setDeleting("ask")}>
           Delete This Job
         </button>
@@ -213,7 +214,7 @@ function JobHeading({ job, onSaveDetails }) {
 
 /** My Jobs list, and the page for one job. */
 export default function JobsScreen({
-  uid, jobs, stops, activeJobId, online, initialJobId, autoSummaryJobId,
+  uid, jobs, stops, activeJobId, online, initialJobId, autoSummaryJobId, canDeleteJobs = false,
   onClose, onReopen, onSaveDetails, onStopSelect, onStopEdit, photoDesc, onExport, onNotice, onSendToPiccolo,
 }) {
   const [openId, setOpenId] = useState(initialJobId ?? null);
@@ -243,6 +244,7 @@ export default function JobsScreen({
         onSendToPiccolo={onSendToPiccolo}
         uid={uid}
         autoSummary={job.id === autoSummaryJobId}
+        canDeleteJobs={canDeleteJobs}
       />
     );
   }

@@ -29,3 +29,6 @@ dist-ssr
 dist-lab
 lab/out
 lab/clips/*.wav
+
+# Functions settings that must stay private (e.g. UNLIMITED_AI_EMAILS); deployed from this machine
+functions/.env

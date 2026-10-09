@@ -146,8 +146,8 @@ function EditWordsSheet({ title, initial, maxLength = 5000, onSave, onClose }) {
   );
 }
 
-// End Job: optional Customer and Location, then finish
-function EndJobSheet({ uid, job, hasDraft, online, onFinish, onClose }) {
+// End Job: optional Customer and Location, then finish (and optionally open it in Piccolo)
+function EndJobSheet({ uid, job, hasDraft, online, onFinish, onClose, canSendToPiccolo }) {
   const [details, setDetails] = useState({ customer: job.customer || "", location: job.location || "" });
   const notes = useWrapUpNotes(uid, job.id);
   const hasNotes = !!(notes.notes.field || notes.notes.customer || notes.pending.field.length || notes.pending.customer.length);
@@ -173,6 +173,11 @@ function EndJobSheet({ uid, job, hasDraft, online, onFinish, onClose }) {
           <FlagIcon />
           Save &amp; Finish Job
         </button>
+        {canSendToPiccolo && (
+          <button type="button" className="big-btn piccolo-send-btn" onClick={() => onFinish(details, { toPiccolo: true })}>
+            Finish &amp; Send to Piccolo
+          </button>
+        )}
         <button type="button" className="big-btn plain-btn" onClick={onClose}>
           Keep Going
         </button>
@@ -181,7 +186,9 @@ function EndJobSheet({ uid, job, hasDraft, online, onFinish, onClose }) {
   );
 }
 
-export default function App() {
+// onSendToPiccolo(jobId) opens a finished job in the Piccolo pane; openJob ({ jobId, key })
+// asks PicTalk to show that job's page (from Piccolo). Both optional.
+export default function App({ onSendToPiccolo, openJob }) {
   const [pending, setPending] = useState([]); // saved on this phone, not uploaded yet
   const [localPhotos, setLocalPhotos] = useState(new Map()); // uploaded stop id -> new photo still on this phone
   const [synced, setSynced] = useState([]); // safely in the cloud
@@ -199,6 +206,14 @@ export default function App() {
   const [view, setView] = useState("camera"); // "camera" | "jobs"
   const [jobsTarget, setJobsTarget] = useState(null); // { jobId, autoSummary, key } when opening a job directly
   const [deleting, setDeleting] = useState(false);
+  const [seenOpenJob, setSeenOpenJob] = useState(null);
+
+  // Piccolo asked to show a job here ("Add photos or notes in PicTalk")
+  if (openJob && openJob.key !== seenOpenJob) {
+    setSeenOpenJob(openJob.key);
+    setJobsTarget((t) => ({ jobId: openJob.jobId, key: (t?.key ?? 0) + 1 }));
+    setView("jobs");
+  }
 
   const fileInput = useRef(null);
   const recorder = useRef(null);
@@ -391,7 +406,7 @@ export default function App() {
     if (next === "talk") startRecording();
   };
 
-  const finishJob = (details) => {
+  const finishJob = (details, { toPiccolo = false } = {}) => {
     endJob(uid, activeJob.id, details);
     clearDraft();
     setSheet(null);
@@ -399,6 +414,7 @@ export default function App() {
     // Go straight to the finished job's page, where the AI summary gets built
     setJobsTarget((t) => ({ jobId: activeJob.id, autoSummary: true, key: (t?.key ?? 0) + 1 }));
     showView("jobs");
+    if (toPiccolo) onSendToPiccolo?.(activeJob.id);
   };
 
   const canSave = activeJob && (photo || audio) && !recording && !saving;
@@ -553,6 +569,7 @@ export default function App() {
           onReopen={requestReopen}
           onSaveDetails={saveDetails}
           onExport={(job) => setSheet({ type: "export", job })}
+          onSendToPiccolo={onSendToPiccolo}
           onStopSelect={selectStop}
           onStopEdit={editWords}
           photoDesc={photoDesc}
@@ -682,7 +699,7 @@ export default function App() {
       )}
 
       {sheet?.type === "end" && activeJob && (
-        <EndJobSheet uid={uid} job={activeJob} hasDraft={!!(photo || audio)} online={online} onFinish={finishJob} onClose={() => setSheet(null)} />
+        <EndJobSheet uid={uid} job={activeJob} hasDraft={!!(photo || audio)} online={online} onFinish={finishJob} onClose={() => setSheet(null)} canSendToPiccolo={!!onSendToPiccolo} />
       )}
 
       {sheet?.type === "reopen" && (

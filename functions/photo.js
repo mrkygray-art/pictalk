@@ -11,6 +11,8 @@ const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 const Anthropic = require("@anthropic-ai/sdk");
 const sharp = require("sharp");
+const { reserveGlobalAi } = require("./budget");
+const { isUnlimited } = require("./limits");
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 
@@ -97,7 +99,7 @@ function fakeModel(jpeg, words) {
  * Claim the request (requested → describing) and count it against the limits.
  * Returns the stop's data, or null if there's nothing to do or a limit was hit.
  */
-async function claim(ref, uid) {
+async function claim(ref, uid, unlimited = false) {
   const usageRef = db().doc(`users/${uid}/aiUsage/${new Date().toISOString().slice(0, 10)}`);
   return db().runTransaction(async (tx) => {
     const [snap, usage] = await Promise.all([tx.get(ref), tx.get(usageRef)]);
@@ -109,7 +111,7 @@ async function claim(ref, uid) {
       return null;
     };
     if (stopCount >= PER_STOP_LIMIT) return refuse(`This demo allows ${PER_STOP_LIMIT} photo descriptions per stop.`);
-    if (dayCount >= PER_DAY_LIMIT) return refuse(`This demo allows ${PER_DAY_LIMIT} photo descriptions per day. Try again tomorrow.`);
+    if (dayCount >= PER_DAY_LIMIT && !unlimited) return refuse(`This demo allows ${PER_DAY_LIMIT} photo descriptions per day. Try again tomorrow.`);
     tx.set(usageRef, { photos: dayCount + 1, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     tx.update(ref, { photoDescStatus: "describing", photoDescCount: stopCount + 1, photoDescError: null });
     return snap.data();
@@ -136,8 +138,14 @@ exports.describeStopPhoto = onDocumentWritten(
     // transcribeStop's own update re-triggers this function once the words are in
     if (isTranscriptPending(after.data(), Date.now())) return;
 
-    const stop = await claim(ref, uid);
+    const stop = await claim(ref, uid, await isUnlimited(uid));
     if (!stop) return;
+    try {
+      await reserveGlobalAi("photo");
+    } catch (err) {
+      await ref.update({ photoDescStatus: "failed", photoDescError: err.message });
+      return;
+    }
 
     const started = Date.now();
     let result = null;

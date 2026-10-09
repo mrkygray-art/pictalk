@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 const APP = 'http://localhost:5176/';
-const FS = 'http://127.0.0.1:8080/v1/projects/pictalk-6cbff/databases/(default)/documents';
+const FS = 'http://127.0.0.1:8080/v1/projects/demo-pictalk/databases/(default)/documents';
 const ADMIN = { Authorization: 'Bearer owner' };
 const OUT = path.join(__dirname, 'e2e-live');
 fs.rmSync(OUT, { recursive: true, force: true });

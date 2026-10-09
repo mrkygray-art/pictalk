@@ -1,0 +1,10 @@
+[
+  {
+    "origin": [
+      "https://pictalk-dev-52368.web.app",
+      "https://pictalk-dev-52368.firebaseapp.com"
+    ],
+    "method": ["GET"],
+    "maxAgeSeconds": 3600
+  }
+]

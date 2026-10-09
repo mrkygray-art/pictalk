@@ -4,8 +4,29 @@ service firebase.storage {
     function isOwner(uid) {
       return request.auth != null && request.auth.uid == uid;
     }
+    // The caller's profile (company and role), from Firestore
+    function me() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+    function activeIn(orgId) {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && me().get('orgId', null) == orgId
+        && me().get('status', 'active') == 'active';
+    }
+    // A stop's photo or voice note ("{stopId}.{ext}") when the stop is shared with the caller's
+    // company: admins, estimators, and field see it; installers don't
+    function teamStopFile(uid, file) {
+      let stopPath = /databases/(default)/documents/users/$(uid)/stops/$(file.split('[.]')[0]);
+      return request.auth != null
+        && firestore.exists(stopPath)
+        && firestore.get(stopPath).data.get('orgId', null) != null
+        && activeIn(firestore.get(stopPath).data.orgId)
+        && me().get('role', null) in ['admin', 'estimator', 'field'];
+    }
     match /photos/{uid}/{file} {
-      allow read, delete: if isOwner(uid);
+      allow read: if isOwner(uid) || teamStopFile(uid, file);
+      allow delete: if isOwner(uid);
       allow create, update: if isOwner(uid)
         && request.resource.size < 15 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
@@ -18,8 +39,20 @@ service firebase.storage {
         && request.resource.size < 25 * 1024 * 1024
         && request.resource.contentType == 'application/pdf';
     }
+    // Piccolo finals: copies of a job's photos and audio, made by finalizePiccolo (never
+    // written by the app, and outside voice/, so the 5-day voice lifecycle doesn't apply).
+    // A shared job's finals are open to the company's admins and estimators.
+    match /finals/{uid}/{jobId}/{version}/{file} {
+      allow read: if isOwner(uid)
+        || (request.auth != null
+            && firestore.exists(/databases/(default)/documents/users/$(uid)/jobs/$(jobId))
+            && firestore.get(/databases/(default)/documents/users/$(uid)/jobs/$(jobId)).data.get('orgId', null) != null
+            && activeIn(firestore.get(/databases/(default)/documents/users/$(uid)/jobs/$(jobId)).data.orgId)
+            && me().get('role', null) in ['admin', 'estimator']);
+    }
     match /voice/{uid}/{file} {
-      allow read, delete: if isOwner(uid);
+      allow read: if isOwner(uid) || teamStopFile(uid, file);
+      allow delete: if isOwner(uid);
       allow create, update: if isOwner(uid)
         && request.resource.size < 20 * 1024 * 1024
         && request.resource.contentType.matches('audio/.*');

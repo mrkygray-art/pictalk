@@ -59,7 +59,7 @@ function jumpToStop(id) {
   return true;
 }
 
-function JobDetail({ uid, job, stops, isActive, online, autoSummary, onBack, onCamera, onReopen, onSaveDetails, onStopSelect, onStopEdit, photoDesc, onExport, onNotice }) {
+function JobDetail({ uid, job, stops, isActive, online, autoSummary, onBack, onCamera, onReopen, onSaveDetails, onStopSelect, onStopEdit, photoDesc, onExport, onNotice, onSendToPiccolo }) {
   const notes = useWrapUpNotes(uid, job.id);
   const hasNotes = !!(notes.notes.field || notes.notes.customer || notes.pending.field.length || notes.pending.customer.length);
   return (
@@ -87,6 +87,11 @@ function JobDetail({ uid, job, stops, isActive, online, autoSummary, onBack, onC
         <PdfIcon />
         Export PDF
       </button>
+      {job.status !== "open" && onSendToPiccolo && (
+        <button className="big-btn piccolo-send-btn" onClick={() => onSendToPiccolo(job.id)}>
+          Open in Piccolo
+        </button>
+      )}
       {job.status !== "open" && (
         <JobSummary
           uid={uid}
@@ -170,7 +175,7 @@ function JobHeading({ job, onSaveDetails }) {
 /** My Jobs list, and the page for one job. */
 export default function JobsScreen({
   uid, jobs, stops, activeJobId, online, initialJobId, autoSummaryJobId,
-  onClose, onReopen, onSaveDetails, onStopSelect, onStopEdit, photoDesc, onExport, onNotice,
+  onClose, onReopen, onSaveDetails, onStopSelect, onStopEdit, photoDesc, onExport, onNotice, onSendToPiccolo,
 }) {
   const [openId, setOpenId] = useState(initialJobId ?? null);
   const stopsOf = (id) => stops.filter((s) => s.jobId === id);
@@ -196,6 +201,7 @@ export default function JobsScreen({
         photoDesc={photoDesc}
         onExport={onExport}
         onNotice={onNotice}
+        onSendToPiccolo={onSendToPiccolo}
         uid={uid}
         autoSummary={job.id === autoSummaryJobId}
       />

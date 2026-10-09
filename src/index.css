@@ -1614,3 +1614,934 @@ button:focus-visible {
   padding-top: 4px;
   border-top: 1px solid var(--surface-2);
 }
+
+/* ---------- Piccolo: pane switcher, account, team ---------- */
+
+/* Always on screen (the spec's persistent switcher); the job bar sticks just below it */
+.pane-bar {
+  --pane-bar-h: 68px;
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: calc(12px + env(safe-area-inset-top)) 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg);
+}
+
+.pane-body .job-bar {
+  top: calc(68px + env(safe-area-inset-top, 0px));
+}
+
+.pane-switch {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface);
+  border-radius: 16px;
+}
+
+.pane-switch button {
+  min-height: 48px;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pane-switch button.is-on {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.account-chip {
+  flex-shrink: 0;
+  max-width: 40%;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 2px solid var(--surface-2);
+  border-radius: 16px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.account-chip.is-guest {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+/* The pane bar sits above each pane, so panes need less top space */
+.pane-body > .app,
+.pane-bar ~ .app {
+  padding-top: 16px;
+}
+
+.google-btn {
+  background: #ffffff;
+  color: #1f1f1f;
+  border: 3px solid #ffffff;
+  min-height: 72px;
+  font-size: 22px;
+}
+
+.or-line {
+  text-align: center;
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.sent-note {
+  background: var(--surface-2);
+  border-radius: 14px;
+  padding: 14px 16px;
+  line-height: 1.4;
+}
+
+.detail-fields select {
+  width: 100%;
+  min-height: 60px;
+  padding: 14px 16px;
+  font-family: inherit;
+  font-size: 18px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 3px solid var(--surface-2);
+  border-radius: 16px;
+}
+
+.detail-fields select:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.account-who {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 19px;
+  overflow-wrap: anywhere;
+}
+
+.account-who span {
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.account-section {
+  border-top: 1px solid var(--surface-2);
+  padding-top: 14px;
+}
+
+.account-section h3,
+.team-box h2,
+.team-list h2,
+.section-title {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.section-title {
+  margin: 4px 0 12px;
+}
+
+.team-box,
+.invite-ready {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 18px;
+}
+
+.invite-ready {
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  line-height: 1.4;
+}
+
+.team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.team-row {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.team-row > strong {
+  font-size: 19px;
+}
+
+.team-row > span {
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.team-row.is-off {
+  opacity: 0.6;
+}
+
+.team-row .pill {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 14px;
+  vertical-align: 2px;
+}
+
+.team-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.team-actions .text-btn {
+  margin: 0;
+}
+
+.text-btn.is-danger {
+  color: var(--red);
+}
+
+.piccolo-callout {
+  background: var(--surface);
+  border: 2px solid var(--blue);
+  border-radius: 20px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.job-card.is-static {
+  cursor: default;
+}
+
+/* ---------- Piccolo job screen ---------- */
+
+.piccolo-send-btn {
+  background: var(--surface);
+  color: var(--orange);
+  border: 3px solid var(--orange);
+  min-height: 64px;
+  font-size: 21px;
+}
+
+.pc-status,
+.pc-banner {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 14px 16px;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.pc-banner {
+  border: 2px solid var(--orange);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pc-banner-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pc-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.pc-tabs button {
+  flex-shrink: 0;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pc-tabs button.is-on {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.pc-draft-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.text-btn.pc-inline {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 8px 0;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.pc-block {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pc-block h3 {
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.pc-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pc-block-head .link-btn {
+  min-height: 40px;
+  padding: 6px 14px;
+  background: var(--surface-2);
+  font-size: 16px;
+}
+
+.pc-text {
+  font-size: 18px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pc-empty {
+  font-size: 16px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.pc-items {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.src-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.src-chip {
+  min-height: 34px;
+  padding: 4px 12px;
+  border: 1px solid var(--surface-2);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--blue);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pc-line {
+  background: var(--surface);
+  border-radius: 18px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-left: 4px solid transparent;
+}
+
+.pc-line.is-inferred {
+  border-left-color: var(--orange);
+}
+
+.pc-line-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+.pc-qty {
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.pc-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.badge.is-warn {
+  background: var(--orange);
+  color: #000000;
+}
+
+.badge.is-muted {
+  color: var(--muted);
+}
+
+.pc-meta {
+  font-size: 16px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.pc-quote {
+  font-size: 15px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.pc-totals {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 18px;
+}
+
+.pc-totals p {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pc-totals .pc-total {
+  border-top: 1px solid var(--surface-2);
+  padding-top: 8px;
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.pc-totals .pc-empty {
+  display: block;
+}
+
+.pc-media {
+  background: var(--surface);
+  border-radius: 18px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.pc-photo {
+  width: 100%;
+  max-height: 300px;
+  object-fit: cover;
+  display: block;
+}
+
+.pc-media-text {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.pc-seen {
+  color: var(--violet);
+}
+
+.piccolo .job-card .pill {
+  background: var(--orange);
+}
+
+/* Source chips jump here and flash it, like the summary's stop links */
+.pc-media.is-flash,
+.pc-block.is-flash {
+  animation: stop-flash 1.8s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pc-media.is-flash,
+  .pc-block.is-flash {
+    animation: none;
+    box-shadow: inset 0 0 0 3px var(--blue);
+  }
+}
+
+/* ---------- Piccolo editing ---------- */
+
+.pc-savebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.pc-savebar .link-btn {
+  min-height: 40px;
+  padding: 6px 14px;
+  font-size: 16px;
+}
+
+.pc-save.is-saved {
+  color: var(--live);
+}
+
+.pc-save.is-offline {
+  color: var(--orange);
+}
+
+.pc-save.is-error {
+  color: var(--red);
+}
+
+.pc-item-btn {
+  display: block;
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 17px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pc-answer {
+  margin-top: 4px;
+  font-size: 16px;
+  color: var(--live);
+}
+
+.pc-add {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 8px 4px;
+  border: none;
+  background: none;
+  color: var(--blue);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pc-add-block {
+  width: 100%;
+  min-height: 56px;
+  margin-bottom: 12px;
+  border: 2px dashed var(--surface-2);
+  border-radius: 18px;
+  text-align: center;
+}
+
+.pc-add-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.pc-line-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pc-line-main .pc-line-top,
+.pc-line-main .pc-badges,
+.pc-line-main .pc-meta,
+.pc-line-main .pc-quote {
+  display: flex;
+}
+
+.pc-edit-hint {
+  font-size: 13px;
+  color: var(--blue);
+}
+
+.pc-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.pc-hint {
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.pc-line-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.pc-line-actions .link-btn {
+  justify-content: center;
+  width: 100%;
+  background: var(--surface-2);
+  font-size: 16px;
+}
+
+.link-btn.is-danger {
+  color: var(--red);
+}
+
+.pc-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pc-compare h3 {
+  font-size: 18px;
+}
+
+.pc-compare-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: 14px;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.pc-compare-row .link-btn {
+  min-height: 40px;
+  padding: 6px 14px;
+  background: var(--bg);
+}
+
+/* ---------- Piccolo finalize and export ---------- */
+
+.pc-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.pc-actions .big-btn {
+  min-height: 60px;
+  font-size: 20px;
+}
+
+.pc-final-note {
+  font-size: 16px;
+  color: var(--live);
+  line-height: 1.4;
+}
+
+.pc-final-note.is-changed {
+  color: var(--orange);
+}
+
+.pc-warnings {
+  background: var(--surface-2);
+  border-left: 4px solid var(--orange);
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.pc-warnings ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.pc-checks {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 18px;
+}
+
+.pc-checks legend {
+  margin-bottom: 6px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.pc-checks label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.pc-checks input {
+  width: 24px;
+  height: 24px;
+}
+
+.pc-file-name {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+
+/* ---------- guests ---------- */
+
+.guest-banner {
+  max-width: 440px;
+  margin: 12px auto 0;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 2px solid var(--blue);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.guest-banner.is-urgent {
+  border-color: var(--red);
+}
+
+.guest-banner .link-btn {
+  min-height: 44px;
+  padding: 8px 14px;
+  background: var(--surface-2);
+  font-size: 16px;
+}
+
+.guest-banner-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.guest-banner-actions .text-btn {
+  margin: 0;
+  font-size: 16px;
+}
+
+@media (max-width: 480px) {
+  .guest-banner {
+    margin-left: 20px;
+    margin-right: 20px;
+  }
+}
+
+.piccolo-callout.is-try {
+  border-color: var(--orange);
+}
+
+.job-card .pill.is-sample {
+  background: var(--violet);
+  color: #000000;
+}
+
+/* ---------- admin console ---------- */
+
+.adm-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.adm-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 6px;
+  background: var(--surface);
+  border: 2px solid transparent;
+  border-radius: 16px;
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+div.adm-stat {
+  cursor: default;
+}
+
+.adm-stat.is-on {
+  border-color: var(--blue);
+}
+
+.adm-stat strong {
+  font-size: 24px;
+}
+
+.adm-stat span {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.adm-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.adm-filters select {
+  min-height: 52px;
+  padding: 10px 12px;
+  font-size: 16px;
+}
+
+.job-card .pill.is-captured { background: var(--surface-2); color: var(--text); }
+.job-card .pill.is-drafted { background: var(--blue); color: #ffffff; }
+.job-card .pill.is-quoted { background: var(--orange); color: #000000; }
+.job-card .pill.is-won { background: var(--live); color: #000000; }
+.job-card .pill.is-lost { background: var(--red); color: #ffffff; }
+.job-card .pill.is-installed { background: var(--violet); color: #000000; }
+
+.job-card.is-archived {
+  opacity: 0.6;
+}
+
+.adm-contact {
+  border: 1px solid var(--surface-2);
+  border-radius: 16px;
+  padding: 12px;
+  margin: 0;
+}
+
+.adm-contact legend {
+  padding: 0 6px;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.adm-toggle {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.adm-toggle input {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.adm-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.adm-log li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border-radius: 14px;
+  font-size: 16px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.adm-when {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* Admin Data tab: lines drafts have learned */
+.adm-learned {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  font-size: 16px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.pc-compare-row .pc-meta {
+  display: block;
+  font-size: 15px;
+}

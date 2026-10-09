@@ -19,6 +19,42 @@ exports.transcribeWrapUpNote = require("./wrapup").transcribeWrapUpNote;
 // AI description of a stop's photo (when the user taps Describe photo)
 exports.describeStopPhoto = require("./photo").describeStopPhoto;
 
+// Piccolo: AI draft of a work order, BOM, and quote from a finished job
+exports.draftPiccolo = require("./piccolo").draftPiccolo;
+exports.finalizePiccolo = require("./finalize").finalizePiccolo;
+exports.piccoloMediaLinks = require("./finalize").piccoloMediaLinks;
+
+// Teams: share jobs with the company, keep stops in step, price-free work order view, assign
+const teams = require("./teams");
+exports.shareNewJobWithTeam = teams.shareNewJobWithTeam;
+exports.syncStopOrg = teams.syncStopOrg;
+exports.workOrderView = teams.workOrderView;
+exports.setJobSharing = teams.setJobSharing;
+exports.assignJob = teams.assignJob;
+
+// Admin console: sales status and customer on team jobs, storage used
+exports.updateTeamJob = require("./admin").updateTeamJob;
+exports.orgStorageUsage = require("./admin").orgStorageUsage;
+exports.auditOrgSettings = require("./admin").auditOrgSettings;
+exports.recordExport = require("./admin").recordExport;
+exports.clearLearning = require("./learning").clearLearning;
+
+// Guests: 7-day expiry, daily cleanup, merging into an existing account, sample job
+const guests = require("./guests");
+exports.setGuestExpiry = guests.setGuestExpiry;
+exports.cleanupGuestJobs = guests.cleanupGuestJobs;
+exports.mergeGuestIntoAccount = guests.mergeGuestIntoAccount;
+exports.createDemoJob = guests.createDemoJob;
+
+// Piccolo accounts: profiles, companies, team invites, roles
+const accounts = require("./accounts");
+exports.ensureProfile = accounts.ensureProfile;
+exports.acceptInvite = accounts.acceptInvite;
+exports.createOrg = accounts.createOrg;
+exports.createInvite = accounts.createInvite;
+exports.revokeInvite = accounts.revokeInvite;
+exports.updateMember = accounts.updateMember;
+
 // Short-lived Deepgram token for live transcription in the browser
 exports.getDeepgramStreamToken = require("./streamtoken").getDeepgramStreamToken;
 
@@ -37,6 +73,11 @@ exports.transcribeStop = onDocumentCreated(
 
     if (!stop.audioPath) {
       logger.info("No audio on this stop, skipping", { uid, stopId });
+      return;
+    }
+    // Already written down (e.g. a guest's stop moved into their account): don't pay twice
+    if (["transcribed", "no_speech"].includes(stop.status)) {
+      logger.info("Already transcribed, skipping", { uid, stopId });
       return;
     }
 

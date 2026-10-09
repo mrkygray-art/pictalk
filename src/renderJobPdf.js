@@ -15,7 +15,7 @@ const LINE = [200, 200, 205];
 
 // The PDF's built-in fonts only cover basic Western characters; swap common
 // typographic ones for plain equivalents so nothing prints as garbage.
-function pdfSafe(text) {
+export function pdfSafe(text) {
   const swapped = String(text ?? '')
     .replace(/[‘’‚′]/g, "'")
     .replace(/[“”„″]/g, '"')

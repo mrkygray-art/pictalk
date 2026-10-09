@@ -12,7 +12,7 @@ PicTalk turns a field technician's normal workflow — **take a photo and explai
 **Portfolio case study:** https://ky-gray-portfolio.vercel.app/#pictalk  
 **How it's built:** [Architecture](#high-level-architecture) · [Evaluation Lab](#evaluation-lab) · [Run it locally](#run-it-locally)
 
-> **Demo note:** Open it on your phone. No sign-up is needed: take a photo, tap to talk, and save a stop. End the job to see the AI summary and download the PDF. To see the pipeline behind it, tap **Engineering Mode** at the bottom of the main screen. Then tap **Piccolo** at the top to turn a finished job into a work order, parts list, and quote; Piccolo needs a quick sign-in (Google or an emailed link), and your PicTalk jobs come with you. Demo limits: up to 10 stops per job, and voice recordings are deleted after 5 days. Please don't record real customer information.
+> **Demo note:** Open it on your phone. No sign-up is needed: your first visit opens with seven made-up example jobs from different trades (six homes and a warehouse), each with photos, the tech's words, and wrap-up notes, to open, edit, or delete. Then take a photo, tap to talk, and save a stop. End the job to see the AI summary and download the PDF. To see the pipeline behind it, tap **Engineering Mode** at the bottom of the main screen. Then tap **Piccolo** at the top to turn a finished job into a work order, parts list, and quote; Piccolo needs a quick sign-in (Google or an emailed link), and your PicTalk jobs come with you. Demo limits: up to 10 stops per job, and voice recordings are deleted after 5 days. Please don't record real customer information.
 
 ## Works with no signal
 

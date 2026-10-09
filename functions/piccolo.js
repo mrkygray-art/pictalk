@@ -27,7 +27,7 @@ const { piccoloAccess, ownerOf } = require("./teams");
 const { learnedFor, findLearned } = require("./learning");
 const { isUnlimited } = require("./limits");
 const DEMO = require("./demoJob");
-const { samplePrice } = DEMO;
+const { samplePrice, sampleAnswer } = DEMO;
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 
@@ -473,12 +473,23 @@ exports.draftPiccolo = onCall(
           logger.warn("Piccolo retry: lines without a valid source", { uid, jobId });
           continue;
         }
-        // The sample job's quote comes out complete: any line still unpriced gets a sample price
+        // The sample job comes out as a finished example with nothing left to fix: every line
+        // priced (sample prices), checked, no unconfirmed part numbers, questions answered
         if (job.isDemo) {
           for (const ln of data.bom) {
-            if (Number.isFinite(ln.unitPrice)) continue;
-            ln.unitPrice = samplePrice(ln);
-            ln.priceSource = "sample";
+            if (!Number.isFinite(ln.unitPrice)) {
+              ln.unitPrice = samplePrice(ln);
+              ln.priceSource = "sample";
+            }
+            if (ln.partNumberStatus === "ai_suggested") {
+              ln.partNumber = "";
+              ln.partNumberStatus = "none";
+            }
+            ln.checked = true;
+          }
+          for (const q of data.questions) {
+            q.answer = sampleAnswer(q.text);
+            q.answered = true;
           }
         }
         result = { ...data, model: out.model };

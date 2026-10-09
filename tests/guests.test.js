@@ -151,6 +151,9 @@ test("Try Piccolo: signed-in only; a sample job with its own draft allowance tha
   assert.ok(w.bom.length > 0 && w.bom.every((l) => Number.isFinite(l.unitPrice)), "every line priced");
   assert.ok(w.bom.some((l) => l.priceSource === "sample"));
   assert.deepEqual([w.quote.prefix, w.quote.markupPct, w.quote.taxPct], ["SAMPLE-", 15, 9.5]);
+  // ...and nothing left to fix: finalizing shows no warnings
+  assert.deepEqual(fnRequire("./finalize.js").finalizeWarnings(w), []);
+  assert.ok(w.questions.every((q) => q.answered && q.answer.startsWith("Sample answer:")));
   // Sample drafts don't count toward the account's own drafts
   assert.equal((await adminDb().doc(`users/${uid}/aiUsage/${new Date().toISOString().slice(0, 10)}`).get()).get("piccoloDrafts"), undefined);
   await jobWithPhoto(g, "own1");

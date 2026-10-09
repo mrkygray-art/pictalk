@@ -4,13 +4,15 @@
 
 PicTalk turns a field technician's normal workflow — **take a photo and explain what you see** — into structured job documentation. Technicians capture photos and voice notes at each stop, PicTalk transcribes the recordings, organizes the work by job, drafts an AI summary and action items, and produces a customer-ready PDF after human review.
 
-> Built as a practical field workflow: **Photo → Voice → Transcript → Job Context → AI Draft → Human Approval → PDF Report**
+**Piccolo**, the second pane, takes a finished job the rest of the way: Claude drafts a work order, parts list (BOM), and quote from the job's photos and voice notes, the estimator checks and edits every line, and Piccolo saves numbered, unchangeable finals to export or share with a team.
+
+> Built as a practical field workflow: **Photo → Voice → Transcript → Job Context → AI Draft → Human Approval → PDF Report → Work Order, Parts, and Quote**
 
 **Try it live:** https://pictalk-6cbff.web.app  
 **Portfolio case study:** https://ky-gray-portfolio.vercel.app/#pictalk  
 **How it's built:** [Architecture](#high-level-architecture) · [Evaluation Lab](#evaluation-lab) · [Run it locally](#run-it-locally)
 
-> **Demo note:** Open it on your phone. No sign-up is needed: take a photo, tap to talk, and save a stop. End the job to see the AI summary and download the PDF. To see the pipeline behind it, tap **Engineering Mode** at the bottom of the main screen. Demo limits: up to 10 stops per job, and voice recordings are deleted after 5 days. Please don't record real customer information.
+> **Demo note:** Open it on your phone. No sign-up is needed: take a photo, tap to talk, and save a stop. End the job to see the AI summary and download the PDF. To see the pipeline behind it, tap **Engineering Mode** at the bottom of the main screen. Then tap **Piccolo** at the top to turn a finished job into a work order, parts list, and quote; Piccolo needs a quick sign-in (Google or an emailed link), and your PicTalk jobs come with you. Demo limits: up to 10 stops per job, and voice recordings are deleted after 5 days. Please don't record real customer information.
 
 ## Works with no signal
 
@@ -45,6 +47,18 @@ PicTalk is designed to capture that information **while the technician is alread
 7. **Claude** uses the job's transcripts, photo descriptions, and wrap-up notes to draft a concise job summary and prioritized action items.
 8. The technician reviews and edits the AI output before approving it.
 9. PicTalk generates a **PDF job report** containing the approved summary, action items, job details, photos, and field documentation.
+
+## Piccolo: from site walk to quote
+
+Piccolo turns a finished PicTalk job into the documents that come next, with the estimator in charge of every line.
+
+- **AI draft from the job itself.** Claude reads the stops (words, photo descriptions, and the photos), the wrap-up notes, and the job summary, and writes a work order (scope, locations with tasks, customer requirements, installation notes), a parts and labor list, and open questions. There's no parts catalog to set up.
+- **Guardrails enforced in code, not just asked for.** Every line links back to the stop or note it came from (tap to jump to the photo). A part number counts as the technician's only if it was actually said or written; anything else is marked **Verify part #**. Lines the AI assumed are marked **Inferred · check**. Prices stay blank unless they come from the company's labor rate, the same item on an earlier final, or AI estimates the company turned on (always marked **ESTIMATE**).
+- **Edit everything.** Lines, quantities, part numbers, prices, scope, tasks, and questions, with undo, saving on the phone first. A newer draft never overwrites the user's copy; they can compare and pull in only what they want.
+- **Finalize and export.** Finalizing lists anything still unchecked, then saves an unchangeable numbered version (v1, v2…) with its own copies of the photos and audio. Exports: a PDF with any of work order (no prices), parts list, and quote; parts and quote CSV files; or the full package as JSON.
+- **Teams and roles.** A company admin invites people as estimator (everything, including prices), field tech (jobs, photos, and the price-free work order), or installer (only the work orders assigned to them). Prices are kept out of what field techs and installers can read, by the security rules rather than just by hiding them in the app.
+- **Admin console.** People and invites, every company job with its sales status (captured, drafted, quoted, won, lost, installed), customers, quote defaults (number prefix, markup, tax, labor rate, terms), an activity log, storage used, and export everything.
+- **Learns from edits.** Each final records what changed from the AI's draft. Later drafts reuse the company's own wording, part numbers, and last quoted prices, marked **Part # from a past quote** and **Last quoted price**. Each company's history stays its own, and a company can turn it off or clear it.
 
 ## Screenshots
 
@@ -86,6 +100,8 @@ PicTalk is designed to capture that information **while the technician is alread
 - Automatic voice-note retention policy designed to reduce unnecessary long-term audio storage
 - **Engineering Mode:** an opt-in inside view of the capture pipeline with real timings, sync status, and AI usage
 - **Evaluation Lab:** an offline simulator with a public scorecard and fixes log
+- **Piccolo:** AI-drafted work orders, parts lists, and quotes with code-enforced guardrails, full editing, numbered finals, PDF/CSV/JSON export, team roles with price-free views, an admin console, and drafts that learn from each company's finals
+- Accounts when they're needed: PicTalk works without one; signing in (Google or an emailed link) keeps the same account and jobs
 
 ## AI with human review
 
@@ -172,13 +188,14 @@ node lab/simulate.js            # every scenario, 3 runs each; --only <id>, --ru
 | Front end | React 19, Vite, JavaScript/JSX |
 | Application model | Progressive Web App (PWA) |
 | Offline storage | IndexedDB / `idb-keyval` |
-| Authentication | Firebase Anonymous Authentication |
+| Authentication | Firebase Authentication: anonymous guests, then Google or email link on the same account |
 | Database | Cloud Firestore |
 | File storage | Firebase Storage |
 | Backend | Firebase Cloud Functions |
 | Speech-to-text | Deepgram Nova-3 |
-| AI summaries and photo descriptions | Anthropic Claude |
+| AI summaries, photo descriptions, and Piccolo drafts | Anthropic Claude |
 | PDF generation | jsPDF |
+| Tests | Node test runner against the Firebase emulators (security rules and Cloud Functions) |
 | Hosting | Firebase Hosting |
 
 ## High-level architecture
@@ -252,13 +269,15 @@ sequenceDiagram
 
 PicTalk uses per-user Firebase paths for job and stop data, with Firebase Security Rules restricting access to the authenticated owner. Storage rules restrict field media by owner, file type, and size.
 
+Piccolo adds companies and roles. A job stays under the person who captured it; sharing it with their company lets teammates read it according to their role. Roles, company membership, invites, and the activity log are written only by Cloud Functions, so nobody can give themselves access. Field techs and installers read a separate price-free copy of the work order, so prices never reach their phones. Finals are written only by a function and can't be changed afterward.
+
 The AI summarization function reads the authenticated user's job context and writes the generated draft back to that user's job. API credentials for external AI and transcription services are handled as backend function secrets rather than exposed in the browser application.
 
 Audio is intentionally treated as temporary working data. The application is designed around a five-day voice-file retention period while keeping the resulting transcript as part of the job record.
 
 ## AI usage controls
 
-To keep AI use predictable, the summary function allows 5 summaries per job and 20 per account per day, the photo description function allows 3 descriptions per stop and 30 per account per day, and the live-words token function allows 60 connections per account per hour. These limits are enforced in Cloud Functions, not in the browser. AI-generated summaries also preserve metadata needed to distinguish drafts from approved content.
+To keep AI use predictable, the summary function allows 5 summaries per job and 20 per account per day, the photo description function allows 3 descriptions per stop and 30 per account per day, and the live-words token function allows 60 connections per account per hour. Piccolo drafts need a signed-in account and are limited to 10 per account per day and 5 per job, and every AI call in the app counts toward an overall daily cap. These limits are enforced in Cloud Functions, not in the browser. AI-generated summaries also preserve metadata needed to distinguish drafts from approved content.
 
 The summary is generated from the text associated with the job, including photo descriptions; photos and audio recordings themselves are not sent to the summarization model. A photo is sent to Claude only when the technician taps **Describe photo** on that stop. It is shrunk to 1600 pixels on the long side first, and the description is written back onto the stop.
 
@@ -272,7 +291,7 @@ That includes understanding the realities of field work — intermittent connect
 
 ## Current project status
 
-PicTalk is an actively developed demonstration application. Current functionality includes job organization, offline capture and synchronization, photo and voice stops, transcription, live words for wrap-up notes, editable field notes, AI-generated summaries and action items, AI photo descriptions, human approval, PDF job reporting, an installable app that opens with no signal, Engineering Mode, and the Evaluation Lab.
+PicTalk is an actively developed demonstration application. Current functionality includes job organization, offline capture and synchronization, photo and voice stops, transcription, live words for wrap-up notes, editable field notes, AI-generated summaries and action items, AI photo descriptions, human approval, PDF job reporting, an installable app that opens with no signal, Engineering Mode, the Evaluation Lab, and Piccolo (AI-drafted work orders, parts lists, and quotes, with accounts, teams, and an admin console).
 
 The current demo limits a job to 10 stops. Voice recordings are designed to expire after five days.
 
@@ -282,26 +301,27 @@ Needs Node 24 and, for the emulators, the Firebase CLI and Java 11+.
 
 ```bash
 npm install
-npm run dev        # Vite dev server against the live project (the service worker only runs in production builds)
+npm run dev        # Vite dev server against the local Firebase emulators (the service worker only runs in production builds)
 npm run build      # production build into dist/, which Firebase Hosting serves
 npm run lint
+npm test           # starts the emulators and runs the security-rule and Cloud Function tests in tests/
 ```
 
 To test without touching the live Firebase project, use the emulators. One command sets them up with free stand-ins for Claude and Deepgram, so no API keys are needed:
 
 ```bash
 npm run setup:emulator     # creates the two local settings files below and installs the functions' dependencies
-firebase emulators:start --only auth,firestore,storage,functions
-npm run dev:emulators      # in a second terminal: the app talks to the emulators
+npm run emulators          # every emulator, as the offline-only project demo-pictalk
+npm run dev                # in a second terminal: the app talks to the emulators
 ```
 
 | Setting | Where | What it does |
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | `functions/.secret.local` (emulator), Firebase secret (production) | Claude API key for summaries and photo descriptions. Dummy value is fine with the stand-in on |
 | `DEEPGRAM_API_KEY` | same | Deepgram key for transcripts and live-word tokens. Live words need a Member-role key |
-| `PICTALK_FAKE_AI=1` | `functions/.env.local` | Stand-in summaries and photo descriptions instead of the Claude API (emulator only) |
+| `PICTALK_FAKE_AI=1` | `functions/.env.local` | Stand-in summaries, photo descriptions, and Piccolo drafts instead of the Claude API (emulator only) |
 | `PICTALK_FAKE_STT=1` | `functions/.env.local` | Stand-in transcripts and live words instead of Deepgram (emulator only) |
-| `VITE_USE_EMULATORS=true` | `.env.emulators` (used by `npm run dev:emulators`) | Points the dev app at the local emulators |
+| `VITE_USE_EMULATORS=true` | `.env.development` (used by `npm run dev`) | Points the dev app at the local emulators |
 
 The setup script copies `functions/.secret.local.example` and `functions/.env.local.example`; the copies are git-ignored and never overwritten. In production the keys are set with `firebase functions:secrets:set ANTHROPIC_API_KEY` (and `DEEPGRAM_API_KEY`). The Firebase web config in `src/firebase.js` is public by design and needs no setting. Browser test scripts are in `e2e/`; the offline simulator is in `lab/` ([Evaluation Lab](#evaluation-lab)).
 

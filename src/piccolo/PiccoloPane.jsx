@@ -99,6 +99,19 @@ export default function PiccoloPane({ uid, isGuest, profile, target, onAccount, 
   };
   const orgName = orgId && org?.id === orgId ? org.name : null;
 
+  // Try Piccolo: open the sample job (a random trade), or swap it for a different one
+  const trySample = async (different) => {
+    setDemo({ busy: true, jobId: null, error: "" });
+    try {
+      const { jobId, created } = await createDemoJob(different);
+      setDemo({ busy: false, jobId: created ? jobId : null, error: "" });
+      open({ id: jobId, ownerUid: uid });
+    } catch (err) {
+      setDemo({ busy: false, jobId: null, error: errorText(err) || "Couldn't open the sample. Please try again." });
+      if (different) onNotice(errorText(err) || "Couldn't open another sample. Please try again.");
+    }
+  };
+
   // Piccolo needs an account (the server refuses guests too); PicTalk capture doesn't
   if (isGuest) {
     return (
@@ -145,6 +158,8 @@ export default function PiccoloPane({ uid, isGuest, profile, target, onAccount, 
           isGuest={isGuest}
           orgName={orgName}
           teamControls={<TeamBlock uid={uid} job={job} profile={profile} orgName={orgName} onNotice={onNotice} />}
+          onTryAnother={job.isDemo && !isTeamJob ? () => trySample(true) : null}
+          tryingAnother={demo.busy}
           onAccount={onAccount}
           onBack={() => open(null)}
           onOpenInPicTalk={onOpenInPicTalk}
@@ -162,22 +177,12 @@ export default function PiccoloPane({ uid, isGuest, profile, target, onAccount, 
       </header>
 
       <div className="piccolo-callout is-try">
-        <p>New here? Try Piccolo on a sample site walk: a dental office with a cracked card reader, two cameras, and a network closet.</p>
+        <p>
+          New here? Try Piccolo on a sample site walk with photos and notes, from one of eight jobs: security, electrical, HVAC, plumbing, roofing,
+          solar, painting, or a home appraisal.
+        </p>
         {demo.error && <p className="error" role="alert">{demo.error}</p>}
-        <button
-          className="big-btn photo-btn"
-          disabled={demo.busy || !uid}
-          onClick={async () => {
-            setDemo({ busy: true, jobId: null, error: "" });
-            try {
-              const { jobId, created } = await createDemoJob();
-              setDemo({ busy: false, jobId: created ? jobId : null, error: "" });
-              open({ id: jobId, ownerUid: uid });
-            } catch (err) {
-              setDemo({ busy: false, jobId: null, error: errorText(err) || "Couldn't open the sample. Please try again." });
-            }
-          }}
-        >
+        <button className="big-btn photo-btn" disabled={demo.busy || !uid} onClick={() => trySample(false)}>
           {demo.busy ? "Opening the sample…" : "Try Piccolo"}
         </button>
       </div>

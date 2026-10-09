@@ -39,7 +39,7 @@ test("a finished job becomes a draft and the first editable copy", async () => {
 
   const draft = await read(p, `users/${uid}/jobs/jobA/drafts/${draftId}`);
   assert.equal(draft.model, "emulator-stand-in");
-  assert.equal(draft.promptVersion, "piccolo-draft-v2");
+  assert.equal(draft.promptVersion, "piccolo-draft-v3");
   assert.deepEqual(draft.aiOriginal.bom, draft.bom, "aiOriginal keeps what the AI produced");
   assert.equal(draft.sourceSnapshot.fieldNotes, "Work has to happen after 6 pm.");
 

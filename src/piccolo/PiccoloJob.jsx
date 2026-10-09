@@ -235,7 +235,7 @@ function DetailsSheet({ job, onSave, onClose }) {
 }
 
 /** One job in Piccolo: draft with AI, then edit the work order, BOM, and quote. */
-export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, online, isGuest, orgName, teamControls, onBack, onAccount, onOpenInPicTalk, onNotice }) {
+export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, online, isGuest, orgName, teamControls, onTryAnother, tryingAnother, onBack, onAccount, onOpenInPicTalk, onNotice }) {
   const ownerUid = job.ownerUid || uid; // a teammate's job lives under its owner
   const isOwner = ownerUid === uid;
   const [tab, setTab] = useState("overview");
@@ -400,6 +400,15 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
           <p>New photos or notes since this draft. Re-draft to include them? Your version stays until you choose.</p>
           <button className="big-btn plain-btn" onClick={draft} disabled={waiting > 0 || !online}>
             Re-draft
+          </button>
+        </div>
+      )}
+
+      {onTryAnother && (
+        <div className="pc-sample-bar">
+          <span>Made-up sample job</span>
+          <button className="link-btn" onClick={onTryAnother} disabled={tryingAnother}>
+            {tryingAnother ? "Opening another…" : "Try a different sample ›"}
           </button>
         </div>
       )}

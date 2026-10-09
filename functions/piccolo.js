@@ -27,14 +27,14 @@ const { piccoloAccess, ownerOf } = require("./teams");
 const { learnedFor, findLearned } = require("./learning");
 const { isUnlimited } = require("./limits");
 const DEMO = require("./demoJob");
-const { samplePrice, sampleAnswer } = DEMO;
+const { samplePrice, sampleAnswer, sampleById } = DEMO;
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 
 const MODEL = "claude-opus-5-5";
-const PROMPT_VERSION = "piccolo-draft-v2"; // v2: past finalized lines as examples
+const PROMPT_VERSION = "piccolo-draft-v3"; // v2: past finalized lines; v3: lines must cover every task
 const DAY_LIMIT = 10; // drafts per account per day (UTC); guests can't draft (sign-in required)
-const DEMO_DAY_LIMIT = 3; // the "Try Piccolo" sample job has its own allowance
+const DEMO_DAY_LIMIT = 6; // the "Try Piccolo" sample jobs have their own allowance
 const PER_JOB_LIMIT = 5;
 const MAX_PHOTOS = 10;
 const PHOTO_SIDE = 1024;
@@ -107,7 +107,7 @@ Write:
 - locations: the places work happens (use the names the worker used, e.g. "North exterior wall", "IDF closet"), each with short imperative tasks for the installer. When a stop has a location the worker typed (location "…" in its header), use exactly that name for the work at that stop, and for its lines' location.
 - constraints: customer limits or requirements (access hours, finishes, things to avoid).
 - install_notes: mounting, cable routing, power, and similar details the installer needs.
-- lines: the BOM and labor. One line per distinct item and location. category is equipment, cable, labor, or misc. Labor lines describe the work (e.g. "Install and aim cameras") with unit "hr" when hours were mentioned, otherwise "lot" and qty 1.
+- lines: the BOM and labor. One line per distinct item and location. Every task in locations needs the equipment, materials, or labor lines to do it; never return an empty lines list when there is work to do. category is equipment, cable, labor, or misc. Labor lines describe the work (e.g. "Install and aim cameras") with unit "hr" when hours were mentioned, otherwise "lot" and qty 1.
 - questions: gaps you could not resolve, phrased as questions for the contractor (e.g. "How long is the cable run to the IDF?", "What mounting height does the customer want?").
 
 Rules:
@@ -411,8 +411,9 @@ exports.draftPiccolo = onCall(
     // Company settings: quote defaults, labor rate, AI price estimates (off unless turned on)
     const orgId = job.orgId || (await db().doc(`users/${owner}`).get()).get("orgId") || null;
     // The sample job uses its own sample quote settings, never the company's
-    const defaults = job.isDemo
-      ? { ...DEMO.quote, aiPriceEstimates: false }
+    const sample = job.isDemo ? sampleById(job.demoSample) : null;
+    const defaults = sample
+      ? { ...sample.quote, aiPriceEstimates: false }
       : orgId ? (await db().doc(`orgs/${orgId}`).get()).get("defaults") || {} : {};
     const record = job.customerId && orgId ? (await db().doc(`customers/${job.customerId}`).get()).data() : null;
     const customerRecord = record && record.orgId === orgId
@@ -468,18 +469,35 @@ exports.draftPiccolo = onCall(
       attempts = attempt;
       try {
         const out = useFake ? fakeModel(input) : await callModel(client, content);
+        try {
+          const rawLines = JSON.parse(out.text)?.lines;
+          if (!Array.isArray(rawLines) || !rawLines.length) {
+            logger.warn("Piccolo: the model returned no lines", { uid, jobId, attempt, text: String(out.text).slice(0, 1500) });
+          }
+        } catch {
+          // postProcess reports malformed output
+        }
         const { data, complete } = postProcess(out.text, { sourceIds, sourceText, estimates: input.estimates, laborRate: Number(defaults.laborRate) || null, learned });
         if (!complete && attempt === 1) {
           lastError = new Error("some lines had no valid source");
           logger.warn("Piccolo retry: lines without a valid source", { uid, jobId });
           continue;
         }
+        // A draft with no parts or labor lines at all isn't useful: ask once more
+        if (!data.bom.length && attempt === 1) {
+          lastError = new Error("no lines");
+          logger.warn("Piccolo retry: the draft had no lines", { uid, jobId });
+          continue;
+        }
         // The sample job comes out as a finished example with nothing left to fix: every line
         // priced (sample prices), checked, no unconfirmed part numbers, questions answered
         if (job.isDemo) {
+          // The sample's labor budget is shared by however many labor-by-the-lot lines the draft has
+          const laborLots = data.bom.filter((ln) => ln.category === "labor" && !Number.isFinite(ln.unitPrice)
+            && !/^(hr|hrs|hour|hours|ft|feet|foot|lf)$/i.test(String(ln.unit || "").trim())).length;
           for (const ln of data.bom) {
             if (!Number.isFinite(ln.unitPrice)) {
-              ln.unitPrice = samplePrice(ln);
+              ln.unitPrice = samplePrice(ln, sample, { laborLots });
               ln.priceSource = "sample";
             }
             if (ln.partNumberStatus === "ai_suggested") {
@@ -489,7 +507,7 @@ exports.draftPiccolo = onCall(
             ln.checked = true;
           }
           for (const q of data.questions) {
-            q.answer = sampleAnswer(q.text);
+            q.answer = sampleAnswer(q.text, sample);
             q.answered = true;
           }
         }

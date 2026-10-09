@@ -109,7 +109,7 @@ test("finalizing records the diff and teaches the next draft (personal account)"
   assert.ok(reused, "a line priced from a past final");
   assert.equal(reused.partNumberStatus, "history");
   const draftDoc = await read(p, `users/${uid}/jobs/lj2/drafts/${(await read(p, `users/${uid}/jobs/lj2`)).latestDraftId}`);
-  assert.equal(draftDoc.promptVersion, "piccolo-draft-v2");
+  assert.equal(draftDoc.promptVersion, "piccolo-draft-v3");
   assert.ok(draftDoc.generation.pastLines > 0);
 
   // Someone else can't read it, and their drafts don't get it

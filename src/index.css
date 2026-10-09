@@ -2598,3 +2598,16 @@ div.adm-stat {
   border-top: 1px solid var(--surface-2);
   padding-top: 8px;
 }
+
+/* A sample job: say so, and offer another trade */
+.pc-sample-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 15px;
+}

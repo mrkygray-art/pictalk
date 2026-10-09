@@ -15,6 +15,7 @@ if (!getApps().length) adminInit({ projectId: "demo-pictalk", storageBucket: "de
 const { getFirestore: adminDb } = fnRequire("firebase-admin/firestore");
 const { getAuth: adminAuth } = fnRequire("firebase-admin/auth");
 const { runCleanup } = fnRequire("./guests.js");
+const DEMO = fnRequire("./demoJob.js");
 
 after(closeAll);
 
@@ -128,16 +129,20 @@ test("Try Piccolo: signed-in only; a sample job with its own draft allowance tha
   await rejects((await guest()).call("createDemoJob"), "permission-denied");
   const g = await personal("tryer");
   const uid = g.auth.currentUser.uid;
-  const { jobId, created } = await g.call("createDemoJob");
+  const { jobId, created, sample: sampleId } = await g.call("createDemoJob");
   assert.equal(created, true);
   assert.deepEqual(await g.call("createDemoJob"), { jobId, created: false }, "one sample at a time");
+  const sample = DEMO.sampleById(sampleId);
+  assert.equal(sample.id, sampleId);
   const job = await read(g, `users/${uid}/jobs/${jobId}`);
+  assert.deepEqual([job.demoSample, job.customer], [sampleId, sample.customer]);
   assert.equal(job.isDemo, true);
   assert.equal(job.status, "finished");
   assert.ok(job.expiresAt > Date.now());
   const stops = await getDocs(query(collection(g.db, `users/${uid}/stops`), where("jobId", "==", jobId)));
   assert.equal(stops.size, 4);
-  assert.match((await read(g, `users/${uid}/jobs/${jobId}/wrapUpNotes/customer`)).text, /after 5 pm/);
+  assert.equal((await read(g, `users/${uid}/jobs/${jobId}/wrapUpNotes/customer`)).text, sample.customerComments);
+  assert.deepEqual(stops.docs.map((d) => d.get("place")).sort(), sample.stops.map((s) => s.place).sort());
 
   // Each stop has its sample photo in the user's own photos/ folder
   for (const d of stops.docs) {
@@ -150,7 +155,7 @@ test("Try Piccolo: signed-in only; a sample job with its own draft allowance tha
   const w = await read(g, `users/${uid}/jobs/${jobId}/working/current`);
   assert.ok(w.bom.length > 0 && w.bom.every((l) => Number.isFinite(l.unitPrice)), "every line priced");
   assert.ok(w.bom.some((l) => l.priceSource === "sample"));
-  assert.deepEqual([w.quote.prefix, w.quote.markupPct, w.quote.taxPct], ["SAMPLE-", 15, 9.5]);
+  assert.deepEqual([w.quote.prefix, w.quote.markupPct, w.quote.taxPct], ["SAMPLE-", sample.quote.markupPct, sample.quote.taxPct]);
   // ...and nothing left to fix: finalizing shows no warnings
   assert.deepEqual(fnRequire("./finalize.js").finalizeWarnings(w), []);
   assert.ok(w.questions.every((q) => q.answered && q.answer.startsWith("Sample answer:")));
@@ -212,6 +217,54 @@ test("Try Piccolo replaces an older sample with the current one", async () => {
   assert.equal(created, true);
   assert.notEqual(second, first);
   assert.equal(await read(p, `users/${uid}/jobs/${first}`), undefined);
-  assert.equal((await read(p, `users/${uid}/jobs/${second}`)).demoVersion, 3);
+  assert.equal((await read(p, `users/${uid}/jobs/${second}`)).demoVersion, DEMO.version);
   await blocked(updateDoc(doc(p.db, `users/${uid}/jobs/${second}`), { demoVersion: 9 }));
+});
+
+test("Try a different sample: swaps the sample for another trade", async () => {
+  const p = await personal("swapper");
+  const uid = p.auth.currentUser.uid;
+  const first = await p.call("createDemoJob");
+  const second = await p.call("createDemoJob", { different: true });
+  assert.equal(second.created, true);
+  assert.notEqual(second.sample, first.sample, "a different trade");
+  assert.equal(await read(p, `users/${uid}/jobs/${first.jobId}`), undefined, "the old sample is gone");
+  await blocked(updateDoc(doc(p.db, `users/${uid}/jobs/${second.jobId}`), { demoSample: "other" }));
+});
+
+test("every sample is complete: 4 stops with photos, notes, and sensible sample prices", async () => {
+  const fs = fnRequire("node:fs");
+  const path = fnRequire("node:path");
+  assert.equal(DEMO.samples.length, 8);
+  assert.equal(new Set(DEMO.samples.map((s) => s.id)).size, 8);
+  for (const s of DEMO.samples) {
+    assert.equal(s.stops.length, 4, s.id);
+    for (let i = 1; i <= 4; i++) {
+      assert.ok(fs.existsSync(path.join(path.dirname(fnRequire.resolve("./demoJob.js")), "demo-photos", `${s.id}-${i}.jpg`)), `${s.id}-${i}.jpg`);
+    }
+    for (const st of s.stops) assert.ok(st.place && st.words && st.photo, s.id);
+    assert.ok(s.fieldNotes && s.customerComments && s.quote.quotePrefix === "SAMPLE-", s.id);
+    // Every kind of line gets a price, and footage is priced per foot (not per item)
+    for (const category of ["equipment", "cable", "labor", "misc"]) {
+      assert.ok(DEMO.samplePrice({ description: "Something", category, unit: "ea" }, s) >= 0, `${s.id} ${category}`);
+    }
+    assert.ok(DEMO.samplePrice({ description: "Run of cable", category: "cable", unit: "ft" }, s) < 20, `${s.id} per-foot`);
+    assert.match(DEMO.sampleAnswer("Anything else?", s), /^Sample answer: /);
+    // Labor by the lot shares the sample's labor budget across however many labor lines there are
+    const one = DEMO.samplePrice({ description: "Install", category: "labor", unit: "lot" }, s, { laborLots: 1 });
+    const four = DEMO.samplePrice({ description: "Install", category: "labor", unit: "lot" }, s, { laborLots: 4 });
+    assert.ok(four * 4 <= one + 20, `${s.id} labor split`);
+  }
+});
+
+test("sample prices: accessories are priced as accessories, not as the main item", () => {
+  const price = (id, description, category = "equipment") => DEMO.samplePrice({ description, category, unit: "ea" }, DEMO.sampleById(id));
+  assert.equal(price("plumbing-home", "Haul away the old water heater", "misc"), 95);
+  assert.equal(price("plumbing-home", "Seismic straps for water heater", "misc"), 45);
+  assert.equal(price("plumbing-home", "50-gallon gas water heater"), 1350);
+  assert.equal(price("hvac-office", "Curb adapter for rooftop unit", "misc"), 1200);
+  assert.equal(price("solar-home", "Racking rails for solar panels", "misc"), 85);
+  assert.equal(price("electrical-restaurant", "100 A breaker to feed subpanel"), 95);
+  assert.equal(price("appraisal-repairs", "Concrete anchors and mounting hardware for handrail", "misc"), 25);
+  assert.equal(price("security-dental", "Camera junction box", "misc"), 25);
 });

@@ -243,10 +243,14 @@ exports.createDemoJob = onCall(piccoloCallable({ timeoutSeconds: 60 }), async (r
     throw new HttpsError("permission-denied", "Sign in (Save my work) to use Piccolo.");
   }
   const now = Date.now();
-  // One sample at a time; an older version of the sample is replaced with the current one
+  // One sample at a time: an older version is replaced, and { different: true } swaps the
+  // current one for another trade (picked at random either way)
   const samples = (await db().collection(`users/${uid}/jobs`).where("isDemo", "==", true).get()).docs;
   const current = samples.find((d) => (d.get("expiresAt") || 0) > now && (d.get("demoVersion") || 1) >= DEMO.version);
-  if (current) return { jobId: current.id, created: false };
+  if (current && request.data?.different !== true && !request.data?.sample) return { jobId: current.id, created: false };
+  // A specific sample can be asked for by id (testing); otherwise a random one
+  const wanted = DEMO.samples.find((s) => s.id === request.data?.sample);
+  const sample = wanted || DEMO.pickSample(current?.get("demoSample"));
   for (const old of samples) await deleteJobData(uid, old.id);
 
   const jobId = `demo-${now.toString(36)}`;
@@ -255,8 +259,8 @@ exports.createDemoJob = onCall(piccoloCallable({ timeoutSeconds: 60 }), async (r
   const jobRef = db().doc(`users/${uid}/jobs/${jobId}`);
   batch.set(jobRef, {
     name: "Sample site walk",
-    customer: DEMO.customer,
-    location: DEMO.location,
+    customer: sample.customer,
+    location: sample.location,
     address: null,
     lat: null,
     lng: null,
@@ -266,13 +270,15 @@ exports.createDemoJob = onCall(piccoloCallable({ timeoutSeconds: 60 }), async (r
     lastStopAt: start + 35 * 60 * 1000,
     isDemo: true,
     demoVersion: DEMO.version,
+    demoSample: sample.id,
     expiresAt: now + GUEST_DAYS * DAY,
   });
   // The sample photos (AI-generated images matching each stop), copied into the user's own
   // photos/ folder first so the stop records never point at a missing file
   const bucket = getStorage().bucket();
   const photoPaths = [];
-  for (const [i, file] of (DEMO.photos || []).entries()) {
+  for (let i = 0; i < sample.stops.length; i++) {
+    const file = `${sample.id}-${i + 1}.jpg`;
     const dest = `photos/${uid}/${jobId}-s${i + 1}.jpg`;
     try {
       await bucket.upload(path.join(__dirname, "demo-photos", file), { destination: dest, contentType: "image/jpeg" });
@@ -281,7 +287,7 @@ exports.createDemoJob = onCall(piccoloCallable({ timeoutSeconds: 60 }), async (r
       logger.warn("Sample photo upload failed", { uid, file, error: String(err?.message || err) });
     }
   }
-  DEMO.stops.forEach((s, i) => {
+  sample.stops.forEach((s, i) => {
     batch.set(db().doc(`users/${uid}/stops/${jobId}-s${i + 1}`), {
       jobId,
       note: "",
@@ -297,11 +303,11 @@ exports.createDemoJob = onCall(piccoloCallable({ timeoutSeconds: 60 }), async (r
       createdAt: FieldValue.serverTimestamp(),
     });
   });
-  for (const [type, text] of [["field", DEMO.fieldNotes], ["customer", DEMO.customerComments]]) {
+  for (const [type, text] of [["field", sample.fieldNotes], ["customer", sample.customerComments]]) {
     batch.set(jobRef.collection("wrapUpNotes").doc(type), { type, text, edited: true, segments: [], createdBy: uid, createdAt: now, updatedAt: now });
   }
   await batch.commit();
-  return { jobId, created: true };
+  return { jobId, created: true, sample: sample.id, trade: sample.trade };
 });
 
 /**

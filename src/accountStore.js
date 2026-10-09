@@ -16,7 +16,7 @@ export const createOrg = (name) => call("createOrg")({ name });
 export const createInvite = (email, role) => call("createInvite")({ email, role });
 export const revokeInvite = (inviteId) => call("revokeInvite")({ inviteId });
 export const updateMember = (uid, change) => call("updateMember")({ uid, ...change });
-export const createDemoJob = () => call("createDemoJob")();
+export const createDemoJob = (different = false) => call("createDemoJob")(different ? { different: true } : {});
 const mergeGuest = (guestToken) => call("mergeGuestIntoAccount")({ guestToken });
 
 export const TEAM_ROLES = [

@@ -117,6 +117,7 @@ Piccolo turns a finished PicTalk job into the documents that come next, with the
 - PDF export with job information, photos, findings, summary, and action items
 - PDF delivery that fits the device: on a phone, Share PDF (Web Share) comes first; on a computer, Download PDF saves the file and Share PDF is the second option
 - Automatic voice-note retention policy designed to reduce unnecessary long-term audio storage
+- **Help built in:** a one-page quick-start PDF (opens offline) and **Ask PicTalk**, a help chat you can type or speak to. Claude answers how-to and best-practice questions only from a written guide to the app, names the guide sections it used, and says when the guide doesn't cover something. A test fails if the guide ever names a button the app no longer has.
 - **Engineering Mode:** an opt-in inside view of the capture pipeline with real timings, sync status, and AI usage
 - **Evaluation Lab:** an offline simulator with a public scorecard and fixes log
 - **Piccolo:** AI-drafted work orders, parts lists, and quotes with code-enforced guardrails, full editing, numbered finals, PDF/CSV/JSON export, team roles with price-free views, an admin console, and drafts that learn from each company's finals

@@ -61,6 +61,15 @@ Piccolo turns a finished PicTalk job into the documents that come next, with the
 
 <sub>The made-up "Try Piccolo" sample job, drafted by Claude on the test project; prices entered by hand.</sub>
 
+**Tested on a real phone** (made-up customers):
+
+<p>
+  <img src="docs/piccolo-phone-parts-verify.webp" alt="Parts list on an Android phone: a replacement light marked Verify part number and Needs price, quoting the tech and linking to stop 5" width="200">
+  <img src="docs/piccolo-phone-pdf-workorder.webp" alt="Work order PDF drafted from photos: scope, tasks by location, devices and materials, installation notes" width="200">
+  <img src="docs/piccolo-phone-pdf-quote.webp" alt="Quote PDF: priced lines, TBD lines left out of the total, subtotal, markup, tax, and total" width="300">
+  <img src="docs/piccolo-phone-export.webp" alt="Export sheet: pick a final version, then PDF (work order, parts list, quote) or CSV" width="200">
+</p>
+
 - **AI draft from the job itself.** Claude reads the stops (words, photo descriptions, and the photos), the wrap-up notes, and the job summary, and writes a work order (scope, locations with tasks, customer requirements, installation notes), a parts and labor list, and open questions. There's no parts catalog to set up.
 - **Guardrails enforced in code, not just asked for.** Every line links back to the stop or note it came from (tap to jump to the photo). A part number counts as the technician's only if it was actually said or written; anything else is marked **Verify part #**. Lines the AI assumed are marked **Inferred · check**. Prices stay blank unless they come from the company's labor rate, the same item on an earlier final, or AI estimates the company turned on (always marked **ESTIMATE**).
 - **Edit everything.** Lines, quantities, part numbers, prices, scope, tasks, and questions, with undo, saving on the phone first. A newer draft never overwrites the user's copy; they can compare and pull in only what they want.

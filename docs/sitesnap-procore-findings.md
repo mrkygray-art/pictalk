@@ -11,7 +11,9 @@ For Steps 2, 6 and 8 and the open questions in `docs/sitesnap-changes.md`. Check
    - Every Procore write goes through one small module, so it can switch to a Developer Managed Service Account later (see "Moving to a service account" below; not built).
 3. **Step 1:** not merged until the preview is reviewed.
 4. **Firebase:** Ky creates the new SiteSnap project and sends its ID. Don't touch `pictalk-6cbff`, and store no tokens (step 2's PM token included) until the new project exists.
-5. **`?code=` or `#`:** read the Vercel log line after Ky signs in again on the live Step 1, then update this doc.
+5. **`?code=` or `#`: answered (2026-10-14).**
+   - The sandbox sends the code **in the query** (`?code=`). All three sandbox sign-ins in the production logs say "Procore callback: code arrived in the query" (03:22 and 03:27 UTC, deployment `dpl_5JJeBvYxsh5anm1FYkAaL1NuBwB3`), and none say `#`.
+   - The `#` handling stays as a fallback. It may matter for Procore's iframe-helper popup flow later.
 6. **Webhooks (Step 8, not yet):**
    - Treat each delivery as a ping only.
    - Verify our own secret header.
@@ -128,5 +130,4 @@ No public API. None of Procore's 649 API resource groups mention it, so don't bu
 - Minimum permission levels to create or close a Task or Observation.
 - Webhook resource names, and whether comments fire events.
 - Whether `PATCH task_items/{id}` accepts JSON (the reference lists multipart).
-- What the sandbox sends back after sign-in. The callback handles both `?code=` and `#code=`. Look for "Procore callback: code arrived …" in the Vercel logs (decision 5).
 - That Admin on the Tasks tool is needed to close a Task (decision 1). This needs a sandbox test.

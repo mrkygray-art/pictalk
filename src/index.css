@@ -1679,7 +1679,9 @@ button:focus-visible {
 }
 
 /* SiteSnap AI (Piccolo off): who's signed in, in place of the pane tabs */
-.account-bar { justify-content: space-between; }
+.account-bar { justify-content: space-between; padding-bottom: 10px; }
+/* the job bar sticks just under the (taller) account bar, with a gap */
+.account-bar ~ .pane-body .job-bar { top: calc(78px + env(safe-area-inset-top, 0px)); }
 .account-state {
   min-width: 0;
   color: var(--muted);

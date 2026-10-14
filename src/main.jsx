@@ -1,5 +1,6 @@
 import { StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
+import './theme.css'
 import './index.css'
 import Shell from './Shell.jsx' // SiteSnap AI and Piccolo panes
 import LabPage from './lab/LazyLabPage.jsx' // the public Evaluation Lab page at /lab

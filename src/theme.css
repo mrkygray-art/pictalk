@@ -1,0 +1,99 @@
+/* SiteSnap AI look: light iOS grouped style, dark when the phone is in dark mode.
+   Colors live here only; index.css uses these variables. */
+:root {
+  color-scheme: light dark;
+
+  /* Backgrounds */
+  --bg: #f2f2f7; /* iOS grouped background, the page */
+  --surface: #ffffff; /* cards, lists, sheets */
+  --surface-2: #f9f9fb; /* secondary fill */
+  --fill: #f2f2f7; /* inputs and boxes inside a white card (#f9f9fb is too faint on white) */
+
+  /* Text */
+  --text: #1c1c1e;
+  --text-2: #6c6c70; /* secondary, hints */
+  --text-3: #aeaeb2; /* placeholder, disabled */
+
+  /* Brand */
+  --brand: #0f9d8a; /* Signal Teal: main buttons, links, active tab */
+  --brand-press: #0b7f70;
+  --brand-soft: #e3f5f2; /* tinted backgrounds, secondary buttons */
+  --on-brand: #ffffff; /* text on a teal fill */
+
+  /* Action colors */
+  --record: #ff453a; /* Tap to Talk, recording dot, timer */
+  --record-soft: #ffe9e7;
+  --success: #34c759; /* fills: saved, approved */
+  --success-ink: #248a3d; /* green text on white */
+  --success-soft: #e5f8ea;
+  --warning: #ff9f0a; /* fills and outlines: "still here?", open questions */
+  --warning-ink: #b25000; /* orange text on white */
+  --warning-soft: #fff3e0;
+  --danger: #ff3b30; /* End Job, delete */
+  --danger-soft: #ffe9e7;
+  --violet: #af52de; /* AI photo descriptions */
+  --violet-soft: #f5eafb;
+
+  /* Lines and layers */
+  --separator: #e5e5ea; /* hairline dividers */
+  --shade: rgba(0, 0, 0, 0.4); /* behind bottom sheets */
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --bar-bg: rgba(242, 242, 247, 0.82); /* frosted top bar */
+  --segment-track: rgba(118, 118, 128, 0.12);
+
+  /* Older names, kept so every rule maps to the palette above */
+  --muted: var(--text-2);
+  --blue: var(--brand);
+  --red: var(--danger);
+  --green: var(--brand); /* Save buttons are teal now */
+  --live: var(--success);
+  --orange: var(--warning);
+
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --surface: #1c1c1e;
+    --surface-2: #2c2c2e;
+    --fill: #2c2c2e;
+    --text: #ffffff;
+    --text-2: #aeaeb2;
+    --text-3: #636366;
+    --brand: #2dd4bf;
+    --brand-press: #14b8a6;
+    --brand-soft: #0f2e2a;
+    --on-brand: #00201c; /* white on the light dark-mode teal is unreadable */
+    --record: #ff6961;
+    --record-soft: #3a1a18;
+    --success: #30d158;
+    --success-ink: #30d158;
+    --success-soft: #12301a;
+    --warning: #ff9f0a;
+    --warning-ink: #ff9f0a;
+    --warning-soft: #33260f;
+    --danger: #ff453a;
+    --danger-soft: #3a1a18;
+    --violet: #bf5af2;
+    --violet-soft: #2a1636;
+    --separator: #38383a;
+    --shade: rgba(0, 0, 0, 0.6);
+    --card-shadow: none;
+    --bar-bg: rgba(0, 0, 0, 0.78);
+    --segment-track: rgba(118, 118, 128, 0.24);
+  }
+}
+
+/* Shared shapes (the spec's component classes) */
+.card { background: var(--surface); border-radius: 16px; box-shadow: var(--card-shadow); }
+.btn { height: 52px; border-radius: 14px; font-weight: 600; font-size: 17px; border: 0; }
+.btn-primary { background: var(--brand); color: var(--on-brand); }
+.btn-primary:active { background: var(--brand-press); transform: scale(0.98); }
+.btn-secondary { background: var(--brand-soft); color: var(--brand); }
+.btn-danger { background: transparent; color: var(--danger); }
+.input { background: var(--fill); border: 0; border-radius: 12px; padding: 14px 16px; font-size: 16px; }

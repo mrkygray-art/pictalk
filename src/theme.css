@@ -1,51 +1,53 @@
-/* SiteSnap AI look: light iOS grouped style, dark when the phone is in dark mode.
+/* SiteSnap AI look: iOS shapes in a warm job-site palette (hi-vis amber on concrete and sand),
+   dark when the phone is in dark mode.
    Colors live here only; index.css uses these variables. */
 :root {
   color-scheme: light dark;
 
   /* Backgrounds */
-  --bg: #f2f2f7; /* iOS grouped background, the page */
-  --surface: #ffffff; /* cards, lists, sheets */
-  --surface-2: #f9f9fb; /* secondary fill */
-  --fill: #f2f2f7; /* inputs and boxes inside a white card (#f9f9fb is too faint on white) */
+  --bg: #ece4d6; /* warm concrete, the page */
+  --surface: #fbf7f0; /* cards, lists, sheets */
+  --surface-2: #faf6ef; /* secondary fill */
+  --fill: #efe7da; /* inputs and boxes inside a card */
 
   /* Text */
-  --text: #1c1c1e;
-  --text-2: #6c6c70; /* secondary, hints */
-  --text-3: #aeaeb2; /* placeholder, disabled */
+  --text: #231e19;
+  --text-2: #6f6559; /* secondary, hints */
+  --text-3: #ada293; /* placeholder, disabled */
 
   /* Brand */
-  --brand: #0f9d8a; /* Signal Teal: main buttons, links, active tab */
-  --brand-press: #0b7f70;
-  --brand-soft: #e3f5f2; /* tinted backgrounds, secondary buttons */
-  --on-brand: #ffffff; /* text on a teal fill */
+  --brand: #f5a300; /* Hi-Vis Amber: main buttons, active tab */
+  --brand-press: #db8f00;
+  --brand-soft: #fff0c7; /* tinted backgrounds, secondary buttons */
+  --on-brand: #1f1a14; /* dark text on amber, readable in sun */
+  --brand-ink: #8a5300; /* amber text and links on light backgrounds */
 
   /* Action colors */
-  --record: #ff453a; /* Tap to Talk, recording dot, timer */
-  --record-soft: #ffe9e7;
+  --record: #e5383b; /* Tap to Talk, recording dot, timer */
+  --record-soft: #fde4e1;
   --success: #34c759; /* fills: saved, approved */
   --success-ink: #248a3d; /* green text on white */
   --success-soft: #e5f8ea;
-  --warning: #ff9f0a; /* fills and outlines: "still here?", open questions */
-  --warning-ink: #b25000; /* orange text on white */
-  --warning-soft: #fff3e0;
-  --danger: #ff3b30; /* End Job, delete */
-  --danger-soft: #ffe9e7;
+  --warning: #e8590c; /* fills and outlines: "still here?", open questions */
+  --warning-ink: #b33d00; /* orange text on white */
+  --warning-soft: #ffe6d5;
+  --danger: #d92d20; /* End Job, delete */
+  --danger-soft: #fde4e1;
   --violet: #af52de; /* AI photo descriptions */
   --violet-soft: #f5eafb;
 
   /* Lines and layers */
-  --separator: #e5e5ea; /* hairline dividers */
+  --separator: #e6ded2; /* hairline dividers */
   --shade: rgba(0, 0, 0, 0.4); /* behind bottom sheets */
-  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --bar-bg: rgba(242, 242, 247, 0.82); /* frosted top bar */
+  --card-shadow: 0 1px 3px rgba(60, 40, 10, 0.08);
+  --bar-bg: rgba(236, 228, 214, 0.85); /* frosted top bar */
   --segment-track: rgba(118, 118, 128, 0.12);
 
   /* Older names, kept so every rule maps to the palette above */
   --muted: var(--text-2);
   --blue: var(--brand);
   --red: var(--danger);
-  --green: var(--brand); /* Save buttons are teal now */
+  --green: var(--brand); /* Save buttons are amber now */
   --live: var(--success);
   --orange: var(--warning);
 
@@ -58,33 +60,34 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #000000;
-    --surface: #1c1c1e;
-    --surface-2: #2c2c2e;
-    --fill: #2c2c2e;
-    --text: #ffffff;
-    --text-2: #aeaeb2;
-    --text-3: #636366;
-    --brand: #2dd4bf;
-    --brand-press: #14b8a6;
-    --brand-soft: #0f2e2a;
-    --on-brand: #00201c; /* white on the light dark-mode teal is unreadable */
-    --record: #ff6961;
-    --record-soft: #3a1a18;
+    --bg: #14110e;
+    --surface: #221d18;
+    --surface-2: #2e2721;
+    --fill: #2e2721;
+    --text: #f5efe6;
+    --text-2: #b8ac9c;
+    --text-3: #6e6458;
+    --brand: #ffb81c;
+    --brand-press: #e6a200;
+    --brand-soft: #3a2c0e;
+    --on-brand: #1f1a14;
+    --brand-ink: #ffc24d;
+    --record: #ff5f57;
+    --record-soft: #3d1a17;
     --success: #30d158;
     --success-ink: #30d158;
     --success-soft: #12301a;
-    --warning: #ff9f0a;
-    --warning-ink: #ff9f0a;
-    --warning-soft: #33260f;
-    --danger: #ff453a;
-    --danger-soft: #3a1a18;
+    --warning: #ff8a3d;
+    --warning-ink: #ff8a3d;
+    --warning-soft: #3a2214;
+    --danger: #ff5f57;
+    --danger-soft: #3d1a17;
     --violet: #bf5af2;
     --violet-soft: #2a1636;
-    --separator: #38383a;
+    --separator: #3a332b;
     --shade: rgba(0, 0, 0, 0.6);
     --card-shadow: none;
-    --bar-bg: rgba(0, 0, 0, 0.78);
+    --bar-bg: rgba(20, 17, 14, 0.82);
     --segment-track: rgba(118, 118, 128, 0.24);
   }
 }
@@ -94,6 +97,6 @@
 .btn { height: 52px; border-radius: 14px; font-weight: 600; font-size: 17px; border: 0; }
 .btn-primary { background: var(--brand); color: var(--on-brand); }
 .btn-primary:active { background: var(--brand-press); transform: scale(0.98); }
-.btn-secondary { background: var(--brand-soft); color: var(--brand); }
+.btn-secondary { background: var(--brand-soft); color: var(--brand-ink); }
 .btn-danger { background: transparent; color: var(--danger); }
 .input { background: var(--fill); border: 0; border-radius: 12px; padding: 14px 16px; font-size: 16px; }

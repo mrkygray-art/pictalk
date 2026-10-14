@@ -1,26 +1,3 @@
-/* Always dark: black background, whatever the phone's light/dark setting */
-:root {
-  color-scheme: dark;
-  --bg: #000000;
-  --surface: #1c1c1e;
-  --surface-2: #2c2c2e;
-  --text: #f2f2f7;
-  --muted: #aeaeb2;
-  --blue: #0a84ff;
-  --red: #ff453a;
-  --green: #1e8e3e; /* button fill: dark enough for white text */
-  --live: #30d158; /* bright green for text, dots and outlines on black */
-  --orange: #ff9f0a;
-  --violet: #bf5af2; /* AI photo descriptions */
-  --violet-soft: rgba(191, 90, 242, 0.12);
-  --shade: rgba(0, 0, 0, 0.7);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  color: var(--text);
-  background: var(--bg);
-  -webkit-font-smoothing: antialiased;
-  -webkit-tap-highlight-color: transparent;
-}
-
 * {
   box-sizing: border-box;
   margin: 0;
@@ -56,7 +33,8 @@ body {
 
 .current {
   background: var(--surface);
-  border-radius: 22px;
+  box-shadow: var(--card-shadow);
+  border-radius: 16px;
   overflow: hidden;
   min-height: 220px;
   display: flex;
@@ -85,22 +63,32 @@ body {
   margin: 12px;
 }
 
+.current .preview {
+  border-radius: 12px;
+  width: calc(100% - 16px);
+  margin: 8px 8px 0;
+}
+
 .big-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
   width: 100%;
-  min-height: 88px;
-  border-radius: 22px;
+  min-height: 64px;
+  border: none;
+  border-radius: 14px;
   font-family: inherit;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.1s ease;
 }
 
-.big-btn:active {
+.big-btn:active,
+.save-btn:active,
+.link-btn:active,
+.job-card:active {
   transform: scale(0.98);
 }
 
@@ -111,36 +99,57 @@ body {
 }
 
 .photo-btn {
-  background: var(--blue);
-  color: #ffffff;
-  border: 3px solid var(--blue);
+  background: var(--brand);
+  color: var(--on-brand);
 }
 
+.photo-btn:active {
+  background: var(--brand-press);
+}
+
+/* Tap to Talk: a big red circle with a white mic, the label beside it */
 .talk-btn {
+  justify-content: flex-start;
+  gap: 16px;
+  padding: 10px 16px 10px 10px;
   background: var(--surface);
-  color: var(--blue);
-  border: 3px solid var(--blue);
+  box-shadow: var(--card-shadow);
+  color: var(--record);
+  font-variant-numeric: tabular-nums;
+}
+
+.big-btn.talk-btn svg {
+  width: 84px;
+  height: 84px;
+  padding: 26px;
+  border-radius: 50%;
+  background: var(--record);
+  color: #ffffff;
 }
 
 .talk-btn.is-recording {
-  background: var(--red);
-  border-color: var(--red);
-  color: #ffffff;
-  animation: pulse 1.6s ease-in-out infinite;
+  background: var(--record-soft);
+}
+
+.talk-btn.is-recording svg {
+  animation: pulse 1.6s ease-out infinite;
 }
 
 @keyframes pulse {
-  50% {
-    opacity: 0.82;
+  from {
+    box-shadow: 0 0 0 0 var(--record);
+  }
+  to {
+    box-shadow: 0 0 0 14px transparent;
   }
 }
 
 .save-btn {
   min-height: 60px;
   border: none;
-  border-radius: 16px;
-  background: var(--green);
-  color: #ffffff;
+  border-radius: 14px;
+  background: var(--brand);
+  color: var(--on-brand);
   font-family: inherit;
   font-size: 20px;
   font-weight: 600;
@@ -153,7 +162,7 @@ button:disabled {
 }
 
 button:focus-visible {
-  outline: 3px solid var(--text);
+  outline: 3px solid var(--brand);
   outline-offset: 3px;
 }
 
@@ -172,14 +181,35 @@ button:focus-visible {
   margin: 12px 0;
 }
 
+/* Saved stops: one grouped inset list, hairlines between rows */
 .stop {
+  position: relative;
   background: var(--surface);
-  border-radius: 16px;
   display: flex;
   gap: 14px;
-  padding: 12px;
+  padding: 12px 16px;
   align-items: flex-start;
+}
+
+.stop:not(.stop + .stop) {
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+}
+
+.stop:not(:has(+ .stop)) {
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 16px;
   margin-bottom: 12px;
+}
+
+.stop + .stop::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 0;
+  height: 1px;
+  background: var(--separator);
 }
 
 .thumb {
@@ -218,14 +248,15 @@ button:focus-visible {
   align-items: center;
   gap: 12px;
   background: var(--surface);
-  border: 2px solid var(--live);
-  border-radius: 18px;
+  border-radius: 16px;
   padding: 12px 16px;
+  outline: 1.5px solid var(--live);
+  outline-offset: -1.5px;
   box-shadow: 0 -12px 0 8px var(--bg); /* hides the list scrolling behind it */
 }
 
 .job-bar.is-idle {
-  border-color: var(--surface-2);
+  outline-color: transparent;
 }
 
 .job-bar-dot {
@@ -273,31 +304,35 @@ button:focus-visible {
 
 .start-btn {
   background: var(--surface);
-  color: var(--text);
-  border: 3px solid transparent;
+  box-shadow: var(--card-shadow);
+  color: var(--brand-ink);
   min-height: 72px;
   margin-top: 8px;
 }
 
 .end-btn {
-  background: transparent;
-  color: var(--red);
-  border: 3px solid var(--red);
+  background: var(--danger-soft);
+  color: var(--danger);
   min-height: 64px;
   font-size: 22px;
   margin-top: 8px;
 }
 
 .danger-btn {
-  background: var(--red);
+  background: var(--danger);
   color: #ffffff;
-  border: 3px solid var(--red);
 }
 
+/* Save & Finish Job (the End Job sheet's submit) is an amber primary, not a delete */
+.sheet-form > .danger-btn[type="submit"] {
+  background: var(--brand);
+  color: var(--on-brand);
+}
+
+/* Secondary buttons: amber tint */
 .plain-btn {
-  background: var(--surface-2);
-  color: var(--text);
-  border: 3px solid transparent;
+  background: var(--brand-soft);
+  color: var(--brand-ink);
   min-height: 64px;
 }
 
@@ -307,10 +342,9 @@ button:focus-visible {
   padding: 12px;
   background: none;
   border: none;
-  color: var(--muted);
+  color: var(--brand-ink);
   font-family: inherit;
   font-size: 18px;
-  text-decoration: underline;
   cursor: pointer;
 }
 
@@ -328,11 +362,12 @@ button:focus-visible {
   gap: 8px;
   align-self: flex-start;
   min-height: 48px;
-  padding: 10px 16px;
+  padding: 10px 18px;
   background: var(--surface);
-  color: var(--blue);
+  box-shadow: var(--card-shadow);
+  color: var(--brand-ink);
   border: none;
-  border-radius: 16px;
+  border-radius: 999px;
   font-family: inherit;
   font-size: 18px;
   font-weight: 700;
@@ -368,9 +403,10 @@ button:focus-visible {
   width: 100%;
   text-align: left;
   background: var(--surface);
+  box-shadow: var(--card-shadow);
   color: var(--text);
   border: none;
-  border-radius: 20px;
+  border-radius: 16px;
   padding: 16px 18px;
   margin-bottom: 12px;
   font-family: inherit;
@@ -378,7 +414,7 @@ button:focus-visible {
 }
 
 .job-card.is-live {
-  box-shadow: inset 0 0 0 3px var(--live);
+  box-shadow: inset 0 0 0 2px var(--live);
 }
 
 .job-card strong {
@@ -397,8 +433,8 @@ button:focus-visible {
 .job-card .pill {
   display: inline-block;
   margin: 0 0 0 8px;
-  padding: 2px 8px;
-  border-radius: 8px;
+  padding: 2px 10px;
+  border-radius: 999px;
   background: var(--live);
   color: #000000;
   font-size: 14px;
@@ -411,10 +447,10 @@ button:focus-visible {
   margin-top: 8px;
   min-height: 44px;
   padding: 8px 14px;
-  background: var(--surface-2);
-  color: var(--blue);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
   border: none;
-  border-radius: 12px;
+  border-radius: 999px;
   font-family: inherit;
   font-size: 16px;
   font-weight: 700;
@@ -450,8 +486,8 @@ button:focus-visible {
   font-size: 22px;
   color: var(--text);
   background: var(--surface);
-  border: 3px solid var(--blue);
-  border-radius: 16px;
+  border: 2px solid var(--blue);
+  border-radius: 12px;
 }
 
 .sheet-form {
@@ -482,9 +518,9 @@ button:focus-visible {
   font-family: inherit;
   font-size: 21px;
   color: var(--text);
-  background: var(--surface-2);
-  border: 3px solid var(--surface-2);
-  border-radius: 16px;
+  background: var(--fill);
+  border: 2px solid transparent;
+  border-radius: 12px;
 }
 
 .detail-fields input:focus {
@@ -492,13 +528,15 @@ button:focus-visible {
   border-color: var(--blue);
 }
 
-.detail-fields input::placeholder {
-  color: var(--muted);
+.detail-fields input::placeholder,
+.words-field::placeholder,
+.summary-field::placeholder {
+  color: var(--text-3);
 }
 
 .name-box .detail-fields input {
   background: var(--surface);
-  border-color: var(--surface);
+  border-color: transparent;
 }
 
 .name-box .detail-fields input:focus {
@@ -513,9 +551,8 @@ button:focus-visible {
 }
 
 .limit-note {
-  background: var(--surface);
-  border: 2px solid var(--orange);
-  border-radius: 18px;
+  background: var(--warning-soft);
+  border-radius: 16px;
   padding: 20px;
   font-size: 20px;
   line-height: 1.4;
@@ -545,11 +582,12 @@ button:focus-visible {
   width: 100%;
   aspect-ratio: 4 / 3;
   object-fit: cover;
-  border-radius: 18px;
+  border-radius: 12px;
 }
 
 .sheet .job-card {
-  background: var(--surface-2);
+  background: var(--fill);
+  box-shadow: none;
   margin-bottom: 0;
 }
 
@@ -569,12 +607,24 @@ button:focus-visible {
   max-height: 92vh;
   overflow-y: auto;
   background: var(--surface);
-  border-radius: 26px 26px 0 0;
-  padding: 26px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  border-radius: 20px 20px 0 0;
+  padding: 12px 20px calc(32px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   gap: 14px;
   animation: sheet-up 0.22s ease-out;
+}
+
+/* grabber bar on top of every bottom sheet */
+.sheet::before,
+.rec-confirm-card::before {
+  content: "";
+  flex: none;
+  width: 36px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--separator);
+  margin: 0 auto 2px;
 }
 
 .sheet h2 {
@@ -609,8 +659,8 @@ button:focus-visible {
 }
 
 .toast {
-  background: var(--surface-2);
-  color: var(--text);
+  background: var(--text);
+  color: var(--surface);
   padding: 14px 22px;
   border-radius: 16px;
   font-size: 18px;
@@ -621,7 +671,7 @@ button:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .talk-btn.is-recording,
+  .talk-btn.is-recording svg,
   .sheet,
   .toast {
     animation: none;
@@ -631,16 +681,17 @@ button:focus-visible {
   }
 }
 .stop-info .stop-status { font-size: 0.85rem; color: var(--muted); }
-.stop-info .stop-status.is-pending { color: var(--orange); }
-.stop-info .stop-status.is-saved { color: var(--live); }
+.stop-info .stop-status.is-pending { color: var(--warning-ink); }
+.stop-info .stop-status.is-saved { color: var(--success-ink); }
 .stop-info .stop-note { font-size: 0.85rem; color: var(--muted); font-style: italic; }
-.stop-info .stop-status.is-working { color: var(--blue); }
+.stop-info .stop-status.is-working { color: var(--brand-ink); }
 .stop-info .stop-status.is-problem { color: var(--red); }
 /* ---------- AI summary ---------- */
 
 .summary-card {
   background: var(--surface);
-  border-radius: 20px;
+  box-shadow: var(--card-shadow);
+  border-radius: 16px;
   padding: 18px;
   display: flex;
   flex-direction: column;
@@ -689,6 +740,10 @@ button:focus-visible {
   color: #000000;
 }
 
+.badge.is-approved::before {
+  content: "\2713  ";
+}
+
 .summary-meta,
 .summary-status {
   font-size: 16px;
@@ -697,7 +752,7 @@ button:focus-visible {
 }
 
 .summary-status.is-busy {
-  color: var(--blue);
+  color: var(--brand-ink);
   font-weight: 600;
 }
 
@@ -717,9 +772,9 @@ button:focus-visible {
   font-size: 18px;
   line-height: 1.4;
   color: var(--text);
-  background: var(--surface-2);
-  border: 3px solid var(--surface-2);
-  border-radius: 14px;
+  background: var(--fill);
+  border: 2px solid transparent;
+  border-radius: 12px;
   resize: vertical;
 }
 
@@ -741,7 +796,7 @@ button:focus-visible {
   flex-direction: column;
   gap: 8px;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--surface-2);
+  border-bottom: 1px solid var(--separator);
 }
 
 .priority-row {
@@ -752,8 +807,8 @@ button:focus-visible {
 
 .priority-btn {
   min-height: 44px;
-  border-radius: 12px;
-  border: 2px solid var(--surface-2);
+  border-radius: 999px;
+  border: 1px solid var(--separator);
   background: transparent;
   color: var(--muted);
   font-family: inherit;
@@ -775,7 +830,7 @@ button:focus-visible {
 }
 
 .priority-btn.is-on.is-low {
-  background: var(--surface-2);
+  background: var(--fill);
   border-color: var(--muted);
   color: var(--text);
 }
@@ -800,7 +855,7 @@ button:focus-visible {
   min-height: 44px;
   padding: 8px 14px;
   border: none;
-  border-radius: 12px;
+  border-radius: 999px;
   font-family: inherit;
   font-size: 16px;
   font-weight: 700;
@@ -808,8 +863,8 @@ button:focus-visible {
 }
 
 .stop-link {
-  background: var(--surface-2);
-  color: var(--blue);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
 }
 
 .remove-btn {
@@ -821,7 +876,7 @@ button:focus-visible {
 .add-btn {
   align-self: flex-start;
   background: transparent;
-  color: var(--blue);
+  color: var(--brand-ink);
   padding-left: 0;
 }
 
@@ -834,7 +889,7 @@ button:focus-visible {
   display: inline;
   padding: 0 4px;
   font-size: 16px;
-  color: var(--blue);
+  color: var(--brand-ink);
 }
 
 .approve-btn {
@@ -898,7 +953,7 @@ button:focus-visible {
   min-height: 60px;
   padding: 0 16px;
   border-radius: 14px;
-  border: 1.5px solid;
+  border: none;
   font-family: inherit;
   font-size: 18px;
   font-weight: 600;
@@ -908,13 +963,11 @@ button:focus-visible {
 }
 
 .add-note.is-field {
-  background: #1e2a3a;
-  border-color: #3a5f8f;
+  background: var(--brand-soft);
 }
 
 .add-note.is-customer {
-  background: #33291a;
-  border-color: #7a5a22;
+  background: var(--warning-soft);
 }
 
 .add-note-label {
@@ -940,16 +993,15 @@ button:focus-visible {
 }
 
 .note-icon.is-field {
-  color: #64a8ff;
+  color: var(--brand-ink);
 }
 
 .note-icon.is-customer {
-  color: #f2b14c;
+  color: var(--warning-ink);
 }
 
 .note-card {
-  border-radius: 14px;
-  border: 1.5px solid;
+  border-radius: 16px;
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -957,13 +1009,11 @@ button:focus-visible {
 }
 
 .note-card.is-field {
-  background: #1e2a3a;
-  border-color: #3a5f8f;
+  background: var(--brand-soft);
 }
 
 .note-card.is-customer {
-  background: #33291a;
-  border-color: #7a5a22;
+  background: var(--warning-soft);
 }
 
 .note-card-head {
@@ -977,7 +1027,7 @@ button:focus-visible {
   margin-left: auto;
   width: 24px;
   height: 24px;
-  color: var(--live);
+  color: var(--success-ink);
 }
 
 .note-check svg {
@@ -1019,8 +1069,8 @@ button:focus-visible {
   min-height: 44px;
   padding: 8px 14px;
   border: none;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: var(--surface);
   color: var(--text);
   font-family: inherit;
   font-size: 16px;
@@ -1046,8 +1096,8 @@ button:focus-visible {
 }
 
 .summary-stale {
-  border: 2px solid var(--orange);
-  border-radius: 14px;
+  background: var(--warning-soft);
+  border-radius: 16px;
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
@@ -1065,8 +1115,8 @@ button:focus-visible {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: #000000;
-  color: #f5f5f7;
+  background: var(--bg);
+  color: var(--text);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1124,7 +1174,7 @@ button:focus-visible {
 
 .rec-job {
   font-size: 15px;
-  color: #8e8e93;
+  color: var(--text-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1139,18 +1189,18 @@ button:focus-visible {
 }
 
 .rec-pill.is-rec {
-  background: rgba(255, 69, 58, 0.18);
-  color: #ff6961;
+  background: var(--record-soft);
+  color: var(--record);
 }
 
 .rec-pill.is-gray {
-  background: var(--surface-2);
-  color: #aeaeb2;
+  background: var(--fill);
+  color: var(--text-2);
 }
 
 .rec-pill.is-amber {
-  background: rgba(242, 177, 76, 0.18);
-  color: #f2b14c;
+  background: var(--warning-soft);
+  color: var(--warning-ink);
 }
 
 .rec-transcript {
@@ -1164,7 +1214,7 @@ button:focus-visible {
 .rec-final {
   font-size: 18px;
   line-height: 1.5;
-  color: #f5f5f7;
+  color: var(--text);
   white-space: pre-wrap;
   margin-bottom: 12px;
 }
@@ -1172,7 +1222,7 @@ button:focus-visible {
 .rec-waiting {
   font-size: 17px;
   line-height: 1.5;
-  color: #8e8e93;
+  color: var(--text-2);
 }
 
 .rec-controls {
@@ -1188,7 +1238,7 @@ button:focus-visible {
   align-items: center;
   gap: 8px;
   font-size: 15px;
-  color: #aeaeb2;
+  color: var(--text-2);
 }
 
 .rec-btn {
@@ -1209,14 +1259,15 @@ button:focus-visible {
 .rec-btn.is-edit {
   width: 60px;
   height: 60px;
-  background: #3a3a3c;
+  background: var(--fill);
+  color: var(--text);
 }
 
 .rec-btn.is-main {
   width: 76px;
   height: 76px;
-  background: #ff3b30;
-  box-shadow: 0 0 0 4px #000000, 0 0 0 7px #ffffff;
+  background: var(--record);
+  box-shadow: 0 0 0 4px var(--bg), 0 0 0 7px var(--text-3);
 }
 
 .rec-btn.is-main svg {
@@ -1227,7 +1278,8 @@ button:focus-visible {
 .rec-btn.is-done {
   width: 60px;
   height: 60px;
-  background: #2b5fa8;
+  background: var(--brand);
+  color: var(--on-brand);
 }
 
 .rec-consent {
@@ -1241,10 +1293,9 @@ button:focus-visible {
 .rec-consent p {
   font-size: 20px;
   line-height: 1.45;
-  color: #f5f5f7;
-  background: #33291a;
-  border: 1.5px solid #7a5a22;
-  border-radius: 14px;
+  color: var(--text);
+  background: var(--warning-soft);
+  border-radius: 16px;
   padding: 18px;
 }
 
@@ -1254,9 +1305,9 @@ button:focus-visible {
   min-height: 200px;
   padding: 16px;
   border-radius: 16px;
-  border: 2px solid var(--surface-2);
+  border: 2px solid transparent;
   background: var(--surface);
-  color: #f5f5f7;
+  color: var(--text);
   font-family: inherit;
   font-size: 18px;
   line-height: 1.5;
@@ -1265,12 +1316,12 @@ button:focus-visible {
 
 .rec-editor:focus {
   outline: none;
-  border-color: #64a8ff;
+  border-color: var(--brand);
 }
 
 .rec-help {
   font-size: 15px;
-  color: #8e8e93;
+  color: var(--text-2);
 }
 
 .rec-edit-actions {
@@ -1284,9 +1335,9 @@ button:focus-visible {
 }
 
 .rec-done-btn {
-  background: #2b5fa8;
-  color: #ffffff;
-  border: 3px solid #2b5fa8;
+  background: var(--brand);
+  color: var(--on-brand);
+  border: 3px solid var(--brand);
 }
 
 .rec-confirm {
@@ -1303,8 +1354,8 @@ button:focus-visible {
   width: 100%;
   max-width: 480px;
   background: var(--surface);
-  border-radius: 26px 26px 0 0;
-  padding: 26px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  border-radius: 20px 20px 0 0;
+  padding: 12px 20px calc(32px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1321,12 +1372,12 @@ button:focus-visible {
 
 /* live transcription */
 .rec-pill.is-live {
-  background: rgba(48, 209, 88, 0.18);
-  color: #30d158;
+  background: var(--success-soft);
+  color: var(--success-ink);
 }
 
 .rec-interim {
-  color: #8e8e93;
+  color: var(--text-2);
 }
 
 .rec-caret {
@@ -1335,7 +1386,7 @@ button:focus-visible {
   height: 1.1em;
   margin-left: 3px;
   vertical-align: text-bottom;
-  background: #64a8ff;
+  background: var(--brand);
   animation: rec-blink 1s steps(2, start) infinite;
 }
 
@@ -1366,9 +1417,9 @@ button:focus-visible {
   font-size: 19px;
   line-height: 1.45;
   color: var(--text);
-  background: var(--surface-2);
-  border: 3px solid var(--surface-2);
-  border-radius: 16px;
+  background: var(--fill);
+  border: 2px solid transparent;
+  border-radius: 12px;
   resize: vertical;
 }
 
@@ -1400,7 +1451,7 @@ button:focus-visible {
   font-size: 14px;
   font-weight: 700;
   vertical-align: 2px;
-  background: var(--surface-2);
+  background: var(--fill);
   color: var(--text);
 }
 
@@ -1449,7 +1500,7 @@ button:focus-visible {
 
 .mic-choice.is-on {
   border-color: var(--blue);
-  color: var(--blue);
+  color: var(--brand-ink);
 }
 
 /* ---------- Engineering Mode (off by default) ---------- */
@@ -1459,7 +1510,7 @@ button:focus-visible {
 .bottom-links .eng-toggle { margin-top: 0; }
 .eng-panel {
   background: var(--surface);
-  border: 1px dashed #48484a;
+  border: 1px dashed var(--separator);
   border-radius: 18px;
   padding: 16px;
   margin: 16px 0;
@@ -1471,7 +1522,7 @@ button:focus-visible {
 .eng-fine { margin: 0; color: var(--muted); font-size: 14px; }
 .eng-pipe { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .eng-pipe li {
-  background: var(--surface-2);
+  background: var(--fill);
   border-radius: 10px;
   padding: 6px 9px;
   display: grid;
@@ -1486,15 +1537,15 @@ button:focus-visible {
 .eng-log li, .eng-list li { overflow-wrap: anywhere; }
 .eng-time { color: var(--muted); font-variant-numeric: tabular-nums; }
 .eng-detail { display: block; color: var(--muted); font-size: 13px; }
-.eng-ok { color: var(--live); }
-.eng-warn { color: var(--orange); }
+.eng-ok { color: var(--success-ink); }
+.eng-warn { color: var(--warning-ink); }
 .eng-btn {
   margin-top: 10px;
   font: inherit;
   font-weight: 600;
   color: var(--text);
-  background: var(--surface-2);
-  border: 1px solid #48484a;
+  background: var(--fill);
+  border: 1px solid var(--separator);
   border-radius: 12px;
   padding: 10px 16px;
   cursor: pointer;
@@ -1503,8 +1554,8 @@ button:focus-visible {
 .eng-line {
   margin-top: 6px;
   padding: 8px 10px;
-  border-left: 3px solid #48484a;
-  background: var(--surface-2);
+  border-left: 3px solid var(--separator);
+  background: var(--fill);
   border-radius: 6px;
   font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: var(--muted);
@@ -1521,7 +1572,7 @@ button:focus-visible {
   gap: 10px;
   align-items: start;
   padding: 12px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--separator);
   font-size: 18px;
   line-height: 1.4;
 }
@@ -1534,7 +1585,7 @@ button:focus-visible {
   height: 30px;
   border-radius: 50%;
   background: var(--blue);
-  color: #fff;
+  color: var(--on-brand);
   font-weight: 700;
   font-size: 15px;
 }
@@ -1544,8 +1595,8 @@ button:focus-visible {
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--blue);
+  background: var(--fill);
+  color: var(--brand-ink);
 }
 .install-step-icon svg { width: 24px; height: 24px; }
 .install-steps small { display: block; color: var(--muted); font-size: 15px; margin-top: 3px; }
@@ -1557,7 +1608,7 @@ button:focus-visible {
   padding: 10px 12px;
   border-left: 3px solid var(--muted);
   border-radius: 10px;
-  background: var(--surface-2);
+  background: var(--fill);
 }
 
 .stop-info .stop-box-label {
@@ -1613,7 +1664,7 @@ button:focus-visible {
   column-gap: 8px;
   margin-top: 8px;
   padding-top: 4px;
-  border-top: 1px solid var(--surface-2);
+  border-top: 1px solid var(--separator);
 }
 
 /* ---------- Piccolo: pane switcher, account, team ---------- */
@@ -1625,7 +1676,7 @@ button:focus-visible {
   flex-wrap: wrap;
   gap: 4px 14px;
   padding: calc(6px + env(safe-area-inset-top)) 20px 6px;
-  background: var(--surface-2);
+  background: var(--fill);
   color: var(--muted);
   font-size: 13px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -1638,11 +1689,11 @@ button:focus-visible {
   padding: 10px 20px;
   display: grid;
   gap: 8px;
-  border-bottom: 1px solid var(--surface-2);
+  border-bottom: 1px solid var(--separator);
 }
 .procore-panel h2 { font-size: 16px; }
 .procore-note { color: var(--muted); font-size: 14px; }
-.procore-connected { color: var(--live); font-weight: 600; }
+.procore-connected { color: var(--success-ink); font-weight: 600; }
 .procore-btn {
   justify-self: start;
   min-height: 44px;
@@ -1675,7 +1726,9 @@ button:focus-visible {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: var(--bg);
+  background: var(--bar-bg); /* frosted, like an iOS bar */
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
 }
 
 .pane-body .job-bar {
@@ -1700,10 +1753,10 @@ button:focus-visible {
   flex: 1;
   display: grid;
   grid-template-columns: auto auto; /* each tab as wide as its name; spare room shared */
-  gap: 4px;
-  padding: 4px;
-  background: var(--surface);
-  border-radius: 16px;
+  gap: 2px;
+  padding: 2px;
+  background: var(--segment-track); /* iOS segmented control */
+  border-radius: 12px;
 }
 
 .pane-switch button {
@@ -1711,9 +1764,9 @@ button:focus-visible {
   padding: 0 10px;
   white-space: nowrap;
   border: none;
-  border-radius: 12px;
+  border-radius: 10px;
   background: none;
-  color: var(--muted);
+  color: var(--text);
   font-family: inherit;
   font-size: 18px;
   font-weight: 700;
@@ -1732,18 +1785,20 @@ button:focus-visible {
 }
 
 .pane-switch button.is-on {
-  background: var(--surface-2);
-  color: var(--text);
+  background: var(--surface);
+  color: var(--brand-ink);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 1px 1px rgba(0, 0, 0, 0.04);
 }
 
 .account-chip {
   flex-shrink: 0;
   max-width: 40%;
-  min-height: 56px;
-  padding: 10px 14px;
-  border: 2px solid var(--surface-2);
-  border-radius: 16px;
-  background: var(--bg);
+  min-height: 48px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
   color: var(--text);
   font-family: inherit;
   font-size: 16px;
@@ -1755,8 +1810,8 @@ button:focus-visible {
 }
 
 .account-chip.is-guest {
-  border-color: var(--blue);
-  color: var(--blue);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
 }
 
 /* The pane bar sits above each pane, so panes need less top space */
@@ -1768,7 +1823,7 @@ button:focus-visible {
 .google-btn {
   background: #ffffff;
   color: #1f1f1f;
-  border: 3px solid #ffffff;
+  border: 1px solid var(--separator);
   min-height: 72px;
   font-size: 22px;
 }
@@ -1780,7 +1835,7 @@ button:focus-visible {
 }
 
 .sent-note {
-  background: var(--surface-2);
+  background: var(--fill);
   border-radius: 14px;
   padding: 14px 16px;
   line-height: 1.4;
@@ -1793,9 +1848,9 @@ button:focus-visible {
   font-family: inherit;
   font-size: 18px;
   color: var(--text);
-  background: var(--surface-2);
-  border: 3px solid var(--surface-2);
-  border-radius: 16px;
+  background: var(--fill);
+  border: 2px solid transparent;
+  border-radius: 12px;
 }
 
 .detail-fields select:focus {
@@ -1817,7 +1872,7 @@ button:focus-visible {
 }
 
 .account-section {
-  border-top: 1px solid var(--surface-2);
+  border-top: 1px solid var(--separator);
   padding-top: 14px;
 }
 
@@ -1841,7 +1896,7 @@ button:focus-visible {
 }
 
 .invite-ready {
-  background: var(--surface-2);
+  background: var(--fill);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1882,7 +1937,7 @@ button:focus-visible {
   margin-left: 8px;
   padding: 2px 8px;
   border-radius: 8px;
-  background: var(--surface-2);
+  background: var(--fill);
   color: var(--text);
   font-size: 14px;
   vertical-align: 2px;
@@ -1923,7 +1978,7 @@ button:focus-visible {
 
 .piccolo-send-btn {
   background: var(--surface);
-  color: var(--orange);
+  color: var(--warning-ink);
   border: 3px solid var(--orange);
   min-height: 64px;
   font-size: 21px;
@@ -2032,7 +2087,7 @@ button:focus-visible {
 .pc-block-head .link-btn {
   min-height: 40px;
   padding: 6px 14px;
-  background: var(--surface-2);
+  background: var(--fill);
   font-size: 16px;
 }
 
@@ -2069,10 +2124,10 @@ button:focus-visible {
 .src-chip {
   min-height: 34px;
   padding: 4px 12px;
-  border: 1px solid var(--surface-2);
+  border: 1px solid var(--separator);
   border-radius: 999px;
   background: var(--bg);
-  color: var(--blue);
+  color: var(--brand-ink);
   font-family: inherit;
   font-size: 15px;
   font-weight: 600;
@@ -2116,7 +2171,7 @@ button:focus-visible {
 .badge {
   padding: 2px 8px;
   border-radius: 8px;
-  background: var(--surface-2);
+  background: var(--fill);
   color: var(--text);
   font-size: 13px;
   font-weight: 700;
@@ -2160,7 +2215,7 @@ button:focus-visible {
 }
 
 .pc-totals .pc-total {
-  border-top: 1px solid var(--surface-2);
+  border-top: 1px solid var(--separator);
   padding-top: 8px;
   font-weight: 700;
   font-size: 20px;
@@ -2234,11 +2289,11 @@ button:focus-visible {
 }
 
 .pc-save.is-saved {
-  color: var(--live);
+  color: var(--success-ink);
 }
 
 .pc-save.is-offline {
-  color: var(--orange);
+  color: var(--warning-ink);
 }
 
 .pc-save.is-error {
@@ -2262,7 +2317,7 @@ button:focus-visible {
 .pc-answer {
   margin-top: 4px;
   font-size: 16px;
-  color: var(--live);
+  color: var(--success-ink);
 }
 
 .pc-add {
@@ -2271,7 +2326,7 @@ button:focus-visible {
   padding: 8px 4px;
   border: none;
   background: none;
-  color: var(--blue);
+  color: var(--brand-ink);
   font-family: inherit;
   font-size: 17px;
   font-weight: 700;
@@ -2282,7 +2337,7 @@ button:focus-visible {
   width: 100%;
   min-height: 56px;
   margin-bottom: 12px;
-  border: 2px dashed var(--surface-2);
+  border: 2px dashed var(--separator);
   border-radius: 18px;
   text-align: center;
 }
@@ -2316,7 +2371,7 @@ button:focus-visible {
 
 .pc-edit-hint {
   font-size: 13px;
-  color: var(--blue);
+  color: var(--brand-ink);
 }
 
 .pc-field-row {
@@ -2340,7 +2395,7 @@ button:focus-visible {
 .pc-line-actions .link-btn {
   justify-content: center;
   width: 100%;
-  background: var(--surface-2);
+  background: var(--fill);
   font-size: 16px;
 }
 
@@ -2364,7 +2419,7 @@ button:focus-visible {
   justify-content: space-between;
   gap: 10px;
   padding: 10px 12px;
-  background: var(--surface-2);
+  background: var(--fill);
   border-radius: 14px;
   font-size: 16px;
   overflow-wrap: anywhere;
@@ -2391,16 +2446,16 @@ button:focus-visible {
 
 .pc-final-note {
   font-size: 16px;
-  color: var(--live);
+  color: var(--success-ink);
   line-height: 1.4;
 }
 
 .pc-final-note.is-changed {
-  color: var(--orange);
+  color: var(--warning-ink);
 }
 
 .pc-warnings {
-  background: var(--surface-2);
+  background: var(--fill);
   border-left: 4px solid var(--orange);
   border-radius: 14px;
   padding: 12px 16px;
@@ -2507,8 +2562,8 @@ div.adm-stat {
   font-size: 16px;
 }
 
-.job-card .pill.is-captured { background: var(--surface-2); color: var(--text); }
-.job-card .pill.is-drafted { background: var(--blue); color: #ffffff; }
+.job-card .pill.is-captured { background: var(--fill); color: var(--text); }
+.job-card .pill.is-drafted { background: var(--blue); color: var(--on-brand); }
 .job-card .pill.is-quoted { background: var(--orange); color: #000000; }
 .job-card .pill.is-won { background: var(--live); color: #000000; }
 .job-card .pill.is-lost { background: var(--red); color: #ffffff; }
@@ -2519,7 +2574,7 @@ div.adm-stat {
 }
 
 .adm-contact {
-  border: 1px solid var(--surface-2);
+  border: 1px solid var(--separator);
   border-radius: 16px;
   padding: 12px;
   margin: 0;
@@ -2606,7 +2661,7 @@ div.adm-stat {
 .place-chip {
   min-height: 40px;
   padding: 8px 14px;
-  border: 1px solid var(--surface-2);
+  border: 1px solid var(--separator);
   border-radius: 999px;
   background: var(--surface);
   color: var(--text);
@@ -2622,7 +2677,7 @@ div.adm-stat {
 
 /* Parts & materials and Labor sit above the subtotal */
 .pc-totals .pc-subtotal {
-  border-top: 1px solid var(--surface-2);
+  border-top: 1px solid var(--separator);
   padding-top: 8px;
 }
 
@@ -2652,27 +2707,27 @@ div.adm-stat {
 /* Help: quick-start PDF and the Ask SiteSnap AI chat */
 .header-row h1 { margin-right: auto; }
 .help-btn { min-width: 48px; justify-content: center; font-size: 22px; font-weight: 700; padding: 10px 14px; }
-.help-link { font-size: 16px; color: var(--blue); }
+.help-link { font-size: 16px; color: var(--brand-ink); }
 .help { display: flex; flex-direction: column; gap: 14px; padding-bottom: 24px; }
-.help-guide { display: block; background: var(--surface); border: 1px solid var(--surface-2); border-radius: 16px; padding: 16px; color: var(--text); text-decoration: none; }
-.help-guide strong { display: block; color: var(--blue); font-size: 19px; margin-bottom: 4px; }
+.help-guide { display: block; background: var(--surface); border: 1px solid var(--separator); border-radius: 16px; padding: 16px; color: var(--text); text-decoration: none; }
+.help-guide strong { display: block; color: var(--brand-ink); font-size: 19px; margin-bottom: 4px; }
 .help-guide span { color: var(--muted); font-size: 16px; }
 .help-h2 { font-size: 24px; margin-top: 8px; }
 .help-intro { color: var(--muted); font-size: 17px; }
 .help-chat { display: flex; flex-direction: column; gap: 10px; }
 .help-sugs { display: flex; flex-wrap: wrap; gap: 8px; }
-.help-chip { background: none; border: 1px solid var(--surface-2); border-radius: 999px; color: var(--text); font: inherit; font-size: 16px; padding: 10px 14px; text-align: left; cursor: pointer; }
-.help-user { align-self: flex-end; max-width: 85%; background: var(--surface-2); border-radius: 16px; padding: 10px 14px; font-size: 17px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.help-chip { background: none; border: 1px solid var(--separator); border-radius: 999px; color: var(--text); font: inherit; font-size: 16px; padding: 10px 14px; text-align: left; cursor: pointer; }
+.help-user { align-self: flex-end; max-width: 85%; background: var(--fill); border-radius: 16px; padding: 10px 14px; font-size: 17px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .help-bot { background: var(--surface); border-radius: 16px; padding: 12px 14px; font-size: 17px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
-.help-bot.is-error { color: var(--orange); }
+.help-bot.is-error { color: var(--warning-ink); }
 .help-src { margin-top: 8px; font-size: 14px; color: var(--muted); }
 .help-wait { color: var(--muted); font-style: italic; }
 .help-row { display: flex; gap: 8px; }
-.help-in { flex: 1; min-width: 0; min-height: 52px; border-radius: 14px; border: 1px solid var(--surface-2); background: var(--surface); color: var(--text); font: inherit; font-size: 17px; padding: 0 14px; }
-.help-mic { flex: none; width: 52px; min-height: 52px; display: grid; place-items: center; border-radius: 14px; border: 1px solid var(--surface-2); background: var(--surface); color: var(--blue); cursor: pointer; }
+.help-in { flex: 1; min-width: 0; min-height: 52px; border-radius: 14px; border: 1px solid var(--separator); background: var(--surface); color: var(--text); font: inherit; font-size: 17px; padding: 0 14px; }
+.help-mic { flex: none; width: 52px; min-height: 52px; display: grid; place-items: center; border-radius: 14px; border: 1px solid var(--separator); background: var(--surface); color: var(--brand-ink); cursor: pointer; }
 .help-mic svg { width: 24px; height: 24px; }
-.help-mic.is-on { background: var(--red); border-color: var(--red); color: #fff; }
-.help-send { flex: none; min-height: 52px; padding: 0 18px; border-radius: 14px; border: 0; background: var(--blue); color: #fff; font: inherit; font-size: 17px; font-weight: 700; cursor: pointer; }
+.help-mic.is-on { background: var(--red); border-color: var(--red); color: #ffffff; }
+.help-send { flex: none; min-height: 52px; padding: 0 18px; border-radius: 14px; border: 0; background: var(--blue); color: var(--on-brand); font: inherit; font-size: 17px; font-weight: 700; cursor: pointer; }
 .help-send:disabled, .help-mic:disabled, .help-chip:disabled { opacity: 0.5; }
 .help-note { color: var(--muted); font-size: 15px; }
-.help-note.is-warn { color: var(--orange); }
+.help-note.is-warn { color: var(--warning-ink); }

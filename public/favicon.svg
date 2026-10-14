@@ -1,13 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- SiteSnap AI: a camera with a voice wave in the lens, white on black -->
+  <!-- SiteSnap AI: an orange DSLR camera body with a voice wave in the lens, on black -->
   <rect width="512" height="512" rx="96" fill="#000"/>
-  <path d="M182 150l22-34h104l22 34h54a38 38 0 0 1 38 38v172a38 38 0 0 1-38 38H128a38 38 0 0 1-38-38V188a38 38 0 0 1 38-38z"
-        fill="none" stroke="#f2f2f7" stroke-width="28" stroke-linejoin="round"/>
-  <circle cx="256" cy="274" r="78" fill="#0a84ff"/>
-  <g stroke="#fff" stroke-width="16" stroke-linecap="round">
-    <line x1="216" y1="258" x2="216" y2="290"/>
-    <line x1="243" y1="236" x2="243" y2="312"/>
-    <line x1="270" y1="248" x2="270" y2="300"/>
-    <line x1="297" y1="262" x2="297" y2="286"/>
+  <!-- shutter button and viewfinder hump -->
+  <rect x="98" y="138" width="62" height="34" rx="10" fill="#ff7a00"/>
+  <path d="M196 176l20-58a14 14 0 0 1 13-10h54a14 14 0 0 1 13 10l20 58z" fill="#ff7a00"/>
+  <!-- body -->
+  <rect x="56" y="162" width="400" height="248" rx="40" fill="#ff7a00"/>
+  <!-- grip -->
+  <path d="M376 162h40a40 40 0 0 1 40 40v168a40 40 0 0 1-40 40h-40z" fill="#d95f00"/>
+  <!-- flash / viewfinder window -->
+  <rect x="226" y="132" width="60" height="20" rx="6" fill="#1f1a14"/>
+  <!-- lens -->
+  <circle cx="236" cy="290" r="112" fill="#1f1a14"/>
+  <circle cx="236" cy="290" r="88" fill="none" stroke="#3a332b" stroke-width="10"/>
+  <circle cx="236" cy="290" r="64" fill="#2a2420"/>
+  <g stroke="#ffb347" stroke-width="15" stroke-linecap="round">
+    <line x1="200" y1="274" x2="200" y2="306"/>
+    <line x1="224" y1="252" x2="224" y2="328"/>
+    <line x1="248" y1="264" x2="248" y2="316"/>
+    <line x1="272" y1="278" x2="272" y2="302"/>
   </g>
 </svg>

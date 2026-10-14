@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { CameraIcon, MicIcon, StopIcon } from "./icons";
 import { formatTime, useRecorder } from "./useRecorder";
 import RecipientSearch from "./RecipientSearch";
+import { DelaySheet, QuickReplyBar } from "./QuickReplyBar";
+import { statusOf } from "./quickReplies";
+import { SHOW_AI_PHOTO_DESCRIPTION } from "../features";
 import {
   describePhoto, newId, photoPathFor, queueMessage, transcribeVoice, uploadFile, voicePathFor,
 } from "./messagingStore";
@@ -9,10 +12,10 @@ import {
 const MAX_PHOTOS = 10;
 
 // New Message (mode "new": To: first, then photos, voice, words, Send) and Reply (mode "reply":
-// the same capture tools under a conversation). Send needs at least one tagged person (new) and a
-// photo, a voice note, or words. Words for a voice note and the AI photo description come first when
+// a quick reply and / or the same capture tools under a conversation). Send needs at least one tagged
+// person (new) and a quick reply, a photo, a voice note, or words. Words for a voice note and the AI photo description come first when
 // there's signal; neither ever blocks sending (with no signal, the server writes the words down later).
-export default function Composer({ mode = "new", session, conversation = null, onSent, onCancel }) {
+export default function Composer({ mode = "new", session, conversation = null, onSent, onCancel, quickReplies = false }) {
   const { project, me, dir, dirError, loadingDir, refreshDirectory } = session;
   const key = `${project.companyId}_${project.projectId}`;
   const ids = useRef({ cid: conversation?.id ?? newId(), mid: newId() });
@@ -26,6 +29,13 @@ export default function Composer({ mode = "new", session, conversation = null, o
   const [desc, setDesc] = useState(null); // null | { status: "working" | "done" | "failed", text }
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
+  const [status, setStatus] = useState(null); // a quick reply going with this message
+  const [askDelay, setAskDelay] = useState(false);
+  const pickReply = (r) => {
+    if (status?.code === r.code) return setStatus(null);
+    if (r.code === "delayed") return setAskDelay(true);
+    setStatus(statusOf(r));
+  };
   const fileInput = useRef(null);
 
   useEffect(() => () => {
@@ -81,11 +91,11 @@ export default function Composer({ mode = "new", session, conversation = null, o
     }
   };
 
-  const hasContent = photos.length > 0 || !!voice || text.trim() || transcript.trim();
+  const hasContent = photos.length > 0 || !!voice || text.trim() || transcript.trim() || !!status;
   const send = async () => {
     setError("");
     if (mode === "new" && !tagged.length) return setError("Tag at least one person first. Tap To: to pick who it's for.");
-    if (!hasContent) return setError("Add a photo, a voice note, or a few words.");
+    if (!hasContent) return setError(quickReplies ? "Tap a quick reply, or add a photo, a voice note, or a few words." : "Add a photo, a voice note, or a few words.");
     if (recorder.recording) return setError("Stop the recording first.");
     setSending(true);
     try {
@@ -101,6 +111,7 @@ export default function Composer({ mode = "new", session, conversation = null, o
         photos: photos.map((p) => ({ blob: p.blob, path: p.path })),
         voice: voice ? { blob: voice.blob, path: voice.path } : null,
         aiDescription: desc?.status === "done" ? desc.text : null,
+        status,
       });
       onSent?.(ids.current.cid);
     } catch {
@@ -131,6 +142,19 @@ export default function Composer({ mode = "new", session, conversation = null, o
       )}
       {mode === "new" && tagged.length > 0 && (
         <p className="dir-meta">{tagged.length} {tagged.length === 1 ? "person" : "people"} tagged · <button type="button" className="text-btn inline" onClick={() => setTagged([])}>Clear</button></p>
+      )}
+
+      {quickReplies && (
+        <>
+          <QuickReplyBar onPick={pickReply} selected={status?.code ?? null} />
+          {status && <p className="msg-status">Sending with: <strong>{[status.label, status.reason, status.newDate && `new date ${status.newDate}`].filter(Boolean).join(" · ")}</strong></p>}
+          {askDelay && (
+            <DelaySheet
+              onClose={() => setAskDelay(false)}
+              onSend={(extra) => { setStatus(statusOf({ code: "delayed", told: "Delayed" }, extra)); setAskDelay(false); }}
+            />
+          )}
+        </>
       )}
 
       {photos.length > 0 && (
@@ -170,7 +194,7 @@ export default function Composer({ mode = "new", session, conversation = null, o
         <textarea className="words-field" value={text} onChange={(e) => setText(e.target.value)} rows={mode === "new" ? 3 : 2} placeholder="Type a message" />
       </label>
 
-      {photos.length > 0 && !desc && (
+      {SHOW_AI_PHOTO_DESCRIPTION && photos.length > 0 && !desc && (
         <button type="button" className="describe-btn" onClick={describe} disabled={!navigator.onLine}>Describe photo with AI</button>
       )}
       {desc?.status === "working" && <p className="msg-status">Describing the photo…</p>}

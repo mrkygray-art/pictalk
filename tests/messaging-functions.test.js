@@ -119,3 +119,52 @@ test("composer: a member gets the words for an uploaded voice note; wrong paths 
   await rejects(outsider.call("transcribeMessageVoice", { key: KEY, path }), "permission-denied");
   await rejects(phone().call("transcribeMessageVoice", { key: KEY, path }), "unauthenticated");
 });
+
+test("quick replies: the latest one per person shows on the conversation, and the first answer is timed", async () => {
+  const before = (await conv("").get()).data();
+  await conv("/messages/q1").set({
+    authorId: "202", authorName: "Tia Tagged", text: "", transcript: "", transcriptStatus: "none", photos: [], voicePath: null, voiceType: null,
+    aiDescription: null, status: { code: "delayed", label: "Delayed", reason: "Weather", newDate: "Fri, Oct 16" }, clientCreatedAt: Date.now(), createdAt: Date.now(),
+  });
+  const c = await until(async () => { const d = (await conv("").get()).data(); return d?.statuses?.["202"] && d; });
+  assert.equal(c.statuses["202"].code, "delayed");
+  assert.equal(c.statuses["202"].reason, "Weather");
+  assert.equal(c.lastMessage.text, "Delayed · Weather · new date Fri, Oct 16");
+  assert.equal(c.lastMessage.status, "delayed");
+  assert.ok(c.answered?.["202"] > 0, "Tia's first answer time");
+  assert.ok(c.firstResponseAt > 0);
+  assert.equal(c.firstResponseBy, "202");
+  assert.equal(c.answered?.["201"], undefined, "the sender's own messages aren't answers");
+  assert.equal(c.messageCount, before.messageCount + 1);
+});
+
+test("Done as a quick reply finishes that person's open tasks in the conversation", async () => {
+  assert.equal((await conv("").get()).data().openTasks.length, 1, "m1's task is open (reopened earlier)");
+  await conv("/messages/q2").set({
+    authorId: "202", authorName: "Tia Tagged", text: "", transcript: "", transcriptStatus: "none", photos: [], voicePath: null, voiceType: null,
+    aiDescription: null, status: { code: "done", label: "Marked done" }, clientCreatedAt: Date.now(), createdAt: Date.now(),
+  });
+  const c = await until(async () => { const d = (await conv("").get()).data(); return d?.statuses?.["202"]?.code === "done" && (d.openTasks ?? []).length === 0 && d; });
+  assert.deepEqual(c.taskAssigneeIds, []);
+  assert.equal((await conv("/messages/m1").get()).data().tasks[0].status, "done");
+});
+
+test("opening a conversation records when each person first saw it", async () => {
+  await db().doc(`procoreProjects/${KEY}/members/203/reads/${CID}`).set({ lastReadAt: 111 });
+  const c = await until(async () => { const d = (await conv("").get()).data(); return d?.seen?.["203"] && d; });
+  assert.equal(c.seen["203"], 111);
+  await db().doc(`procoreProjects/${KEY}/members/203/reads/${CID}`).set({ lastReadAt: 222 });
+  await new Promise((r) => setTimeout(r, 1500));
+  assert.equal((await conv("").get()).data().seen["203"], 111, "the first time is kept");
+});
+
+test("a Closed line updates the card and flags no tasks", async () => {
+  await conv("/messages/e1").set({
+    authorId: "201", authorName: "Sam Sender", text: "", transcript: "", transcriptStatus: "none", photos: [], voicePath: null, voiceType: null,
+    aiDescription: null, event: "closed", clientCreatedAt: Date.now(), createdAt: Date.now(),
+  });
+  const c = await until(async () => { const d = (await conv("").get()).data(); return d?.lastMessage?.text === "Closed by Sam Sender" && d; });
+  assert.ok(c);
+  await new Promise((r) => setTimeout(r, 1000));
+  assert.equal((await conv("/messages/e1").get()).data().tasksStatus, undefined, "nothing flagged");
+});

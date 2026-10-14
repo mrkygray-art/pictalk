@@ -7,7 +7,7 @@
 // Sending is offline-first, like stops: a message is saved on this phone (IndexedDB, with its photos and
 // voice note) and uploaded when there's signal; files first, then the Firestore docs.
 import {
-  collection, doc, getDoc, limit, onSnapshot, orderBy, query, setDoc, updateDoc, where, arrayUnion,
+  collection, doc, getDoc, limit, onSnapshot, orderBy, query, setDoc, updateDoc, where, arrayUnion, writeBatch,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { httpsCallable } from "firebase/functions";
@@ -69,8 +69,20 @@ export async function fileUrl(path) {
 
 // ---------- changing a conversation ----------
 
+/**
+ * Close or reopen, with a line in the thread ("Closed by Tia") so the other people get the unread alert.
+ * One batch: the rules check the conversation as it will be after it.
+ */
 export function setStatus(key, cid, status, me) {
-  return updateDoc(convDoc(key, cid), { status, statusBy: me, statusAt: Date.now() });
+  const now = Date.now();
+  const batch = writeBatch(db);
+  batch.update(convDoc(key, cid), { status, statusBy: me.procoreUserId, statusAt: now });
+  batch.set(doc(msgCol(key, cid), newId()), {
+    authorId: me.procoreUserId, authorName: me.name, text: "", transcript: "", transcriptStatus: "none", photos: [],
+    voicePath: null, voiceType: null, aiDescription: null, event: status === "closed" ? "closed" : "reopened",
+    clientCreatedAt: now, createdAt: now,
+  });
+  return batch.commit();
 }
 
 export function addPeople(key, conversation, people) {
@@ -123,11 +135,12 @@ export async function pendingMessages() {
 
 /**
  * Queue a message. newConversation = { tagged } starts one; otherwise cid is an existing conversation.
- * photos: [{ blob, path? }] (path when already uploaded), voice: { blob, path? } | null.
+ * photos: [{ blob, path? }] (path when already uploaded), voice: { blob, path? } | null,
+ * status: a quick reply { code, label, reason?, newDate? } | null (on its own, it's a one-tap answer).
  */
-export async function queueMessage({ key, cid, mid = newId(), me, newConversation = null, text = "", transcript = "", transcriptDone = false, photos = [], voice = null, aiDescription = null }) {
+export async function queueMessage({ key, cid, mid = newId(), me, newConversation = null, text = "", transcript = "", transcriptDone = false, photos = [], voice = null, aiDescription = null, status = null }) {
   const entry = {
-    key, cid, mid, me, newConversation, text, transcript, transcriptDone, aiDescription,
+    key, cid, mid, me, newConversation, text, transcript, transcriptDone, aiDescription, status,
     photos: photos.map((p, i) => ({ blob: p.blob, path: p.path ?? photoPathFor(key, cid, mid, i + 1, p.blob.type), uploaded: !!p.path })),
     voice: voice ? { blob: voice.blob, path: voice.path ?? voicePathFor(key, cid, mid, voice.blob.type), type: baseType(voice.blob.type), uploaded: !!voice.path } : null,
     clientCreatedAt: Date.now(),
@@ -176,6 +189,8 @@ async function run() {
         voicePath: m.voice?.path ?? null,
         voiceType: m.voice?.type ?? null,
         aiDescription: m.aiDescription?.trim() || null,
+        // a quick reply (src/messaging/quickReplies.js): { code, label, reason?, newDate? }
+        ...(m.status ? { status: m.status } : {}),
         clientCreatedAt: m.clientCreatedAt,
         createdAt: now,
       });

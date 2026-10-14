@@ -3,14 +3,16 @@
 // fields only these functions write):
 //   procoreProjects/{key}/conversations/{cid}   key = {companyId}_{projectId}
 //     app:    createdBy {procoreUserId, name, company, title}, tagged[], taggedIds[], status, createdAt, lastActivityAt
-//     server: lastMessage {authorId, authorName, text, photoCount, hasVoice}, messageCount, firstPhotoPath,
+//     server: lastMessage {authorId, authorName, text, photoCount, hasVoice, status}, messageCount, firstPhotoPath,
+//             statuses.{pid} (latest quick reply), seen.{pid} / answered.{pid} (first times), firstResponseAt/By,
 //             openTasks[{messageId, id, text, assigneeIds, assigneeNames}], taskAssigneeIds[]
 //   .../conversations/{cid}/messages/{mid}
 //     app:    authorId, authorName, text, transcript, transcriptStatus, photos[{path}], voicePath, voiceType,
-//             aiDescription, clientCreatedAt, createdAt
+//             aiDescription, status {code, label, reason?, newDate?} (a quick reply), event (closed | reopened),
+//             clientCreatedAt, createdAt
 //     server: transcript / transcriptStatus (when the app couldn't transcribe first), tasks[], tasksStatus
 // Callers are identified by the procoreUserId claim on their Firebase sign-in (api/procore/session).
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
@@ -41,6 +43,18 @@ async function requireMember(request, key) {
 
 const words = (m) => [m.text, m.transcript].map((s) => String(s ?? "").trim()).filter(Boolean).join("\n");
 const excerpt = (m) => (words(m) || m.aiDescription || "").replace(/\s+/g, " ").trim().slice(0, 160);
+
+/** The feed card's one line: a quick reply reads "Delayed · Weather · new date Fri", a close "Closed by Tia" */
+function cardLine(m) {
+  if (m.event === "closed") return `Closed by ${m.authorName ?? "someone"}`;
+  if (m.event === "reopened") return `Reopened by ${m.authorName ?? "someone"}`;
+  if (m.status?.label) {
+    const st = [m.status.label, m.status.reason, m.status.newDate ? `new date ${m.status.newDate}` : null].filter(Boolean).join(" · ");
+    const said = excerpt(m);
+    return (said ? `${st}: ${said}` : st).slice(0, 160);
+  }
+  return excerpt(m);
+}
 
 // ---------- tasks: does this message ask someone to do something? ----------
 
@@ -150,11 +164,35 @@ async function processMessage(key, cid, mid, message) {
   }
 
   const photos = Array.isArray(m.photos) ? m.photos : [];
+  const now = Date.now();
   await convRef.set({
-    lastActivityAt: Date.now(),
-    lastMessage: { authorId: m.authorId ?? "", authorName: m.authorName ?? "", text: excerpt(m), photoCount: photos.length, hasVoice: !!m.voicePath },
+    lastActivityAt: now,
+    lastMessage: { authorId: m.authorId ?? "", authorName: m.authorName ?? "", text: cardLine(m), photoCount: photos.length, hasVoice: !!m.voicePath, status: m.status?.code ?? null },
     messageCount: FieldValue.increment(1),
+    // each person's latest quick reply, for the thread and the dashboard
+    ...(m.status?.code && m.authorId ? { statuses: { [m.authorId]: { code: m.status.code, label: m.status.label ?? "", reason: m.status.reason ?? "", newDate: m.status.newDate ?? "", at: now } } } : {}),
   }, { merge: true });
+
+  // First answer from each person who isn't the sender (time to respond, later reports)
+  if (m.authorId && !m.event) {
+    await db().runTransaction(async (tx) => {
+      const snap = await tx.get(convRef);
+      if (snap.get("createdBy.procoreUserId") === m.authorId) return;
+      const update = {};
+      if (!snap.get(`answered.${m.authorId}`)) update[`answered.${m.authorId}`] = now;
+      if (!snap.get("firstResponseAt")) Object.assign(update, { firstResponseAt: now, firstResponseBy: m.authorId });
+      if (Object.keys(update).length) tx.update(convRef, update);
+    });
+  }
+
+  // "Done" as a quick reply also finishes this person's flagged tasks in the conversation
+  if (m.status?.code === "done" && m.authorId) {
+    const mine = ((await convRef.get()).get("openTasks") ?? []).filter((t) => (t.assigneeIds ?? []).includes(m.authorId));
+    for (const t of mine) {
+      await changeTask(key, cid, t.messageId, t.id, "done", m.authorId).catch((err) => logger.warn("Done reply: task not changed", { key, cid, task: t.id, error: err.message }));
+    }
+  }
+  if (m.event) return; // a "Closed" / "Reopened" line has nothing to transcribe or flag
   if (photos[0]?.path) {
     await db().runTransaction(async (tx) => {
       const snap = await tx.get(convRef);
@@ -230,10 +268,8 @@ exports.describeMessagePhoto = onCall(
 );
 
 // An assignee (or the sender) marks a flagged task done, or opens it again
-exports.setMessageTask = onCall(piccoloCallable({ region: REGION }), async (request) => {
-  const { key, cid, mid, taskId, status } = request.data ?? {};
-  const pid = await requireMember(request, key);
-  if (![cid, mid].every((x) => ID_RE.test(String(x ?? ""))) || !["open", "done"].includes(status)) throw new HttpsError("invalid-argument", "Unknown task.");
+/** Mark one flagged task done or open again (by someone it's for, or its sender). */
+async function changeTask(key, cid, mid, taskId, status, pid) {
   const msgRef = db().doc(`procoreProjects/${key}/conversations/${cid}/messages/${mid}`);
   const convRef = db().doc(`procoreProjects/${key}/conversations/${cid}`);
   await db().runTransaction(async (tx) => {
@@ -248,5 +284,29 @@ exports.setMessageTask = onCall(piccoloCallable({ region: REGION }), async (requ
     if (status === "open") open.push({ messageId: mid, id: task.id, text: task.text, assigneeIds: task.assigneeIds, assigneeNames: task.assigneeNames, due: task.due });
     tx.update(convRef, { openTasks: open, taskAssigneeIds: [...new Set(open.flatMap((t) => t.assigneeIds))] });
   });
+}
+
+exports.setMessageTask = onCall(piccoloCallable({ region: REGION }), async (request) => {
+  const { key, cid, mid, taskId, status } = request.data ?? {};
+  const pid = await requireMember(request, key);
+  if (![cid, mid].every((x) => ID_RE.test(String(x ?? ""))) || !["open", "done"].includes(status)) throw new HttpsError("invalid-argument", "Unknown task.");
+  await changeTask(key, cid, mid, taskId, status, pid);
   return { ok: true };
 });
+
+// Seen: the first time each person opens a conversation (their read mark), kept on the conversation
+// for the "Seen 2:14 PM" line and later response-time reports. Server-only.
+exports.onConversationRead = onDocumentWritten(
+  { document: "procoreProjects/{key}/members/{pid}/reads/{cid}", region: REGION },
+  async (event) => {
+    const { key, pid, cid } = event.params;
+    const at = event.data?.after?.get("lastReadAt");
+    if (!at) return;
+    const convRef = db().doc(`procoreProjects/${key}/conversations/${cid}`);
+    await db().runTransaction(async (tx) => {
+      const conv = await tx.get(convRef);
+      if (!conv.exists || conv.get(`seen.${pid}`)) return;
+      tx.update(convRef, { [`seen.${pid}`]: at });
+    });
+  },
+);

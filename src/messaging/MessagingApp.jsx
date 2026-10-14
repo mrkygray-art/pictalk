@@ -23,6 +23,13 @@ export default function MessagingApp() {
   const key = project ? `${project.companyId}_${project.projectId}` : null;
 
   useEffect(() => (signedIn ? startMessageSync() : undefined), [signedIn]);
+  // Keep the address bar plain: drop ?procore=… once its message has been read
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("procore")) return;
+    url.searchParams.delete("procore");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, []);
   useEffect(() => {
     const load = () => pendingMessages().then(setPending).catch(() => {});
     load();
@@ -61,6 +68,9 @@ export default function MessagingApp() {
   }
 
   const multiCompany = new Set(projects.map((p) => p.companyId)).size > 1;
+  // Who's signed in, from their Procore project directory entry: name · company · title (only what exists)
+  const mine = session.dir?.people?.find((p) => String(p.id) === String(me.procoreUserId));
+  const whoLine = [me.name, mine?.company, mine?.title || mine?.role].filter(Boolean).join(" · ");
   if (!project || choosing) {
     return (
       <main className="app msg-app">
@@ -98,18 +108,18 @@ export default function MessagingApp() {
           {projects.length > 1 && <button type="button" className="stop-more" onClick={() => setChoosing(true)}>Switch Project</button>}
         </div>
         <p className="msg-who">
-          {state.offline ? "Offline · " : ""}Signed in as {me.name} · <button type="button" className="text-btn inline" onClick={session.signOut}>Sign out</button>
+          {state.offline ? "Offline · " : ""}<strong>{whoLine}</strong> · <button type="button" className="text-btn inline" onClick={session.signOut}>Sign out</button>
         </p>
       </header>
 
       {view.name === "feed" && (
         <>
           <div className="msg-title-row">
-            <h2 className="page-title">Conversations</h2>
+            <h2 className="page-title">Messages</h2>
           </div>
           <button type="button" className="big-btn photo-btn msg-new" onClick={() => setView({ name: "compose" })}>New Message</button>
           <Feed projectKey={key} me={me.procoreUserId} reads={reads} pending={pending} onOpen={(cid) => setView({ name: "conversation", cid })} />
-          <p className="msg-footnote">Voice notes are kept with each message. Only people on this Procore project can see its conversations.</p>
+          <p className="msg-footnote">Only people on this Procore project can see its messages. Everyone on a message can see when it was sent, seen and answered.</p>
         </>
       )}
       {view.name === "compose" && (

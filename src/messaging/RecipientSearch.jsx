@@ -46,7 +46,7 @@ export default function RecipientSearch({ dir, dirError, loadingDir, onRefresh, 
           <span className="dir-who">
             <strong>{p.name ?? "Unnamed"}</strong>
             {sub && <span>{sub}</span>}
-            {fixed.has(String(p.id)) && <small>Already in this conversation</small>}
+            {fixed.has(String(p.id)) && <small>Already on this message</small>}
           </span>
         </button>
       </li>

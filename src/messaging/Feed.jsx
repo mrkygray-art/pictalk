@@ -24,13 +24,13 @@ export default function Feed({ projectKey, me, reads, pending, onOpen }) {
 
   // For Me always listens (its unread count shows on the tab); the open tab too
   useEffect(() => watchFeed(projectKey, "forMe", me, (list, err) => {
-    if (err) setError("Couldn't load conversations. Check your signal.");
+    if (err) setError("Couldn't load messages. Check your signal.");
     else setLists((l) => ({ ...l, forMe: list }));
   }), [projectKey, me]);
   useEffect(() => {
     if (tab === "forMe") return undefined;
     return watchFeed(projectKey, tab, me, (list, err) => {
-      if (err) setError("Couldn't load conversations. Check your signal.");
+      if (err) setError("Couldn't load messages. Check your signal.");
       else setLists((l) => ({ ...l, [tab]: list }));
     });
   }, [projectKey, tab, me]);
@@ -40,7 +40,7 @@ export default function Feed({ projectKey, me, reads, pending, onOpen }) {
   const sending = pending.filter((p) => p.key === projectKey && p.newConversation);
 
   return (
-    <section className="feed" aria-label="Conversations">
+    <section className="feed" aria-label="Messages">
       <div className="dir-filters feed-tabs" role="tablist">
         {TABS.map(([id, label]) => (
           <button key={id} role="tab" type="button" aria-selected={tab === id} className={tab === id ? "is-on" : ""} onClick={() => setTab(id)}>
@@ -67,10 +67,10 @@ export default function Feed({ projectKey, me, reads, pending, onOpen }) {
         </ul>
       )}
 
-      {!list && !error && <p className="procore-note">Loading conversations…</p>}
+      {!list && !error && <p className="procore-note">Loading messages…</p>}
       {list && list.length === 0 && (
         <p className="empty">
-          {tab === "forMe" ? "Nothing for you right now. When someone tags you, it shows up here." : tab === "mine" ? "You haven't started a conversation yet." : "No conversations on this project yet."}
+          {tab === "forMe" ? "Nothing for you right now. When someone tags you, it shows up here." : tab === "mine" ? "You haven't sent a message yet." : "No messages on this project yet."}
         </p>
       )}
       {list && list.length > 0 && (
@@ -93,7 +93,7 @@ export default function Feed({ projectKey, me, reads, pending, onOpen }) {
                     <span className="conv-meta">
                       {summaryLine(c)}
                       {c.status === "closed" && <span className="pill">Closed</span>}
-                      {tasks.length > 0 && <span className="pill is-task">{tasks.length} task{tasks.length === 1 ? "" : "s"} for you</span>}
+                      {tasks.length > 0 && <span className="pill is-task">{tasks.length} to do for you</span>}
                     </span>
                   </div>
                   {unread && <span className="unread-dot" aria-label="Unread" />}

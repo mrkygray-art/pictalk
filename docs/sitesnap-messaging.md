@@ -59,6 +59,32 @@ Hidden, not deleted (`VITE_FEATURE_JOBS=1` brings them back): My Jobs, Start New
 
 **Tests:** `tests/messaging-session.test.js`, `tests/messaging-rules.test.js`, `tests/messaging-functions.test.js`, and `e2e/e2e-messaging.js` (sender, tagged person, untagged member and non-member, in four browsers).
 
+## Round 2, Phase 1 (`SITESNAP-MESSAGING-NEXT.md`, 2026-10-14)
+
+- **Quick replies.**
+  - The list lives in `src/messaging/quickReplies.js` (labels, what the sender is told, and the Delayed reasons). Edit it there; the rules only check lengths.
+  - People a message was sent to see four big buttons (Done, On it, Delayed, Need info) plus More.
+  - One tap sends a message with just `status {code, label}` through the normal send queue. Delayed asks why and for a new date first, both optional.
+  - In the Reply composer, a quick reply can go along with a photo, voice note or note.
+  - The thread shows a colored status line; the feed card reads "Delayed · Weather · new date Fri".
+  - The server keeps each person's latest one on the conversation (`statuses.{pid}`). **Done** also finishes that person's open to-dos in the thread.
+- **Tracking, in plain words**, under To: on each thread: "Tia Tagged · Seen 2:14 PM · On it 2:20 PM".
+  - Server-only: `seen.{pid}` (first open, from the read mark, via `onConversationRead`), `answered.{pid}`, `firstResponseAt` / `firstResponseBy`, plus the status times. Phase 2 reports are built from these.
+- **One Reply button** on an open thread. Tapping it opens the composer; Cancel puts the button back.
+- **Closed.**
+  - Only the sender or someone tagged closes or reopens. Each leaves a line in the thread ("Closed by Tia"), so the others get the unread alert.
+  - A closed thread shows only Closed and Reopen.
+  - The rules refuse new messages on a closed conversation. The only exception is the Closed line written in the same batch that closes an open one; the rules compare the conversation before and after that batch.
+- **AI photo description hidden:** `SHOW_AI_PHOTO_DESCRIPTION = false` in `src/features.js`. The functions and saved text are kept.
+- **Header:** name · company · title, from the signed-in person's own Procore project directory entry. Only what exists is shown.
+- **Words:** Messages, not Conversations; "To do" for flagged tasks.
+- **Address bar:** `?procore=` is cleared from it after sign-in.
+
+**Deploy before merging this round** (the new rules allow `status` / `event` on messages; the app sends them):
+```
+firebase deploy --only firestore:rules,functions:onConversationMessage,functions:onConversationRead,functions:setMessageTask --project sitesnap-procore
+```
+
 ## Not built yet (the spec's later steps)
 - **Procore sync adapter** (Email Communications, with `procoreSyncStatus` / `procoreRef` and Retry). Also pushing flagged tasks into Procore as Task Items.
 - **Alerts beyond the in-app unread count** (Procore email through the sync, web push).

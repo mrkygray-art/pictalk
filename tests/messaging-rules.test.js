@@ -63,7 +63,7 @@ test("a member starts a conversation as themselves, tagging at least one person;
   await assertFails(deleteDoc(doc(fs("101"), `procoreProjects/${KEY}/conversations/c1`)), "no deleting");
 });
 
-test("any member tags more people or opens / closes; nobody untags or edits the summary", async () => {
+test("any member tags more people; the people on it open / close; nobody untags or edits the summary", async () => {
   const ref1 = (id) => doc(fs(id), `procoreProjects/${KEY}/conversations/c1`);
   await assertSucceeds(updateDoc(ref1("103"), { tagged: arrayUnion(P("103", "User 103")), taggedIds: arrayUnion("103") }));
   await assertSucceeds(updateDoc(ref1("102"), { status: "closed", statusBy: "102", statusAt: 5 }));
@@ -72,6 +72,7 @@ test("any member tags more people or opens / closes; nobody untags or edits the 
   await assertFails(updateDoc(ref1("101"), { lastMessage: { text: "edited" } }));
   await assertFails(updateDoc(ref1("101"), { status: "archived" }));
   await assertFails(updateDoc(ref1("104"), { status: "closed" }), "not a member");
+  await assertFails(updateDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/c2`), { status: "closed", statusBy: "103", statusAt: 7 }), "statusBy must be me");
 });
 
 test("messages: written once by their author; tasks and other server fields can't be faked", async () => {
@@ -119,4 +120,44 @@ test("message files: members of that project upload and read photos and voice no
   await assertFails(uploadBytes(ref(st("102"), `messages/${KEY}/c1/m9/photo-1.jpg`), new Uint8Array([1]), { contentType: "text/html" }), "photos must be images");
   await assertFails(uploadBytes(ref(st("102"), `messages/${KEY}/c1/m9/notes.txt`), new Uint8Array([1]), { contentType: "text/plain" }), "only photo-* and voice.*");
   await senv.cleanup();
+});
+
+test("quick replies: a short status rides on a message; a made-up shape is refused", async () => {
+  const m = (mid) => doc(fs("102"), `procoreProjects/${KEY}/conversations/c1/messages/${mid}`);
+  await assertSucceeds(setDoc(m("q1"), msg("102", { text: "", photos: [], status: { code: "on_it", label: "On it" } })));
+  await assertSucceeds(setDoc(m("q2"), msg("102", { text: "", photos: [], status: { code: "delayed", label: "Delayed", reason: "Weather", newDate: "Fri, Oct 16" } })));
+  await assertFails(setDoc(m("q3"), msg("102", { status: { code: "done", label: "Done", by: "101" } })), "extra keys");
+  await assertFails(setDoc(m("q4"), msg("102", { status: "done" })), "must be a map");
+  await assertFails(setDoc(m("q5"), msg("102", { status: { code: "", label: "x" } })), "empty code");
+});
+
+test("closed: no new messages (rules too, not just the screen); only the sender or someone tagged closes or reopens", async () => {
+  const { writeBatch } = await import("firebase/firestore");
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `procoreProjects/${KEY}/conversations/k1`), conv("101", ["102"]));
+  });
+  const line = (id, event) => msg(id, { text: "", photos: [], event, clientCreatedAt: 9, createdAt: 9 });
+  const close = (id, mid) => {
+    const f = fs(id);
+    const b = writeBatch(f);
+    b.update(doc(f, `procoreProjects/${KEY}/conversations/k1`), { status: "closed", statusBy: id, statusAt: 9 });
+    b.set(doc(f, `procoreProjects/${KEY}/conversations/k1/messages/${mid}`), line(id, "closed"));
+    return b.commit();
+  };
+  const reopen = (id, mid) => {
+    const f = fs(id);
+    const b = writeBatch(f);
+    b.update(doc(f, `procoreProjects/${KEY}/conversations/k1`), { status: "open", statusBy: id, statusAt: 10 });
+    b.set(doc(f, `procoreProjects/${KEY}/conversations/k1/messages/${mid}`), line(id, "reopened"));
+    return b.commit();
+  };
+  await assertFails(close("103", "e0"), "103 is on the project but not on this message");
+  await assertSucceeds(close("102", "e1"));
+  await assertFails(setDoc(doc(fs("101"), `procoreProjects/${KEY}/conversations/k1/messages/n1`), msg("101")), "no messages while closed");
+  await assertFails(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/k1/messages/n2`), msg("102", { status: { code: "done", label: "Done" } })), "not even a quick reply");
+  await assertFails(setDoc(doc(fs("101"), `procoreProjects/${KEY}/conversations/k1/messages/n3`), line("101", "closed")), "a closed line on its own, already closed: only with the close");
+  await assertFails(reopen("103", "e2"), "not on this message");
+  await assertSucceeds(reopen("101", "e3"));
+  await assertSucceeds(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/k1/messages/n4`), msg("102")), "open again: messages are back");
+  await assertFails(setDoc(doc(fs("103"), `procoreProjects/${KEY}/conversations/k1/messages/n5`), line("103", "reopened")), "a reopened line from someone not on it");
 });

@@ -103,26 +103,56 @@ service cloud.firestore {
         && request.resource.data.status == 'open'
         && okPeople(request.resource.data.tagged) && okPeople(request.resource.data.taggedIds)
         && request.resource.data.taggedIds.size() > 0;
-      // Any member can tag more people or open / close it
+      // Any member can tag more people; only the sender or someone tagged closes or reopens it
       allow update: if memberOf(key)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tagged', 'taggedIds', 'status', 'statusBy', 'statusAt'])
         && request.resource.data.status in ['open', 'closed']
         && okPeople(request.resource.data.tagged) && okPeople(request.resource.data.taggedIds)
-        && request.resource.data.taggedIds.size() >= resource.data.taggedIds.size();
+        && request.resource.data.taggedIds.size() >= resource.data.taggedIds.size()
+        && (request.resource.data.status == resource.data.status
+            || (onIt(resource.data) && request.resource.data.statusBy == procoreMe()));
       match /messages/{messageId} {
         allow read: if memberOf(key);
-        // Written once by its author; transcripts, AI descriptions and tasks are added by the server
+        // Written once by its author; transcripts, AI descriptions and tasks are added by the server.
+        // A closed conversation takes no new messages except the "closed" line written as it closes
+        // (the conversation as it will be after this write, so close + line can go in one batch).
         allow create: if memberOf(key)
           && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'text', 'transcript', 'transcriptStatus',
-                                                   'photos', 'voicePath', 'voiceType', 'aiDescription', 'clientCreatedAt', 'createdAt'])
+                                                   'photos', 'voicePath', 'voiceType', 'aiDescription', 'status', 'event',
+                                                   'clientCreatedAt', 'createdAt'])
           && request.resource.data.authorId == procoreMe()
           && request.resource.data.get('text', '') is string && request.resource.data.get('text', '').size() <= 5000
           && request.resource.data.get('transcript', '') is string && request.resource.data.get('transcript', '').size() <= 10000
           && (request.resource.data.get('aiDescription', null) == null
               || (request.resource.data.aiDescription is string && request.resource.data.aiDescription.size() <= 3000))
           && request.resource.data.get('photos', []) is list && request.resource.data.get('photos', []).size() <= 10
-          && request.resource.data.get('transcriptStatus', 'none') in ['none', 'pending', 'done'];
+          && request.resource.data.get('transcriptStatus', 'none') in ['none', 'pending', 'done']
+          && okStatus(request.resource.data.get('status', null))
+          && (request.resource.data.get('event', null) == null
+              || (request.resource.data.event in ['closed', 'reopened'] && onIt(conversationAfter())))
+          && (conversationAfter().status == 'open'
+              || (request.resource.data.get('event', null) == 'closed' && conversationAfter().status == 'closed'
+                  && conversationBefore().status == 'open'));
+        function conversationAfter() {
+          return getAfter(/databases/$(database)/documents/procoreProjects/$(key)/conversations/$(conversationId)).data;
+        }
+        function conversationBefore() {
+          return get(/databases/$(database)/documents/procoreProjects/$(key)/conversations/$(conversationId)).data;
+        }
       }
+    }
+    // The sender or someone tagged on a conversation
+    function onIt(c) {
+      return c.createdBy.procoreUserId == procoreMe() || procoreMe() in c.taggedIds;
+    }
+    // A quick reply (src/messaging/quickReplies.js): short code and label, optional reason and new date
+    function okStatus(st) {
+      return st == null
+        || (st is map && st.keys().hasOnly(['code', 'label', 'reason', 'newDate'])
+            && st.code is string && st.code.size() > 0 && st.code.size() <= 40
+            && st.label is string && st.label.size() <= 60
+            && st.get('reason', '') is string && st.get('reason', '').size() <= 60
+            && st.get('newDate', '') is string && st.get('newDate', '').size() <= 20);
     }
 
     // The company's customers. Members read them; admins and estimators add and edit them

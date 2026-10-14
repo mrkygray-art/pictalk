@@ -75,14 +75,15 @@ const USERS = { sam: ["201", "Sam Sender"], tia: ["202", "Tia Tagged"], uma: ["2
     await page.goto(APP, { waitUntil: "domcontentloaded" });
     await waitText("Sign in with Procore");
     await click("button::-p-text(Sign in with Procore)");
-    await waitText("Conversations");
+    await waitText("New Message");
     return { page, shot, text, click, waitText, ctx };
   }
 
   // ---- Sam: sign in, the feed, New Message ----
   const sam = await open("sam");
   let t = await sam.text();
-  check("sign-in leads straight to the project feed (one project, chosen for you)", t.includes("001 - SiteSnap Test Project") && t.includes("Conversations"));
+  check("sign-in leads straight to the project feed (one project, chosen for you)", t.includes("001 - SiteSnap Test Project") && t.includes("Messages"));
+  check("header shows who's signed in: name · company · title", t.includes("Sam Sender · Kyco Builders · Superintendent"));
   check("no job / stop language on the home screen", !/My Jobs|Start New Job|Save This Stop|End Job|stops? per job|No job open/i.test(t), t.match(/My Jobs|Start New Job|Save This Stop|End Job|No job open/i)?.[0] ?? "");
   check("For Me | All Project | Mine tabs", ["For Me", "All Project", "Mine"].every((x) => t.includes(x)));
   await sam.shot("1-feed");
@@ -117,12 +118,15 @@ const USERS = { sam: ["201", "Sam Sender"], tia: ["202", "Tia Tagged"], uma: ["2
   await sam.page.type(".msg-field:nth-of-type(2) textarea, label.msg-field:last-of-type textarea", "Please send the revised drawings for level 2");
   await sam.shot("3-composer", true);
   await sam.click("button::-p-text(Send)");
-  await sam.waitText("Started by", 30000);
+  await sam.waitText("From Sam Sender", 30000);
   await sam.page.waitForFunction(() => document.querySelector(".msg .msg-photo-grid img"), { timeout: 30000 });
-  await sam.page.waitForFunction(() => document.body.innerText.includes("Task:"), { timeout: 30000 });
+  await sam.page.waitForFunction(() => document.body.innerText.includes("To do:"), { timeout: 30000 });
   t = await sam.text();
   check("sent: the conversation shows the photo, the words and the note", t.includes("Please send the revised drawings") && /Test transcript/.test(t));
-  check("AI flags the request as a task for Tia", /Task:.*\n?.*For Tia Tagged/s.test(t), (t.match(/Task:[^\n]*/) ?? [""])[0]);
+  check("after sending, the thread shows one Reply button, not the whole composer", !!(await sam.page.$(".msg-reply-btn")) && !(await sam.page.$(".composer")));
+  check("no AI photo description or describe button on screen", !/Photo description|Describe photo/.test(t));
+  check("the sender doesn't get quick replies on their own message", !(await sam.page.$(".qr-btn")));
+  check("AI flags the request as a to-do for Tia", /To do:.*\n?.*For Tia Tagged/s.test(t), (t.match(/To do:[^\n]*/) ?? [""])[0]);
   await sam.shot("4-sent", true);
 
   // ---- Tia (tagged): highlighted and unread in For Me, task badge, mark done, reply ----
@@ -130,21 +134,33 @@ const USERS = { sam: ["201", "Sam Sender"], tia: ["202", "Tia Tagged"], uma: ["2
   await tia.page.waitForFunction(() => document.querySelector(".conv-card"), { timeout: 30000 });
   const tiaCard = await tia.page.$eval(".conv-card", (e) => ({ cls: e.className, text: e.innerText }));
   check("tagged person: it's in For Me, highlighted and unread", tiaCard.cls.includes("is-for-me") && tiaCard.cls.includes("is-unread"), tiaCard.cls);
-  check("tagged person: the card says a task is for them", tiaCard.text.includes("1 task for you"));
+  check("tagged person: the card says there's something for them to do", tiaCard.text.includes("1 to do for you"));
   check("For Me tab shows an unread count", !!(await tia.page.$(".tab-badge")));
   await tia.shot("1-for-me");
   await tia.click(".conv-card");
-  await tia.waitText("Mark Done");
-  await tia.click("button::-p-text(Mark Done)");
+  await tia.page.waitForFunction(() => document.querySelector(".msg-task button"), { timeout: 20000 });
+  await tia.click(".msg-task button");
   await tia.waitText("Done:", 20000);
-  check("the tagged person marks the task done", (await tia.text()).includes("Done:"));
+  check("the tagged person marks the to-do done (Done / Reopen kept)", (await tia.text()).includes("Done:"));
+  check("quick replies: four buttons and More", (await tia.page.$$(".qr-btn")).length === 4 && !!(await tia.page.$(".qr-more")));
+  await tia.click(".qr-btn::-p-text(On it)");
+  await tia.page.waitForFunction(() => [...document.querySelectorAll(".msg-status-line")].some((e) => e.textContent === "On it"), { timeout: 20000 });
+  check("one tap answers: On it shows as a status line", true);
+  await tia.click(".qr-btn::-p-text(Delayed)");
+  await tia.waitText("Why? (optional)");
+  await tia.click(".sheet .place-chip::-p-text(Weather)");
+  await tia.click("button::-p-text(Send Delayed)");
+  await tia.page.waitForFunction(() => [...document.querySelectorAll(".msg-status-line")].some((e) => e.textContent.startsWith("Delayed · Weather")), { timeout: 20000 });
+  check("Delayed asks why (optional) and shows the reason", true);
+  await tia.shot("1b-quick-replies", true);
+  await tia.click(".msg-reply-btn");
   await tia.page.type("label.msg-field:last-of-type textarea", "On it, sending by noon");
   await tia.click("button::-p-text(Send Reply)");
   await tia.waitText("On it, sending by noon", 30000);
   await tia.page.waitForFunction(() => document.querySelectorAll(".msg:not(.is-pending)").length >= 2, { timeout: 30000 });
-  check("replying with text works", (await tia.page.$$(".msg")).length >= 2);
+  check("Reply opens the composer and sends; then it's back to one Reply button", (await tia.page.$$(".msg")).length >= 2 && !!(await tia.page.$(".msg-reply-btn")));
   await tia.shot("2-replied", true);
-  await tia.click("button::-p-text(Conversations)");
+  await tia.click("button::-p-text(Messages)");
   await sleep(1500);
   const tiaAfter = await tia.page.$eval(".conv-card", (e) => e.className);
   check("after reading (and replying), it's no longer unread for her", !tiaAfter.includes("is-unread"), tiaAfter);
@@ -162,12 +178,15 @@ const USERS = { sam: ["201", "Sam Sender"], tia: ["202", "Tia Tagged"], uma: ["2
   // ---- Vic (not on the project): can't see the feed ----
   const vic = await open("vic");
   await vic.click(".feed-tabs button::-p-text(All Project)");
-  await vic.waitText("Couldn't load conversations", 30000);
+  await vic.waitText("Couldn't load messages", 30000);
   check("someone not on the Procore project can't read its conversations", !(await vic.page.$(".conv-card")));
   await vic.shot("1-no-access");
 
   // ---- Sam: send is blocked without anyone tagged; close drops it from For Me ----
-  await sam.click("button::-p-text(Conversations)");
+  await sam.page.waitForFunction(() => /Seen [0-9]/.test(document.body.innerText) && document.body.innerText.includes("Delayed"), { timeout: 20000 });
+  check("the sender sees when Tia saw it and her latest answer", /Tia Tagged\s*Seen [0-9].*Delayed/.test(await sam.text()));
+  await sam.shot("5-tracking", true);
+  await sam.click("button::-p-text(Messages)");
   await sam.click("button::-p-text(New Message)");
   await sam.click(".dir-done");
   await sam.page.type("label.msg-field:last-of-type textarea", "Test with no one tagged");
@@ -179,7 +198,11 @@ const USERS = { sam: ["201", "Sam Sender"], tia: ["202", "Tia Tagged"], uma: ["2
   check("Mine shows the conversations I started", (await sam.page.$$(".conv-card")).length === 1);
   await sam.click(".conv-card");
   await sam.click(".conv-header button::-p-text(Close)");
-  await sam.waitText("This conversation is closed");
+  await sam.waitText("This message is closed");
+  t = await sam.text();
+  check("closed: no composer, no Reply, no quick replies; only Reopen", !(await sam.page.$(".msg-reply-btn")) && !(await sam.page.$(".composer")) && !(await sam.page.$(".qr-btn")) && t.includes("Reopen"));
+  check("the close shows as a line in the thread", /Closed by Sam Sender/.test(t));
+  await sam.shot("6-closed", true);
   await tia.click(".feed-tabs button::-p-text(All Project)");
   await tia.click(".feed-tabs button::-p-text(For Me)");
   await tia.waitText("Nothing for you right now", 20000);

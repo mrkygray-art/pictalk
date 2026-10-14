@@ -7,3 +7,7 @@ export const PICCOLO = import.meta.env.VITE_FEATURE_PICCOLO === "1";
 // guide, Reset Example Jobs) stay in the code and come back with VITE_FEATURE_JOBS=1.
 export const JOBS = import.meta.env.VITE_FEATURE_JOBS === "1";
 export const MESSAGING = !JOBS;
+
+// The AI photo description (the purple box): hidden for now, functions and saved text kept.
+// Set to true to bring back the "Describe photo with AI" button and the description in threads.
+export const SHOW_AI_PHOTO_DESCRIPTION = false;

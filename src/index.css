@@ -2877,3 +2877,25 @@ div.adm-stat {
 .dir-group-head h3 { margin: 0; }
 .dir-group-btn { margin-top: 0; justify-self: start; }
 .conv-card.is-unread .conv-top { padding-right: 20px; } /* room for the unread dot */
+/* quick replies, Reply button, status lines, closed, seen / answered */
+.qr { display: grid; gap: 6px; }
+.qr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.qr-btn {
+  min-height: 56px; padding: 8px 10px; border-radius: 14px; border: 2px solid var(--separator);
+  background: var(--surface); color: var(--text); font: inherit; font-size: 18px; font-weight: 700; cursor: pointer;
+}
+.qr-btn:active { transform: scale(0.98); }
+.qr-btn.is-on { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+.text-btn.qr-more { padding: 6px; font-size: 16px; }
+.msg-reply-btn { width: 100%; }
+.msg-status-line { justify-self: start; padding: 4px 12px; border-radius: 999px; background: var(--brand-soft); color: var(--brand-ink); font-weight: 800; font-size: 16px; }
+.msg-status-line.is-done { background: var(--success-soft); color: var(--success-ink); }
+.msg-status-line.is-delayed, .msg-status-line.is-cant_do { background: var(--danger-soft); color: var(--danger); }
+.msg-status-line.is-need_info, .msg-status-line.is-waiting_materials, .msg-status-line.is-waiting_someone { background: var(--warning-soft); color: var(--warning-ink); }
+.msg-event { list-style: none; text-align: center; color: var(--muted); font-size: 14px; padding: 4px 0; }
+.closed-box { display: grid; gap: 10px; background: var(--surface); border-radius: 16px; padding: 14px 16px; }
+.closed-box p { color: var(--muted); font-size: 16px; }
+.closed-pill { padding: 4px 12px; border-radius: 999px; background: var(--fill); color: var(--text); font-weight: 800; }
+.conv-track { list-style: none; padding: 0; margin: 4px 0; display: grid; gap: 2px; font-size: 14px; }
+.conv-track span { color: var(--muted); }
+.msg-who strong { color: var(--text); font-weight: 600; }

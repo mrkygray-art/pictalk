@@ -3,8 +3,8 @@ import { useEffect, useState } from "react";
 // Procore connection for the top-level tab ("Capture in a new tab"), never inside the iframe:
 // Procore's login page can't load in one. Talks only to this site's /api/procore/* functions;
 // the tokens stay in an httpOnly cookie the page can't read.
+// After sign-in (?procore=...); a successful one shows as "Connected to Procore as ..." below
 const RESULT = {
-  connected: "Connected to Procore.",
   denied: "Procore sign-in was cancelled.",
   error: "Procore sign-in didn't work. Try again.",
 };
@@ -64,8 +64,8 @@ export default function ProcorePanel({ companyId, projectId }) {
       )}
       {state.step === "ready" && (
         <>
-          <p className="procore-note">
-            Procore: {state.me.name ?? "signed in"}{state.me.email ? ` · ${state.me.email}` : ""}
+          <p className="procore-note procore-connected">
+            Connected to Procore as {state.me.name ?? state.me.email ?? "you"}
           </p>
           {!projectId && <p className="procore-note">No Procore project in this link, so there's no people list.</p>}
           {state.message && <p className="procore-note">{state.message}</p>}

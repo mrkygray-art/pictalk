@@ -95,7 +95,7 @@ Your saved stops stay saved either way. If a photo or voice note is on screen bu
   {
     id: "account",
     title: "Guest mode, saving your work, and signing in",
-    text: `You can use SiteSnap AI without an account: you start as a guest. Guest jobs are deleted after 7 days, so don't capture anything you need to keep until you save your work. Tap Save my work (top right) and sign in with Google or an emailed link; your jobs, photos, and notes stay with you and stop expiring, and you can open them on another device by signing in there. Piccolo needs a signed-in account.`,
+    text: `You can use SiteSnap AI without an account: you start as a guest. Guest jobs are deleted after 7 days, so don't capture anything you need to keep until you sign in. Tap Sign in to SiteSnap (top right) and sign in with Google or an emailed link; your jobs, photos, and notes stay with you and stop expiring, and you can open them on another device by signing in there. Piccolo needs a signed-in account.`,
   },
   {
     id: "example-jobs",
@@ -122,7 +122,7 @@ Your saved stops stay saved either way. If a photo or voice note is on screen bu
 - Before you leave the site, scroll through Saved stops and fix any words that came out wrong.
 - Read and approve the AI summary before you share the PDF; the summary only reports what you said.
 - Install SiteSnap AI on your phone before you go somewhere with no signal.
-- Sign in with Save my work so your jobs don't expire, and don't record real customer data in this demo.`,
+- Tap Sign in to SiteSnap so your jobs don't expire, and don't record real customer data in this demo.`,
   },
   {
     id: "troubleshooting",
@@ -134,13 +134,13 @@ Your saved stops stay saved either way. If a photo or voice note is on screen bu
 - "Recording expired" or a voice note won't play: recordings are deleted after 5 days in this demo. The written words are kept.
 - "This demo allows 10 stops per job": end the job and start a new one.
 - The AI summary didn't appear: it needs the voice notes to be written down first and needs signal. Open the job from My Jobs and try again. A job with no words or notes gets no summary.
-- Can't find a job: check My Jobs; guest jobs are deleted after 7 days unless you tap Save my work.
+- Can't find a job: check My Jobs; guest jobs are deleted after 7 days unless you tap Sign in to SiteSnap.
 - Want to see what's happening behind the scenes: tap Engineering Mode at the bottom of the main screen for upload and sync status.`,
   },
   {
     id: "limits",
     title: "Demo limits",
-    text: `SiteSnap AI is a public demo. Limits: up to 10 stops per job; voice recordings are deleted after 5 days (the words are kept); guest jobs are deleted after 7 days unless you save your work; AI summaries: 5 per job and 20 per day; photo descriptions: 3 per stop and 30 per day; Piccolo drafts are limited per day and per job; the help chat answers a limited number of questions per day. Please don't record real customer information.`,
+    text: `SiteSnap AI is a public demo. Limits: up to 10 stops per job; voice recordings are deleted after 5 days (the words are kept); guest jobs are deleted after 7 days unless you sign in; AI summaries: 5 per job and 20 per day; photo descriptions: 3 per stop and 30 per day; Piccolo drafts are limited per day and per job; the help chat answers a limited number of questions per day. Please don't record real customer information.`,
   },
   {
     id: "engineering",

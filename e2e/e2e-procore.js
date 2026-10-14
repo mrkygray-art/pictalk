@@ -118,7 +118,7 @@ const readAll = async (req) => { let s = ''; for await (const c of req) s += c; 
       visited.some((v) => v.includes('/api/procore/callback')), visited.map((v) => new URL(v).pathname).join(' > '));
     const tok = seen.token.slice(before.token);
     check(`[${m}] one code-for-token exchange, with the secret, server to server`, tok.length === 1 && tok[0].grant_type === 'authorization_code' && tok[0].client_secret === CLIENT_SECRET);
-    check(`[${m}] shows the signed-in name and email`, text.includes('Carl Contractor') && text.includes('carl.contractor@example.com'));
+    check(`[${m}] shows "Connected to Procore as" the signed-in name`, text.includes('Connected to Procore as Carl Contractor'));
     check(`[${m}] lists the project's people: name, company, role`,
       text.includes('Project people (2)') && text.includes('Doe Plumbing · Superintendent') && text.includes('Sam Lee') && text.includes('Lee Electric'));
     const calls = seen.api.slice(before.api);

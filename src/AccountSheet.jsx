@@ -68,10 +68,10 @@ function SaveWork({ inviteId, onSignedIn }) {
       <p>
         {inviteId
           ? "You've been invited to join a team. Sign in with the email address the invite was sent to."
-          : "You're using SiteSnap AI as a guest on this device. Guest jobs are deleted after 7 days. Sign in to keep them in your account and open them on other devices. The jobs you have now come with you."}
+          : "Sign in to SiteSnap once so your jobs are kept in your account and you can open them on other devices. The jobs already on this device come with you."}
       </p>
       {error && <p className="error" role="alert">{error}</p>}
-      {busy && <p className="sent-note" role="status">Saving your work…</p>}
+      {busy && <p className="sent-note" role="status">Signing in…</p>}
       <button className="big-btn google-btn" onClick={google} disabled={busy}>
         <GoogleIcon />
         Continue with Google
@@ -167,7 +167,7 @@ function FinishLink({ onSignedIn, onCancel }) {
         <>
           <p>
             This link opened in a different browser or app than the one you started in. Your guest jobs are there, so
-            finish signing in there: copy this link, go back to SiteSnap AI, tap Save my work, and paste it.
+            finish signing in there: copy this link, go back to SiteSnap AI, tap Sign in to SiteSnap, and paste it.
           </p>
           <button className="big-btn photo-btn" onClick={copyLink}>
             {copied ? "Link Copied" : "Copy This Link"}
@@ -289,7 +289,7 @@ function AccountInfo({ user, profile, onTeam, onNotice, onClose }) {
   );
 }
 
-// "Save my work" for guests, the account page for everyone else, and the email-link landing
+// "Sign in to SiteSnap" for guests, the account page for everyone else, and the email-link landing
 export default function AccountSheet({ user, profile, inviteId, inviteError, emailLink, onEmailLinkDone, onTeam, onNotice, onClose }) {
   const signedIn = (result) => {
     onEmailLinkDone();
@@ -305,7 +305,7 @@ export default function AccountSheet({ user, profile, inviteId, inviteError, ema
     title = "Finish signing in";
     body = <FinishLink onSignedIn={signedIn} onCancel={() => { onEmailLinkDone(); onClose(); }} />;
   } else if (!user || user.isAnonymous) {
-    title = inviteId ? "Join your team" : "Save your work";
+    title = inviteId ? "Join your team" : "Sign in to SiteSnap";
     body = <SaveWork inviteId={inviteId} onSignedIn={signedIn} />;
   } else {
     body = <AccountInfo user={user} profile={profile} onTeam={onTeam} onNotice={onNotice} onClose={onClose} />;

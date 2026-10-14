@@ -1642,6 +1642,7 @@ button:focus-visible {
 }
 .procore-panel h2 { font-size: 16px; }
 .procore-note { color: var(--muted); font-size: 14px; }
+.procore-connected { color: var(--live); font-weight: 600; }
 .procore-btn {
   justify-self: start;
   min-height: 44px;
@@ -1676,6 +1677,18 @@ button:focus-visible {
 .pane-body .job-bar {
   top: calc(68px + env(safe-area-inset-top, 0px));
 }
+
+/* SiteSnap AI (Piccolo off): who's signed in, in place of the pane tabs */
+.account-bar { justify-content: space-between; }
+.account-state {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-bar .account-chip { max-width: 60%; }
 
 .pane-switch {
   flex: 1;
@@ -2426,52 +2439,6 @@ button:focus-visible {
 .pc-file-name {
   overflow-wrap: anywhere;
   color: var(--muted);
-}
-
-/* ---------- guests ---------- */
-
-.guest-banner {
-  max-width: 440px;
-  margin: 12px auto 0;
-  padding: 12px 16px;
-  background: var(--surface);
-  border: 2px solid var(--blue);
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 16px;
-  line-height: 1.4;
-}
-
-.guest-banner.is-urgent {
-  border-color: var(--red);
-}
-
-.guest-banner .link-btn {
-  min-height: 44px;
-  padding: 8px 14px;
-  background: var(--surface-2);
-  font-size: 16px;
-}
-
-.guest-banner-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.guest-banner-actions .text-btn {
-  margin: 0;
-  font-size: 16px;
-}
-
-@media (max-width: 480px) {
-  .guest-banner {
-    margin-left: 20px;
-    margin-right: 20px;
-  }
 }
 
 .piccolo-callout.is-try {

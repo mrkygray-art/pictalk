@@ -6,13 +6,11 @@ import PiccoloPane from "./piccolo/PiccoloPane";
 import AccountSheet from "./AccountSheet";
 import AdminConsole from "./admin/AdminConsole";
 import { watchProfile, ensureProfile, createExampleJobs, acceptInvite, isEmailLinkVisit, roleLabel, errorText, retryGuestMerge } from "./accountStore";
-import { watchJobs } from "./jobStore";
 import { readEmbed } from "./embedded";
 import ProcorePanel from "./ProcorePanel";
+import { PICCOLO } from "./features";
 
 const PANE_KEY = "pictalk-pane";
-const BANNER_KEY = "pictalk-guest-banner"; // dismissed for this visit
-const DAY = 24 * 60 * 60 * 1000;
 
 // Embedded mode, for now: a small debug strip with what the host page sent. Shown inside an
 // iframe, or when the link carries companyId / projectId; ordinary SiteSnap AI links never show it.
@@ -27,65 +25,10 @@ function EmbedStrip({ embed }) {
   );
 }
 
-// Guests: a privacy line, then "save your work" after a finished job, then a warning the
-// day before a job is deleted (that one can't be dismissed).
-function GuestBanner({ uid, onSave }) {
-  const [jobs, setJobs] = useState({ uid: null, list: [] });
-  const [hidden, setHidden] = useState(() => {
-    try {
-      return sessionStorage.getItem(BANNER_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
-  const [now] = useState(() => Date.now());
-  useEffect(() => (uid ? watchJobs(uid, (list) => setJobs({ uid, list })) : undefined), [uid]);
-  const own = (jobs.uid === uid ? jobs.list : []).filter((j) => !j.isDemo);
-  const soon = own.filter((j) => j.expiresAt && j.expiresAt - now < DAY).length;
-  const finished = own.some((j) => j.status === "finished");
-  const hide = () => {
-    setHidden(true);
-    try {
-      sessionStorage.setItem(BANNER_KEY, "1");
-    } catch {
-      // hidden until the app is reopened
-    }
-  };
-
-  if (soon) {
-    return (
-      <div className="guest-banner is-urgent" role="alert">
-        <p>
-          {soon === 1 ? "A job" : `${soon} jobs`} will be deleted within a day. Save your work to keep {soon === 1 ? "it" : "them"}.
-        </p>
-        <button className="link-btn" onClick={onSave}>
-          Save my work
-        </button>
-      </div>
-    );
-  }
-  if (hidden) return null;
-  return (
-    <div className="guest-banner" role="status">
-      <p>
-        {finished
-          ? "Save your work so it follows you. Guest jobs are deleted after 7 days."
-          : "Guest mode: jobs are deleted after 7 days. Don't capture anything sensitive until you save your work."}
-      </p>
-      <div className="guest-banner-actions">
-        <button className="link-btn" onClick={onSave}>
-          Save my work
-        </button>
-        <button className="text-btn" onClick={hide} aria-label="Hide this message">
-          Not now
-        </button>
-      </div>
-    </div>
-  );
-}
 const INVITE_KEY = "pictalk-invite";
 
 function savedPane() {
+  if (!PICCOLO) return "pictalk";
   try {
     return localStorage.getItem(PANE_KEY) === "piccolo" ? "piccolo" : "pictalk";
   } catch {
@@ -239,13 +182,35 @@ export default function Shell() {
   }, [signedInUid]);
 
   const isAdmin = profile?.role === "admin" && profile?.status === "active" && !!profile?.orgId;
-  const chip = !user || user.isAnonymous ? "Save my work" : (user.displayName || user.email || "Account").split(/[ @]/)[0];
+  const guest = !user || user.isAnonymous;
+  const chip = guest ? "Sign in to SiteSnap" : (user.displayName || user.email || "Account").split(/[ @]/)[0];
+  const sendToPiccolo = PICCOLO
+    ? (jobId) => {
+        setPiccoloTarget((t) => ({ jobId, autoDraft: true, key: (t?.key ?? 0) + 1 }));
+        choosePane("piccolo");
+      }
+    : undefined;
+  const openInPiccolo = PICCOLO
+    ? (job) => {
+        setPiccoloTarget((t) => ({ jobId: job.id, ownerUid: job.ownerUid, key: (t?.key ?? 0) + 1 }));
+        choosePane("piccolo");
+      }
+    : undefined;
 
   return (
     <>
       <EmbedStrip embed={embed} />
       {/* Procore sign-in only in a top-level tab (its login page can't load in an iframe) */}
       {!embed.embedded && embed.hasIds && <ProcorePanel companyId={embed.companyId} projectId={embed.projectId} />}
+      {!PICCOLO ? (
+        // SiteSnap AI: no panes, just who's signed in
+        <nav className="pane-bar account-bar" aria-label="Account">
+          <p className="account-state">{guest ? "Not signed in" : `Signed in as ${user.displayName || user.email || "you"}`}</p>
+          <button className={`account-chip${guest ? " is-guest" : ""}`} onClick={() => setSheetOpen(true)}>
+            {guest ? "Sign in to SiteSnap" : "Account"}
+          </button>
+        </nav>
+      ) : (
       <nav className="pane-bar" aria-label="Switch between SiteSnap AI and Piccolo">
         <div className="pane-switch" role="tablist">
           {[
@@ -267,21 +232,17 @@ export default function Shell() {
           {chip}
         </button>
       </nav>
-
-      {user?.isAnonymous && view === "panes" && <GuestBanner uid={user.uid} onSave={() => setSheetOpen(true)} />}
+      )}
 
       <div className="pane-body" hidden={pane !== "pictalk" || view !== "panes"}>
         <App
-          onSendToPiccolo={(jobId) => {
-            setPiccoloTarget((t) => ({ jobId, autoDraft: true, key: (t?.key ?? 0) + 1 }));
-            choosePane("piccolo");
-          }}
+          onSendToPiccolo={sendToPiccolo}
           openJob={pictalkTarget}
           canDeleteJobs={!!profile?.canDeleteJobs}
           embedded={embed.embedded}
         />
       </div>
-      {pane === "piccolo" && view === "panes" && (
+      {PICCOLO && pane === "piccolo" && view === "panes" && (
         <PiccoloPane
           key={piccoloTarget?.key ?? 0}
           uid={user?.uid}
@@ -303,10 +264,7 @@ export default function Shell() {
             profile={profile}
             onBack={() => setView("panes")}
             onNotice={showToast}
-            onOpenJob={(job) => {
-              setPiccoloTarget((t) => ({ jobId: job.id, ownerUid: job.ownerUid, key: (t?.key ?? 0) + 1 }));
-              choosePane("piccolo");
-            }}
+            onOpenJob={openInPiccolo}
           />
         </main>
       )}

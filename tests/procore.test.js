@@ -442,3 +442,37 @@ test("no Procore token or secret in localStorage / sessionStorage or a VITE_ var
     assert.ok(!/^\s*VITE_[A-Z0-9_]*(PROCORE|SESSION|SECRET|TOKEN)/m.test(readFileSync(join(root, f), "utf8")), `${f}: secret in a VITE_ variable`);
   }
 });
+
+// ---------- directory ?shape=1 (diagnostic: field names and counts, never values) ----------
+
+test("directory ?shape=1 lists field names and how many are filled, with no values", async () => {
+  replies.push({ body: [
+    { ...normalUser(1), mobile_phone: "555-0100", business_phone: "", job_title: "Superintendent" },
+    { id: 2, name: "No Title", first_name: "No", last_name: "Title", email_address: "nt@example.com", job_title: null, vendor: null, permission_template: { id: 3, name: "Subcontractor" } },
+  ] });
+  const out = await run(directory, req("/api/procore/directory?companyId=123&projectId=456&shape=1", { [SESSION_COOKIE]: sessionCookie(freshTokens()) }));
+  assert.equal(out.statusCode, 200);
+  const shape = out.json();
+  assert.equal(shape.users, 2);
+  const f = Object.fromEntries(shape.fields.map((x) => [x.path, x.filled]));
+  assert.equal(f.job_title, 1);
+  assert.equal(f.vendor, 1);
+  assert.equal(f["vendor.name"], 1);
+  assert.equal(f["permission_template.name"], 2);
+  assert.equal(f.business_phone, 0, "empty strings don't count");
+  assert.equal(f.mobile_phone, 1);
+  for (const leak of ["555-0100", "@example.com", "Superintendent", "Acme Electric", "Subcontractor", "No Title"]) {
+    assert.ok(!out.body.includes(leak), `no values: ${leak}`);
+  }
+  assert.equal(calls.length, 1, "first page only");
+  assert.equal(calls[0].url, "https://sandbox.procore.test/rest/v1.0/projects/456/users?page=1&per_page=100");
+  assert.equal(calls[0].method, "GET");
+});
+
+test("directory ?shape=1 still needs a Procore session and real ids", async () => {
+  const noSession = await run(directory, req("/api/procore/directory?companyId=123&projectId=456&shape=1"));
+  assert.equal(noSession.statusCode, 401);
+  const noIds = await run(directory, req("/api/procore/directory?shape=1", { [SESSION_COOKIE]: sessionCookie(freshTokens()) }));
+  assert.equal(noIds.statusCode, 400);
+  assert.equal(calls.length, 0);
+});

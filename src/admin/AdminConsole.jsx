@@ -91,9 +91,11 @@ function JobSheet({ job, customers, orgId, onOpen, onNotice, onClose }) {
       <button className="big-btn plain-btn" onClick={() => setAssigning(true)}>
         Assign People
       </button>
-      <button className="big-btn photo-btn" onClick={() => onOpen(job)}>
-        Open in Piccolo
-      </button>
+      {onOpen && (
+        <button className="big-btn photo-btn" onClick={() => onOpen(job)}>
+          Open in Piccolo
+        </button>
+      )}
       <button className="text-btn" onClick={onClose}>
         Close
       </button>

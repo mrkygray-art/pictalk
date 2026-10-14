@@ -124,8 +124,7 @@ const stripOf = (text) => {
       asked.includes('/api/procore/login?companyId=123&projectId=456'), asked.join(' , '));
     await page.waitForFunction(() => document.body.innerText.includes('Project people'), { timeout: 30000 });
     const t = await page.evaluate(() => document.body.innerText);
-    check('after sign-in: back on the same project, "Connected to Procore."', page.url().includes('companyId=123&projectId=456') && t.includes('Connected to Procore.'), page.url());
-    check('shows the signed-in name and email', t.includes('Carl Contractor') && t.includes('carl.contractor@example.com'));
+    check('after sign-in: back on the same project, "Connected to Procore as Carl Contractor"', page.url().includes('companyId=123&projectId=456') && t.includes('Connected to Procore as Carl Contractor'), page.url());
     check('lists the project people with company and role', t.includes('Project people (2)') && t.includes('Jane Doe') && t.includes('Doe Plumbing · Superintendent') && t.includes('Sam Lee'));
     const meIdx = asked.findIndex((a) => a.startsWith('/api/procore/me?companyId=123'));
     const dirIdx = asked.findIndex((a) => a === '/api/procore/directory?companyId=123&projectId=456');
@@ -187,6 +186,10 @@ const stripOf = (text) => {
     check('top level, ordinary link: Tap to Talk, no Capture in a new tab',
       b.includes('Tap to Talk') && !b.includes('Capture in a new tab'));
     check('top level, ordinary link: no Procore panel', !text.includes('Procore'));
+    check('SiteSnap: no Piccolo tab or button (feature off)', !text.includes('Piccolo'), b.filter((x) => /Piccolo/.test(x)).join(' | '));
+    check('SiteSnap: no guest banner or "Save my work"', !/Save my work|Guest mode|Save your work|deleted after 7 days/.test(text));
+    check('SiteSnap: sign-in state "Not signed in" + "Sign in to SiteSnap"', text.includes('Not signed in') && b.includes('Sign in to SiteSnap'));
+    check('no PicTalk name on screen', !text.includes('PicTalk'));
     await page.close();
   }
 

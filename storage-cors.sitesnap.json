@@ -1,0 +1,9 @@
+[
+  {
+    "origin": [
+      "https://sitesnap-procore.vercel.app"
+    ],
+    "method": ["GET"],
+    "maxAgeSeconds": 3600
+  }
+]

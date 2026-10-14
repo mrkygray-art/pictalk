@@ -5,14 +5,16 @@ import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 
+// SiteSnap AI (branch sitesnap): its own Firebase project, sitesnap-procore (us-west2), never
+// PicTalk's pictalk-6cbff. These values are public identifiers, not secrets; access is enforced by
+// the security rules. (PicTalk's own config stays on master.)
 const liveConfig = {
-  apiKey: "AIzaSyCpi_XSpfJzpBHt0-kFFP8G-TQaou7SmA8",
-  authDomain: "pictalk-6cbff.firebaseapp.com",
-  projectId: "pictalk-6cbff",
-  storageBucket: "pictalk-6cbff.firebasestorage.app",
-  messagingSenderId: "70549299789",
-  appId: "1:70549299789:web:9e79ae34bd4b4210b77204",
-  measurementId: "G-DH60FS6YBW"
+  apiKey: "AIzaSyDEFRK4HNMwNh3YxAd-YRvykHNyGabuYww",
+  authDomain: "sitesnap-procore.firebaseapp.com",
+  projectId: "sitesnap-procore",
+  storageBucket: "sitesnap-procore.firebasestorage.app",
+  messagingSenderId: "728186372367",
+  appId: "1:728186372367:web:1c91a58ce67835034cfe7a",
 };
 
 // Piccolo test site (`npm run deploy:dev`): builds with `--mode devcloud` use the separate

@@ -2,7 +2,9 @@ import { StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import './theme.css'
 import './index.css'
-import Shell from './Shell.jsx' // SiteSnap AI and Piccolo panes
+import Shell from './Shell.jsx' // the earlier job / stop app (and Piccolo), behind VITE_FEATURE_JOBS=1
+import MessagingApp from './messaging/MessagingApp.jsx' // SiteSnap AI: project messaging
+import { MESSAGING } from './features.js'
 import LabPage from './lab/LazyLabPage.jsx' // the public Evaluation Lab page at /lab
 
 const isLab = window.location.pathname.replace(/\/+$/, '') === '/lab'
@@ -13,6 +15,8 @@ createRoot(document.getElementById('root')).render(
       <Suspense fallback={null}>
         <LabPage />
       </Suspense>
+    ) : MESSAGING ? (
+      <MessagingApp />
     ) : (
       <Shell />
     )}

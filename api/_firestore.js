@@ -31,13 +31,28 @@ export function serviceAccount(env = process.env) {
   return key;
 }
 
+// The firebase-admin app for sitesnap-procore (loaded only when first needed)
+async function adminApp() {
+  const key = serviceAccount();
+  const { initializeApp, getApps, cert } = await import("firebase-admin/app");
+  return getApps().find((a) => a.name === "sitesnap") ?? initializeApp({ credential: cert(key), projectId: FIREBASE_PROJECT }, "sitesnap");
+}
+
 // Firestore (firebase-admin loaded only when first needed)
 export async function firestore() {
   if (store) return store;
-  const key = serviceAccount();
-  const { initializeApp, getApps, cert } = await import("firebase-admin/app");
   const { getFirestore } = await import("firebase-admin/firestore");
-  const app = getApps().find((a) => a.name === "sitesnap") ?? initializeApp({ credential: cert(key), projectId: FIREBASE_PROJECT }, "sitesnap");
-  store = getFirestore(app);
+  store = getFirestore(await adminApp());
   return store;
+}
+
+// Firebase Auth, for signing a SiteSnap sign-in token for a Procore user (signed locally with the
+// service-account key; needs no extra IAM role). Tests swap it with setAuth().
+let auth = null;
+export const setAuth = (a) => { auth = a; };
+export async function firebaseAuth() {
+  if (auth) return auth;
+  const { getAuth } = await import("firebase-admin/auth");
+  auth = getAuth(await adminApp());
+  return auth;
 }

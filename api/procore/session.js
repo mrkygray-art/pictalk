@@ -1,0 +1,50 @@
+// POST /api/procore/session : turns the Procore sign-in (httpOnly cookie) into a SiteSnap sign-in.
+// Everyone signs in with Procore; SiteSnap has no guests or separate accounts for messaging.
+//  1. Asks Procore who this is (GET /rest/v1.0/me) and which projects they can open (api/_projects.js).
+//  2. Records it for the Firestore rules (server only, never client-writable):
+//       procoreUsers/{procoreUserId} = { name, projectKeys[], updatedAt }   (rules: no client access)
+//       procoreProjects/{c}_{p}/members/{procoreUserId} = { procoreUserId, name, at }
+//     and removes the member docs of projects they're no longer on, so a removed person loses the feed.
+//  3. Returns a Firebase custom token for uid procore_{procoreUserId} with claim procoreUserId, which
+//     the app signs in with. The rules then let them read only their projects' conversations.
+// Same-origin JSON only. No email is returned or stored for other users to see.
+import { config, HttpError, procoreGet, requireSameOriginJson, sendError, sendJson } from "../_procore.js";
+import { listProjects, projectKey } from "../_projects.js";
+import { firebaseAuth, firestore } from "../_firestore.js";
+
+export const uidFor = (procoreUserId) => `procore_${procoreUserId}`;
+
+export default async function handler(req, res) {
+  try {
+    if (req.method !== "POST") throw new HttpError(405, "bad_request", "Use POST.");
+    requireSameOriginJson(req);
+    const cfg = config();
+    const me = await procoreGet(req, res, cfg, "/rest/v1.0/me");
+    if (me?.id == null) throw new HttpError(502, "procore_failed", "Procore didn't say who you are. Try again.");
+    const procoreUserId = String(me.id);
+    const { projects } = await listProjects(req, res, cfg);
+    // Procore only fills in the name when a company is given
+    let name = me.name || null;
+    if (!name && projects[0]) {
+      const named = await procoreGet(req, res, cfg, "/rest/v1.0/me", { companyId: projects[0].companyId, query: { company_id: projects[0].companyId } }).catch(() => null);
+      name = named?.name || null;
+    }
+    name = name || me.login?.split("@")[0] || `Procore user ${procoreUserId}`;
+
+    const db = await firestore();
+    const userRef = db.doc(`procoreUsers/${procoreUserId}`);
+    const before = (await userRef.get()).data()?.projectKeys ?? [];
+    const keys = projects.map(projectKey);
+    const now = Date.now();
+    const batch = db.batch();
+    for (const k of keys) batch.set(db.doc(`procoreProjects/${k}/members/${procoreUserId}`), { procoreUserId, name, at: now });
+    for (const k of before) if (!keys.includes(k)) batch.delete(db.doc(`procoreProjects/${k}/members/${procoreUserId}`));
+    batch.set(userRef, { name, projectKeys: keys, updatedAt: now });
+    await batch.commit();
+
+    const token = await (await firebaseAuth()).createCustomToken(uidFor(procoreUserId), { procoreUserId });
+    sendJson(res, 200, { token, me: { procoreUserId, name }, projects });
+  } catch (err) {
+    sendError(res, err);
+  }
+}

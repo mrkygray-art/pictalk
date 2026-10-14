@@ -137,6 +137,23 @@ export function writeProjectsCache(list) {
   try { store()?.setItem(PROJECTS, JSON.stringify(list)); } catch { /* ignore */ }
 }
 
+// Who signed in on this phone (Procore id and name only), so the feed opens with no signal
+const ME = "sitesnap-me";
+export function readMe() {
+  try {
+    const v = JSON.parse(store()?.getItem(ME) ?? "null");
+    return v?.procoreUserId ? { procoreUserId: String(v.procoreUserId), name: v.name ?? null } : null;
+  } catch {
+    return null;
+  }
+}
+export function writeMe(me) {
+  try { store()?.setItem(ME, JSON.stringify({ procoreUserId: me.procoreUserId, name: me.name ?? null })); } catch { /* ignore */ }
+}
+export function clearMe() {
+  try { store()?.removeItem(ME); } catch { /* ignore */ }
+}
+
 export function readLastProject() {
   try {
     const v = JSON.parse(store()?.getItem(LAST_PROJECT) ?? "null");

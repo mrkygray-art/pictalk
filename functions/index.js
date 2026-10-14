@@ -123,3 +123,9 @@ exports.transcribeStop = onDocumentCreated(
     }
   }
 );
+// SiteSnap messaging: project conversations (functions/messaging.js)
+const messaging = require("./messaging");
+exports.onConversationMessage = messaging.onConversationMessage;
+exports.transcribeMessageVoice = messaging.transcribeMessageVoice;
+exports.describeMessagePhoto = messaging.describeMessagePhoto;
+exports.setMessageTask = messaging.setMessageTask;

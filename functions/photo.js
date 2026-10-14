@@ -189,3 +189,6 @@ exports.describeStopPhoto = onDocumentWritten(
     });
   }
 );
+
+// Shared with SiteSnap messaging (functions/messaging.js): describe a message's photo on request
+exports.photoHelpers = { shrinkPhoto, callModel, fakeModel, ANTHROPIC_API_KEY };

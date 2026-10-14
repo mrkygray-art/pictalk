@@ -63,10 +63,66 @@ service cloud.firestore {
             || (key.matches('org_.+') && adminOf(key.replace('^org_', ''))));
     }
 
-    // SiteSnap: per-Procore-project data (responsibility tags now; threads later), written and read
-    // only by the server (Vercel functions with firebase-admin). Clients can't read or write any of it.
+    // SiteSnap: per-Procore-project data. By default only the server (Vercel functions and Cloud Functions
+    // with firebase-admin) reads or writes it (responsibility tags, procoreUsers); the matches below open
+    // only conversations, messages and read marks, to that project's members.
     match /procoreProjects/{project=**} {
       allow read, write: if false;
+    }
+
+    // SiteSnap messaging. Everyone signs in with Procore: api/procore/session gives a Firebase sign-in
+    // whose token carries procoreUserId, and writes procoreProjects/{key}/members/{procoreUserId} for each
+    // project Procore says they can open (and removes it when they can't). Only members of a project
+    // read its conversations; nobody is alerted here (alerts are the app's For Me view and later Procore).
+    function procoreMe() {
+      return request.auth != null ? request.auth.token.get('procoreUserId', null) : null;
+    }
+    function memberOf(key) {
+      return procoreMe() is string
+        && exists(/databases/$(database)/documents/procoreProjects/$(key)/members/$(procoreMe()));
+    }
+    // A tagged person as the app stores them: Procore id, name, company, title (never email or phone)
+    function okPeople(list) {
+      return list is list && list.size() <= 50;
+    }
+    match /procoreProjects/{key}/members/{memberId} {
+      allow read: if memberId == procoreMe() && memberOf(key);
+      // What this person has read, for For Me unread dots (theirs only)
+      match /reads/{conversationId} {
+        allow read, delete: if memberId == procoreMe() && memberOf(key);
+        allow create, update: if memberId == procoreMe() && memberOf(key)
+          && request.resource.data.keys().hasOnly(['lastReadAt']);
+      }
+    }
+    match /procoreProjects/{key}/conversations/{conversationId} {
+      allow read: if memberOf(key);
+      // Started by a member, as themselves; the summary fields (last message, counts, tasks) are server-only
+      allow create: if memberOf(key)
+        && request.resource.data.keys().hasOnly(['createdBy', 'tagged', 'taggedIds', 'status', 'createdAt', 'lastActivityAt'])
+        && request.resource.data.createdBy.procoreUserId == procoreMe()
+        && request.resource.data.status == 'open'
+        && okPeople(request.resource.data.tagged) && okPeople(request.resource.data.taggedIds)
+        && request.resource.data.taggedIds.size() > 0;
+      // Any member can tag more people or open / close it
+      allow update: if memberOf(key)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tagged', 'taggedIds', 'status', 'statusBy', 'statusAt'])
+        && request.resource.data.status in ['open', 'closed']
+        && okPeople(request.resource.data.tagged) && okPeople(request.resource.data.taggedIds)
+        && request.resource.data.taggedIds.size() >= resource.data.taggedIds.size();
+      match /messages/{messageId} {
+        allow read: if memberOf(key);
+        // Written once by its author; transcripts, AI descriptions and tasks are added by the server
+        allow create: if memberOf(key)
+          && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'text', 'transcript', 'transcriptStatus',
+                                                   'photos', 'voicePath', 'voiceType', 'aiDescription', 'clientCreatedAt', 'createdAt'])
+          && request.resource.data.authorId == procoreMe()
+          && request.resource.data.get('text', '') is string && request.resource.data.get('text', '').size() <= 5000
+          && request.resource.data.get('transcript', '') is string && request.resource.data.get('transcript', '').size() <= 10000
+          && (request.resource.data.get('aiDescription', null) == null
+              || (request.resource.data.aiDescription is string && request.resource.data.aiDescription.size() <= 3000))
+          && request.resource.data.get('photos', []) is list && request.resource.data.get('photos', []).size() <= 10
+          && request.resource.data.get('transcriptStatus', 'none') in ['none', 'pending', 'done'];
+      }
     }
 
     // The company's customers. Members read them; admins and estimators add and edit them

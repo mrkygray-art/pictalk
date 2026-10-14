@@ -1,50 +1,12 @@
-// GET /api/procore/projects : the Procore projects the signed-in user can open, across their companies,
-// for the project picker. Read-only. Checked against Procore's reference (2026-10-14):
-//   GET /rest/v1.0/companies  "Returns companies visible to the current user" (no Procore-Company-Id needed)
-//   GET /rest/v1.1/projects?company_id=  "Return a list of active Projects. If the authenticated user has
-//     full company admin permissions the request will return all of the projects in the company. If the
-//     user does not have full company admin permissions, the request will only return the projects that
-//     the user has been added to." Default 100 per page, max 300; view=compact returns id and name.
-// Calls run one after another: a token refresh replaces the refresh token, so two at once could clash.
-import { config, procoreGet, sendError, sendJson } from "../_procore.js";
-
-const PER_PAGE = 100;
-const MAX_PAGES = 10;
-
-async function allPages(req, res, cfg, path, opts) {
-  const out = [];
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const batch = await procoreGet(req, res, cfg, path, { ...opts, query: { ...opts.query, page, per_page: PER_PAGE } });
-    if (!Array.isArray(batch)) break;
-    out.push(...batch);
-    if (batch.length < PER_PAGE) break;
-  }
-  return out;
-}
+// GET /api/procore/projects : the Procore projects the signed-in user can open, for the project picker.
+// Read-only; the listing itself lives in api/_projects.js (shared with /api/procore/session).
+import { config, sendError, sendJson } from "../_procore.js";
+import { listProjects } from "../_projects.js";
 
 export default async function handler(req, res) {
   try {
     const cfg = config();
-    const companies = await allPages(req, res, cfg, "/rest/v1.0/companies", { query: {} });
-    const projects = [];
-    let refused = 0;
-    for (const c of companies) {
-      if (c?.id == null || c.is_active === false) continue;
-      const companyId = String(c.id);
-      try {
-        const list = await allPages(req, res, cfg, "/rest/v1.1/projects", { companyId, query: { company_id: companyId, view: "compact" } });
-        for (const p of list) {
-          if (p?.id == null) continue;
-          projects.push({ companyId, companyName: c.name ?? null, projectId: String(p.id), name: p.name || `Project ${p.id}` });
-        }
-      } catch (err) {
-        // One company refusing (app not installed there, tool off) shouldn't hide the others
-        if (err?.status === 403 || err?.status === 404) { refused++; continue; }
-        throw err;
-      }
-    }
-    projects.sort((a, b) => a.name.localeCompare(b.name) || a.projectId.localeCompare(b.projectId));
-    sendJson(res, 200, { projects, companies: companies.length, refused });
+    sendJson(res, 200, await listProjects(req, res, cfg));
   } catch (err) {
     sendError(res, err);
   }

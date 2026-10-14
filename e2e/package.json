@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "type": "commonjs",
+  "description": "PicTalk browser test scripts (puppeteer-core, installed with --no-save). Not part of the app."
+}

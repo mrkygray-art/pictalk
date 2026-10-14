@@ -2876,3 +2876,4 @@ div.adm-stat {
 .dir-group-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 6px 4px; }
 .dir-group-head h3 { margin: 0; }
 .dir-group-btn { margin-top: 0; justify-self: start; }
+.conv-card.is-unread .conv-top { padding-right: 20px; } /* room for the unread dot */

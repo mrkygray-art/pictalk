@@ -9,6 +9,14 @@ const RESULT = {
   error: "Procore sign-in didn't work. Try again.",
 };
 
+// Where a person's role came from (api/_responsibilities.js), shown small under the name
+const SOURCE = {
+  project_team: "Procore project team",
+  job_title: "Procore title",
+  permission_template: "Procore permissions",
+  tag: "Tagged in SiteSnap",
+};
+
 async function getJson(url) {
   const resp = await fetch(url, { headers: { Accept: "application/json" } });
   const type = resp.headers.get("content-type") ?? "";
@@ -37,11 +45,36 @@ export default function ProcorePanel({ companyId, projectId }) {
       if (!live) return;
       if (dir.status === 401) return setState({ step: "signin" });
       setState(dir.status === 200
-        ? { step: "ready", me: me.body, people: dir.body.people }
+        ? { step: "ready", me: me.body, people: dir.body.people, canTag: !!dir.body.canTag, labels: dir.body.labels ?? [] }
         : { step: "ready", me: me.body, people: null, message: dir.body?.message ?? "Couldn't load the project's people." });
     })().catch(() => live && setState({ step: "failed" }));
     return () => { live = false; };
   }, [companyId, projectId]);
+
+  // A PM sets or clears a responsibility tag (server checks they're the project's PM)
+  const [tagError, setTagError] = useState("");
+  const setTag = async (userId, label) => {
+    setTagError("");
+    try {
+      const resp = await fetch("/api/procore/responsibility", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ companyId, projectId, userId, label: label || null }),
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok) return setTagError(body.message ?? "Couldn't save that tag.");
+      setState((s) => ({
+        ...s,
+        people: s.people.map((p) => {
+          if (p.id !== userId) return p;
+          const fromTag = p.roleSource === "tag" || p.roleSource === null;
+          return { ...p, tag: body.tag, ...(fromTag ? { role: body.tag, roleSource: body.tag ? "tag" : null } : {}) };
+        }),
+      }));
+    } catch {
+      setTagError("Couldn't reach SiteSnap. Check your signal and try again.");
+    }
+  };
 
   const connect = () => {
     const ids = new URLSearchParams();
@@ -72,6 +105,8 @@ export default function ProcorePanel({ companyId, projectId }) {
           {state.people && (
             <>
               <h2>Project people ({state.people.length})</h2>
+              {state.canTag && <p className="procore-note">You're this project's PM: tag people Procore has no role for.</p>}
+              {tagError && <p className="procore-note procore-error" role="alert">{tagError}</p>}
               {state.people.length === 0 ? (
                 <p className="procore-note">No one is on this project's directory yet.</p>
               ) : (
@@ -79,7 +114,19 @@ export default function ProcorePanel({ companyId, projectId }) {
                   {state.people.map((p) => (
                     <li key={p.id}>
                       <strong>{p.name ?? "Unnamed"}</strong>
-                      <span>{[p.company, p.role].filter(Boolean).join(" · ") || "—"}</span>
+                      <span>
+                        {p.company ?? "Company not set in Procore"} · {p.role ?? "Role not set in Procore"}
+                      </span>
+                      {p.roleSource && <small className="procore-source">{SOURCE[p.roleSource]}</small>}
+                      {state.canTag && (p.roleSource === null || p.roleSource === "tag") && (
+                        <label className="procore-tag">
+                          Responsibility
+                          <select value={p.tag ?? ""} onChange={(e) => setTag(p.id, e.target.value)}>
+                            <option value="">Not tagged</option>
+                            {state.labels.map((l) => <option key={l} value={l}>{l}</option>)}
+                          </select>
+                        </label>
+                      )}
                     </li>
                   ))}
                 </ul>

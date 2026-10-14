@@ -30,10 +30,24 @@ const readAll = async (req) => { let s = ''; for await (const c of req) s += c; 
 
 (async () => {
   const api = {};
-  for (const name of ['login', 'callback', 'me', 'directory']) {
+  for (const name of ['login', 'callback', 'me', 'directory', 'responsibility']) {
     api[name] = (await import(pathToFileURL(path.join(__dirname, '..', 'api', 'procore', `${name}.js`)))).default;
   }
   const { REDIRECT_URI } = await import(pathToFileURL(path.join(__dirname, '..', 'api', '_procore.js')));
+  // SiteSnap's Firestore tag store, in memory (the real one needs FIREBASE_SERVICE_ACCOUNT_B64)
+  const { setTagStore } = await import(pathToFileURL(path.join(__dirname, '..', 'api', '_responsibilities.js')));
+  const tagDocs = new Map();
+  setTagStore({
+    async list(c, p) { return new Map(tagDocs.get(`${c}_${p}`) ?? []); },
+    async set(c, p, u, v) { const m = tagDocs.get(`${c}_${p}`) ?? new Map(); m.set(u, v); tagDocs.set(`${c}_${p}`, m); },
+    async remove(c, p, u) { tagDocs.get(`${c}_${p}`)?.delete(u); },
+  });
+  const PROJECT_USERS = [
+    { id: 1, name: 'Jane Doe', job_title: 'Superintendent', vendor: { id: 7, name: 'Doe Plumbing' }, permission_template: { id: 2, name: 'Project Manager' } },
+    { id: 2, first_name: 'Sam', last_name: 'Lee', name: 'Sam Lee', initials: 'SL', vendor: { id: 8, name: 'Lee Electric' } },
+    { id: 3, name: 'Nobody Set', vendor: null, job_title: null },
+    { id: 160586, name: 'Carl Contractor', vendor: { id: 9, name: 'GC Inc' } },
+  ];
 
   // Stand-in Procore state
   let mode = 'query'; // where authorize puts the code: 'query' | 'hash'
@@ -67,12 +81,15 @@ const readAll = async (req) => { let s = ''; for await (const c of req) s += c; 
       if (u.pathname === '/fake-procore-api/rest/v1.0/me') {
         return json(200, u.searchParams.get('company_id') ? { id: 160586, login: 'carl.contractor@example.com', name: 'Carl Contractor' } : { id: 160586, login: 'carl.contractor@example.com' });
       }
-      if (u.pathname === '/fake-procore-api/rest/v1.0/projects/456/users') {
-        if (req.headers['procore-company-id'] !== '123') return json(400, { error: 'Procore-Company-Id required' });
-        return json(200, [
-          { id: 1, name: 'Jane Doe', job_title: 'Superintendent', vendor: { id: 7, name: 'Doe Plumbing' }, permission_template: { id: 2, name: 'Project Manager' } },
-          { id: 2, first_name: 'Sam', last_name: 'Lee', name: 'Sam Lee', initials: 'SL', vendor: { id: 8, name: 'Lee Electric' } },
-        ]);
+      if (req.headers['procore-company-id'] !== '123' && u.pathname !== '/fake-procore-api/rest/v1.0/me') return json(400, { error: 'Procore-Company-Id required' });
+      if (u.pathname === '/fake-procore-api/rest/v1.0/projects/456/users') return json(200, PROJECT_USERS);
+      const one = u.pathname.match(/^\/fake-procore-api\/rest\/v1\.0\/projects\/456\/users\/(\d+)$/);
+      if (one) {
+        const found = PROJECT_USERS.find((p) => String(p.id) === one[1]);
+        return found ? json(200, found) : json(404, { error: 'not found' });
+      }
+      if (u.pathname === '/fake-procore-api/rest/v1.0/project_roles' && u.searchParams.get('project_id') === '456') {
+        return json(200, [{ id: 1, name: 'Carl Contractor', role: 'Project Manager', user_id: 160586, is_active: true }]);
       }
       return json(404, { error: 'not found' });
     }
@@ -83,7 +100,7 @@ const readAll = async (req) => { let s = ''; for await (const c of req) s += c; 
     const u = new URL(req.url, SITE);
     // Handlers can't send a real Procore login here, so plain responses mean a broken test
     if (u.pathname.startsWith('/fake-procore')) return fakeProcore(req, res, u);
-    const m = u.pathname.match(/^\/api\/procore\/(login|callback|me|directory)$/);
+    const m = u.pathname.match(/^\/api\/procore\/(login|callback|me|directory|responsibility)$/);
     if (m) return api[m[1]](req, res);
     // Everything else: the app from the dev server
     const p = http.request({ ...VITE, path: req.url, method: req.method, headers: { ...req.headers, host: `${VITE.host}:${VITE.port}` } }, (r) => {
@@ -99,6 +116,7 @@ const readAll = async (req) => { let s = ''; for await (const c of req) s += c; 
 
   for (const m of ['query', 'hash']) {
     mode = m;
+    tagDocs.clear(); // each run starts with no SiteSnap tags
     const ctx = await browser.createBrowserContext(); // fresh cookies each run
     const page = await ctx.newPage();
     page.on('pageerror', (e) => console.log('PAGE ERROR:', e.message));
@@ -120,7 +138,26 @@ const readAll = async (req) => { let s = ''; for await (const c of req) s += c; 
     check(`[${m}] one code-for-token exchange, with the secret, server to server`, tok.length === 1 && tok[0].grant_type === 'authorization_code' && tok[0].client_secret === CLIENT_SECRET);
     check(`[${m}] shows "Connected to Procore as" the signed-in name`, text.includes('Connected to Procore as Carl Contractor'));
     check(`[${m}] lists the project's people: name, company, role`,
-      text.includes('Project people (2)') && text.includes('Doe Plumbing · Superintendent') && text.includes('Sam Lee') && text.includes('Lee Electric'));
+      text.includes('Project people (4)') && text.includes('Doe Plumbing · Superintendent') && text.includes('Sam Lee') && text.includes('Lee Electric'));
+    check(`[${m}] Project Roles come first: Carl shows as Project Manager from the Procore project team`,
+      text.includes('GC Inc · Project Manager') && text.includes('Procore project team'));
+    check(`[${m}] missing data says "not set in Procore" instead of a dash`,
+      text.includes('Lee Electric · Role not set in Procore') && text.includes('Company not set in Procore · Role not set in Procore') && !/\n—\n/.test(text));
+    if (m === 'query') {
+      // Carl is the PM, so he can tag Nobody Set (who has no role in Procore)
+      check('[query] the PM sees the tagging note and a Responsibility picker', text.includes("You're this project's PM"));
+      const pick = await page.evaluateHandle(() => [...document.querySelectorAll('.procore-people li')].find((li) => li.innerText.includes('Nobody Set'))?.querySelector('select'));
+      const pickers = await page.evaluate(() => [...document.querySelectorAll('.procore-people li')].filter((li) => li.querySelector('select')).map((li) => li.querySelector('strong').innerText));
+      check('[query] only people Procore has no role for get a picker (Sam Lee, Nobody Set)', pickers.join(',') === 'Sam Lee,Nobody Set', pickers.join(','));
+      await pick.select('Purchasing');
+      await page.waitForFunction(() => [...document.querySelectorAll('.procore-people li')].some((li) => li.innerText.includes('Nobody Set') && li.innerText.includes('Tagged in SiteSnap')), { timeout: 15000 });
+      const saved = tagDocs.get('123_456')?.get('3');
+      check('[query] the tag is saved server-side with who set it', saved?.label === 'Purchasing' && saved.setByProcoreUserId === '160586' && saved.setByName === 'Carl Contractor', JSON.stringify(saved));
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForFunction(() => document.body.innerText.includes('Project people'), { timeout: 30000 });
+      const after = await page.evaluate(() => [...document.querySelectorAll('.procore-people li')].find((li) => li.innerText.includes('Nobody Set'))?.innerText ?? '');
+      check('[query] after a reload, Nobody Set shows Purchasing (tagged in SiteSnap)', after.includes('Purchasing') && after.includes('Tagged in SiteSnap'), after.replace(/\n/g, ' | '));
+    }
     const calls = seen.api.slice(before.api);
     check(`[${m}] Procore API calls are GET only, with the token and Procore-Company-Id 123`,
       calls.length >= 2 && calls.every((c) => c.method === 'GET' && c.company === '123' && /^Bearer at-/.test(c.auth)), JSON.stringify(calls.map((c) => c.path)));

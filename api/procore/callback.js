@@ -7,7 +7,7 @@
 //   POSTs it here (JSON, same origin); the POST runs the same checks and answers { location }.
 import { randomBytes } from "node:crypto";
 import {
-  appUrl, checkState, clearCookie, config, exchangeCode, HttpError, queryOf, readCookies, redirect, saveSession, sendError, sendJson, STATE_COOKIE,
+  appUrl, checkState, clearCookie, config, exchangeCode, HttpError, queryOf, readBody, readCookies, requireSameOriginJson, redirect, saveSession, sendError, sendJson, STATE_COOKIE,
 } from "../_procore.js";
 
 // The shared part: state check (throws on a bad one), then Procore's answer. Returns where to go.
@@ -24,23 +24,6 @@ async function finish(req, res, cfg, { code, state, error }) {
     return appUrl(context, "error");
   }
   return appUrl(context, "connected");
-}
-
-// JSON body from Vercel (already parsed) or a plain Node request; small and JSON only
-async function readBody(req) {
-  if (req.body && typeof req.body === "object") return req.body;
-  let raw = typeof req.body === "string" ? req.body : "";
-  if (!raw) {
-    for await (const chunk of req) {
-      raw += chunk;
-      if (raw.length > 8192) throw new HttpError(413, "too_large", "Request too large.");
-    }
-  }
-  try {
-    const body = JSON.parse(raw || "{}");
-    if (body && typeof body === "object") return body;
-  } catch { /* fall through */ }
-  throw new HttpError(400, "bad_request", "Couldn't read the sign-in answer.");
 }
 
 // Reads a code after '#', takes it out of the address bar and history, and posts it back here
@@ -85,9 +68,7 @@ export default async function handler(req, res) {
     const cfg = config();
     if (req.method === "POST") {
       // Same-origin JSON only: a cross-site form can't send JSON, and the Lax state cookie isn't sent cross-site anyway
-      if (!String(req.headers["content-type"] ?? "").startsWith("application/json")) throw new HttpError(415, "bad_request", "Expected JSON.");
-      const origin = req.headers.origin;
-      if (origin && new URL(origin).host !== req.headers.host) throw new HttpError(403, "bad_origin", "Not allowed.");
+      requireSameOriginJson(req);
       const body = await readBody(req);
       console.log("Procore callback: code arrived after '#'"); // which way Procore sends it (no values logged)
       return sendJson(res, 200, { location: await finish(req, res, cfg, body) });

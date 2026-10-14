@@ -116,6 +116,30 @@ export function sendError(res, err) {
 
 export const queryOf = (req) => new URL(req.url, "http://localhost").searchParams;
 
+// JSON body from Vercel (already parsed) or a plain Node request; small and JSON only
+export async function readBody(req) {
+  if (req.body && typeof req.body === "object") return req.body;
+  let raw = typeof req.body === "string" ? req.body : "";
+  if (!raw) {
+    for await (const chunk of req) {
+      raw += chunk;
+      if (raw.length > 8192) throw new HttpError(413, "too_large", "Request too large.");
+    }
+  }
+  try {
+    const body = JSON.parse(raw || "{}");
+    if (body && typeof body === "object") return body;
+  } catch { /* fall through */ }
+  throw new HttpError(400, "bad_request", "Couldn't read the sign-in answer.");
+}
+
+// POSTs from our own page only: JSON (a cross-site form can't send it) and, when sent, our own Origin
+export function requireSameOriginJson(req) {
+  if (!String(req.headers["content-type"] ?? "").startsWith("application/json")) throw new HttpError(415, "bad_request", "Expected JSON.");
+  const origin = req.headers.origin;
+  if (origin && new URL(origin).host !== req.headers.host) throw new HttpError(403, "bad_origin", "Not allowed.");
+}
+
 // Back to the app (same company / project), always a path on this site, never an outside URL
 export function appUrl({ companyId, projectId }, status) {
   const q = new URLSearchParams();

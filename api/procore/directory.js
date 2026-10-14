@@ -1,20 +1,17 @@
 // GET /api/procore/directory?companyId=&projectId= : read-only list of the project's active users
 // (Procore "List Project Users", GET /rest/v1.0/projects/{project_id}/users, Procore-Company-Id
-// header required). Returns name, company (vendor), and role (job title, else permission template).
+// header required). Returns name, company (vendor), and role: the project team's Project Role, else
+// the job title, else the permission template, else a tag a PM set in SiteSnap (api/_responsibilities.js).
+// Also says whether the signed-in person may tag (a Project Manager / Executive on this project).
 // Users without Directory read access get Procore's compact view, which has no title or template.
 // ?shape=1 (diagnostic): the first page's field names and how many people have each one filled
 // in, never the values, so we can see where title / company / role live in a real project.
 import { config, HttpError, procoreGet, procoreId, queryOf, sendError, sendJson } from "../_procore.js";
+import { canTag, LABELS, person, projectRoles, readTags } from "../_responsibilities.js";
 
 const PER_PAGE = 100;
 const MAX_PAGES = 20; // up to 2,000 people
 
-export const person = (u) => ({
-  id: u.id,
-  name: u.name || [u.first_name, u.last_name].filter(Boolean).join(" ") || null,
-  company: u.vendor?.name ?? null,
-  role: u.job_title || u.permission_template?.name || null,
-});
 
 // Field names (one level into objects, e.g. vendor.name) with a count of non-empty values. No values.
 export function shapeOf(users) {
@@ -43,16 +40,34 @@ export default async function handler(req, res) {
       const first = await procoreGet(req, res, cfg, `/rest/v1.0/projects/${projectId}/users`, { companyId, query: { page: 1, per_page: PER_PAGE } });
       return sendJson(res, 200, shapeOf(Array.isArray(first) ? first : []));
     }
-    const people = [];
+    // One Procore call after another (a token refresh replaces the refresh token)
+    const users = [];
     for (let page = 1; page <= MAX_PAGES; page++) {
       const batch = await procoreGet(req, res, cfg, `/rest/v1.0/projects/${projectId}/users`, {
         companyId, query: { page, per_page: PER_PAGE },
       });
       if (!Array.isArray(batch)) break;
-      people.push(...batch.map(person));
+      users.push(...batch);
       if (batch.length < PER_PAGE) break;
     }
-    sendJson(res, 200, { people });
+    const { roles, available: rolesAvailable } = await projectRoles(req, res, cfg, companyId, projectId);
+    const me = await procoreGet(req, res, cfg, "/rest/v1.0/me", { companyId, query: { company_id: companyId } });
+    // Tags are extra: if SiteSnap's Firestore isn't reachable, the list still shows
+    let tags = new Map();
+    let tagsAvailable = true;
+    try {
+      tags = await readTags(companyId, projectId);
+    } catch (err) {
+      tagsAvailable = false;
+      console.error("Responsibility tags unavailable:", err?.code ?? err?.name ?? "Error");
+    }
+    sendJson(res, 200, {
+      people: users.map((u) => person(u, roles, tags)),
+      rolesAvailable,
+      tagsAvailable,
+      canTag: tagsAvailable && canTag(roles, me?.id),
+      labels: LABELS,
+    });
   } catch (err) {
     sendError(res, err);
   }

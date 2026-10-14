@@ -77,7 +77,8 @@ Also:
 - `GET /rest/v1.0/project_roles?project_id=` (with `Procore-Company-Id`) returns the project team on the project's Home page.
 - Each entry has `name`, `role` (for example "Project Manager"), `user_id`, `contact_id` and `is_active`.
 - Planned order: Project Roles, then `job_title`, then the permission template, then a PM-set tag.
-- Not yet called against the sandbox.
+- Built in Step 2 (branch `sitesnap-step2`), but not yet called against the sandbox. The list still loads if Procore refuses Project Roles (403): `rolesAvailable: false`.
+- PM tags: only someone whose Project Role is Project Manager or Project Executive can tag. Before saving, the person is checked with `GET /rest/v1.0/projects/{project_id}/users/{id}` ("Show project user"). Procore documents only 200, 401 and 403 for that call, not a 404 for someone outside the project, but any error refuses the save.
 
 ## Webhooks (Step 8)
 

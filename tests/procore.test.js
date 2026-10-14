@@ -5,10 +5,14 @@
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import process from "node:process";
+import { Buffer } from "node:buffer";
 import login from "../api/procore/login.js";
 import callback from "../api/procore/callback.js";
 import me from "../api/procore/me.js";
 import directory from "../api/procore/directory.js";
+import responsibility from "../api/procore/responsibility.js";
+import { setTagStore } from "../api/_responsibilities.js";
+import { serviceAccount } from "../api/_firestore.js";
 import { config, newState, seal, unseal, REDIRECT_URI, SESSION_COOKIE, STATE_COOKIE } from "../api/_procore.js";
 
 const SECRET = "test-client-secret-never-leak";
@@ -22,8 +26,26 @@ const ENV = {
 // Procore's documented token response (oauth-auth-grant-flow)
 const TOKEN = { access_token: "access-1", token_type: "bearer", expires_in: 5400, refresh_token: "refresh-1", created_at: 1484786897 };
 
-let calls, replies, logs, saved;
+let calls, replies, logs, saved, tagDocs, tagStoreFails;
+// In-memory stand-in for the Firestore tag store (procoreProjects/{c}_{p}/responsibilities/{userId})
+const fakeTagStore = {
+  async list(c, p) {
+    if (tagStoreFails) throw Object.assign(new Error("down"), { code: "unavailable" });
+    return new Map([...(tagDocs.get(`${c}_${p}`) ?? new Map())]);
+  },
+  async set(c, p, u, v) {
+    const m = tagDocs.get(`${c}_${p}`) ?? new Map();
+    m.set(u, v);
+    tagDocs.set(`${c}_${p}`, m);
+  },
+  async remove(c, p, u) {
+    tagDocs.get(`${c}_${p}`)?.delete(u);
+  },
+};
 beforeEach(() => {
+  tagDocs = new Map();
+  tagStoreFails = false;
+  setTagStore(fakeTagStore);
   saved = { fetch: globalThis.fetch, env: { ...process.env }, error: console.error, log: console.log, warn: console.warn };
   Object.assign(process.env, ENV);
   calls = [];
@@ -294,18 +316,26 @@ test("directory lists the project's people (name, company, role) with the Procor
     { id: 900, first_name: "Jane", last_name: "Doe", name: "Jane Doe", initials: "JD", vendor: { id: 6, name: "Doe Plumbing" } }, // compact view
     { id: 901, name: "No Title", vendor: null, job_title: "", permission_template: { id: 3, name: "Subcontractor" } },
   ] });
+  replies.push({ body: [] }); // project roles: none
+  replies.push({ body: { id: 7, login: "pm@example.com", name: "Pat PM" } }); // me
   const out = await run(directory, req("/api/procore/directory?companyId=123&projectId=456", { [SESSION_COOKIE]: sessionCookie(freshTokens()) }));
   assert.equal(out.statusCode, 200);
-  const { people } = out.json();
+  const { people, canTag, labels, rolesAvailable, tagsAvailable } = out.json();
   assert.equal(people.length, 102);
-  assert.deepEqual(people[0], { id: 1, name: "Person 1", company: "Acme Electric", role: "Superintendent" });
-  assert.deepEqual(people[100], { id: 900, name: "Jane Doe", company: "Doe Plumbing", role: null });
-  assert.deepEqual(people[101], { id: 901, name: "No Title", company: null, role: "Subcontractor" });
-  assert.ok(!JSON.stringify(people).includes("@example.com"), "only name, company, role are returned");
+  assert.deepEqual(people[0], { id: 1, name: "Person 1", company: "Acme Electric", role: "Superintendent", roleSource: "job_title", tag: null });
+  assert.deepEqual(people[100], { id: 900, name: "Jane Doe", company: "Doe Plumbing", role: null, roleSource: null, tag: null });
+  assert.deepEqual(people[101], { id: 901, name: "No Title", company: null, role: "Subcontractor", roleSource: "permission_template", tag: null });
+  assert.ok(!JSON.stringify(out.json()).includes("@example.com"), "no emails go back to the browser");
+  assert.equal(canTag, false, "nobody is a PM in the project roles");
+  assert.deepEqual(labels, ["PM", "Superintendent", "Purchasing", "Sub foreman"]);
+  assert.equal(rolesAvailable, true);
+  assert.equal(tagsAvailable, true);
 
   assert.deepEqual(calls.map((c) => c.url), [
     "https://sandbox.procore.test/rest/v1.0/projects/456/users?page=1&per_page=100",
     "https://sandbox.procore.test/rest/v1.0/projects/456/users?page=2&per_page=100",
+    "https://sandbox.procore.test/rest/v1.0/project_roles?project_id=456&page=1&per_page=100",
+    "https://sandbox.procore.test/rest/v1.0/me?company_id=123",
   ]);
   for (const c of calls) {
     assert.equal(c.method, "GET", "read-only");
@@ -475,4 +505,178 @@ test("directory ?shape=1 still needs a Procore session and real ids", async () =
   const noIds = await run(directory, req("/api/procore/directory?shape=1", { [SESSION_COOKIE]: sessionCookie(freshTokens()) }));
   assert.equal(noIds.statusCode, 400);
   assert.equal(calls.length, 0);
+});
+
+// ---------- responsibilities: Project Roles first, then title, template, PM tag ----------
+
+const dirReq = () => req("/api/procore/directory?companyId=123&projectId=456", { [SESSION_COOKIE]: sessionCookie(freshTokens()) });
+const sandboxUsers = () => [
+  { id: 7, name: "Pat PM", job_title: null, vendor: { id: 1, name: "GC Inc" } },
+  { id: 8, name: "Sam Super", job_title: "Field Lead", vendor: null },
+  { id: 9, name: "Lee Buyer", job_title: null, vendor: null, permission_template: null },
+  { id: 10, name: "Nobody Set", job_title: null, vendor: null },
+];
+
+test("Project Roles win over job title; several roles join; inactive roles and roles without a user are skipped", async () => {
+  replies.push({ body: sandboxUsers() });
+  replies.push({ body: [
+    { id: 1, name: "Pat PM", role: "Project Manager", user_id: 7, is_active: true },
+    { id: 2, name: "Sam Super", role: "Superintendent", user_id: 8, is_active: true },
+    { id: 3, name: "Sam Super", role: "Safety Lead", user_id: 8 },
+    { id: 4, name: "Old Super", role: "Superintendent", user_id: 10, is_active: false },
+    { id: 5, name: "A Contact", role: "Architect", user_id: null, contact_id: 55 },
+  ] });
+  replies.push({ body: { id: 7, login: "pat@example.com", name: "Pat PM" } });
+  tagDocs.set("123_456", new Map([["9", { label: "Purchasing" }], ["8", { label: "Sub foreman" }]]));
+  const out = await run(directory, dirReq());
+  const byId = Object.fromEntries(out.json().people.map((p) => [p.id, p]));
+  assert.deepEqual([byId[7].role, byId[7].roleSource], ["Project Manager", "project_team"]);
+  assert.deepEqual([byId[8].role, byId[8].roleSource, byId[8].tag], ["Superintendent, Safety Lead", "project_team", "Sub foreman"], "a Procore role beats a tag");
+  assert.deepEqual([byId[9].role, byId[9].roleSource], ["Purchasing", "tag"], "the tag fills in when Procore has nothing");
+  assert.deepEqual([byId[10].role, byId[10].roleSource], [null, null], "an inactive role doesn't count");
+  assert.equal(out.json().canTag, true, "the signed-in user is the Project Manager");
+});
+
+test("a Project Executive can tag; other roles can't", async () => {
+  for (const [role, expected] of [["Project Executive", true], ["Superintendent", false], ["Foreman", false]]) {
+    replies.push({ body: sandboxUsers() });
+    replies.push({ body: [{ id: 1, role, user_id: 7 }] });
+    replies.push({ body: { id: 7, name: "Pat" } });
+    const out = await run(directory, dirReq());
+    assert.equal(out.json().canTag, expected, role);
+  }
+});
+
+test("without permission to read Project Roles (403) the list still loads, with no roles and no tagging", async () => {
+  replies.push({ body: sandboxUsers() });
+  replies.push({ status: 403, body: { errors: "User does not have the required permissions" } });
+  replies.push({ body: { id: 7, name: "Pat" } });
+  const out = await run(directory, dirReq());
+  assert.equal(out.statusCode, 200);
+  assert.equal(out.json().rolesAvailable, false);
+  assert.equal(out.json().canTag, false);
+  assert.equal(out.json().people.find((p) => p.id === 8).roleSource, "job_title");
+});
+
+test("if SiteSnap's tag store is down the list still loads, without tags or tagging", async () => {
+  tagStoreFails = true;
+  replies.push({ body: sandboxUsers() });
+  replies.push({ body: [{ id: 1, role: "Project Manager", user_id: 7 }] });
+  replies.push({ body: { id: 7, name: "Pat" } });
+  const out = await run(directory, dirReq());
+  assert.equal(out.statusCode, 200);
+  assert.equal(out.json().tagsAvailable, false);
+  assert.equal(out.json().canTag, false);
+  assert.ok(logs.some((l) => l.includes("Responsibility tags unavailable")));
+});
+
+// POST /api/procore/responsibility
+const tagReq = (body, headers = {}) => ({
+  method: "POST",
+  url: "/api/procore/responsibility",
+  headers: {
+    host: "sitesnap-procore.vercel.app",
+    origin: "https://sitesnap-procore.vercel.app",
+    "content-type": "application/json",
+    cookie: `${SESSION_COOKIE}=${sessionCookie(freshTokens())}`,
+    ...headers,
+  },
+  body,
+});
+const asPM = () => {
+  replies.push({ body: { id: 7, login: "pat@example.com", name: "Pat PM" } }); // me
+  replies.push({ body: [{ id: 1, role: "Project Manager", user_id: 7 }] }); // project roles
+};
+
+test("a project's PM tags a person: checked against Procore, saved server-side with who set it", async () => {
+  asPM();
+  replies.push({ body: { id: 9, name: "Lee Buyer" } }); // the person is on the project
+  const out = await run(responsibility, tagReq({ companyId: "123", projectId: "456", userId: 9, label: "Purchasing" }));
+  assert.equal(out.statusCode, 200);
+  assert.deepEqual(out.json(), { userId: 9, tag: "Purchasing" });
+  const saved = tagDocs.get("123_456").get("9");
+  assert.equal(saved.label, "Purchasing");
+  assert.equal(saved.setByProcoreUserId, "7");
+  assert.equal(saved.setByName, "Pat PM");
+  assert.equal(typeof saved.setAt, "number");
+  assert.deepEqual(calls.map((c) => [c.method, c.url]), [
+    ["GET", "https://sandbox.procore.test/rest/v1.0/me?company_id=123"],
+    ["GET", "https://sandbox.procore.test/rest/v1.0/project_roles?project_id=456&page=1&per_page=100"],
+    ["GET", "https://sandbox.procore.test/rest/v1.0/projects/456/users/9"],
+  ], "read-only on Procore");
+  assert.ok(calls.every((c) => c.headers["Procore-Company-Id"] === "123"));
+});
+
+test("label null removes the tag", async () => {
+  tagDocs.set("123_456", new Map([["9", { label: "PM" }]]));
+  asPM();
+  replies.push({ body: { id: 9 } });
+  const out = await run(responsibility, tagReq({ companyId: "123", projectId: "456", userId: "9", label: null }));
+  assert.equal(out.statusCode, 200);
+  assert.equal(tagDocs.get("123_456").has("9"), false);
+});
+
+test("someone who isn't the project's PM can't tag (403 not_pm), and nothing is saved", async () => {
+  replies.push({ body: { id: 8, name: "Sam Super" } });
+  replies.push({ body: [{ id: 2, role: "Superintendent", user_id: 8 }] });
+  const out = await run(responsibility, tagReq({ companyId: "123", projectId: "456", userId: 9, label: "PM" }));
+  assert.equal(out.statusCode, 403);
+  assert.equal(out.json().error, "not_pm");
+  assert.equal(tagDocs.size, 0);
+});
+
+test("tagging someone Procore says isn't on the project is refused, nothing saved", async () => {
+  asPM();
+  replies.push({ status: 403, body: { errors: "forbidden" } });
+  const out = await run(responsibility, tagReq({ companyId: "123", projectId: "456", userId: 999, label: "PM" }));
+  assert.equal(out.statusCode, 403);
+  assert.equal(tagDocs.size, 0);
+});
+
+test("tagging refuses bad input before calling Procore: wrong label, missing or non-numeric ids, GET, form posts, another site, no session", async () => {
+  const cases = [
+    [tagReq({ companyId: "123", projectId: "456", userId: 9, label: "Boss" }), 400, "bad_label"],
+    [tagReq({ companyId: "123", projectId: "456", label: "PM" }), 400, "missing_ids"],
+    [tagReq({ companyId: "{{procore.company.id}}", projectId: "456", userId: 9, label: "PM" }), 400, "missing_ids"],
+    [{ ...tagReq({}), method: "GET" }, 405, "bad_method"],
+    [tagReq("userId=9", { "content-type": "application/x-www-form-urlencoded" }), 415, "bad_request"],
+    [tagReq({ companyId: "123", projectId: "456", userId: 9, label: "PM" }, { origin: "https://evil.example" }), 403, "bad_origin"],
+  ];
+  for (const [r, status, error] of cases) {
+    const out = await run(responsibility, r);
+    assert.equal(out.statusCode, status, error);
+    assert.equal(out.json().error, error);
+  }
+  const noSession = await run(responsibility, tagReq({ companyId: "123", projectId: "456", userId: 9, label: "PM" }, { cookie: "" }));
+  assert.equal(noSession.statusCode, 401);
+  assert.equal(calls.length, 0);
+  assert.equal(tagDocs.size, 0);
+});
+
+// ---------- Firestore credentials (FIREBASE_SERVICE_ACCOUNT_B64) ----------
+
+test("the Firestore key must be base64 JSON for sitesnap-procore; errors never echo the key", () => {
+  const fakeKey = {
+    type: "service_account",
+    project_id: "sitesnap-procore",
+    client_email: "x@sitesnap-procore.iam.gserviceaccount.com",
+    private_key: "-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n",
+  };
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64");
+  assert.equal(serviceAccount({ FIREBASE_SERVICE_ACCOUNT_B64: b64(fakeKey) }).client_email, fakeKey.client_email);
+  assert.equal(serviceAccount({ FIREBASE_SERVICE_ACCOUNT_B64: ` ${b64(fakeKey)}\n` }).project_id, "sitesnap-procore", "stray spaces / newline tolerated");
+  const bad = {
+    missing: {},
+    "not base64 json": { FIREBASE_SERVICE_ACCOUNT_B64: "not-a-key" },
+    "raw json pasted": { FIREBASE_SERVICE_ACCOUNT_B64: JSON.stringify(fakeKey) },
+    "not a service account": { FIREBASE_SERVICE_ACCOUNT_B64: b64({ ...fakeKey, type: "authorized_user" }) },
+    "PicTalk's key": { FIREBASE_SERVICE_ACCOUNT_B64: b64({ ...fakeKey, project_id: "pictalk-6cbff" }) },
+  };
+  for (const [name, env] of Object.entries(bad)) {
+    assert.throws(() => serviceAccount(env), (err) => {
+      assert.equal(err.code, "not_configured", name);
+      assert.ok(!err.message.includes("PRIVATE KEY") && !err.message.includes("FAKE"), `${name}: no key in the message`);
+      return true;
+    });
+  }
 });

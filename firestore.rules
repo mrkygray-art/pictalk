@@ -63,6 +63,12 @@ service cloud.firestore {
             || (key.matches('org_.+') && adminOf(key.replace('^org_', ''))));
     }
 
+    // SiteSnap: per-Procore-project data (responsibility tags now; threads later), written and read
+    // only by the server (Vercel functions with firebase-admin). Clients can't read or write any of it.
+    match /procoreProjects/{project=**} {
+      allow read, write: if false;
+    }
+
     // The company's customers. Members read them; admins and estimators add and edit them
     // (archive instead of delete, so old jobs keep their customer).
     match /customers/{customerId} {

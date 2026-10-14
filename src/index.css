@@ -1659,6 +1659,10 @@ button:focus-visible {
 .procore-people { list-style: none; padding: 0; display: grid; gap: 6px; max-height: 40vh; overflow-y: auto; }
 .procore-people li { display: grid; padding: 8px 12px; border-radius: 10px; background: var(--surface); font-size: 15px; }
 .procore-people span { color: var(--muted); font-size: 13px; }
+.procore-source { color: var(--muted); font-size: 12px; opacity: 0.8; }
+.procore-error { color: var(--red); }
+.procore-tag { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; color: var(--muted); }
+.procore-tag select { min-height: 36px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--surface-2); background: var(--bg); color: var(--text); font: inherit; }
 
 .pane-bar {
   --pane-bar-h: 68px;

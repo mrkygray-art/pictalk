@@ -89,3 +89,16 @@ test("existing PicTalk data stays private to its owner", async () => {
   await assertFails(getDoc(doc(db("alice"), "users/erin/jobs/j1")));
   await assertFails(getDoc(doc(db("bob"), "users/erin/jobs/j1")));
 });
+
+test("SiteSnap Procore project data (responsibility tags) is server-only: no client can read or write it", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "procoreProjects/4291776_373235/responsibilities/101"), { label: "PM", setByProcoreUserId: "7", setAt: 1 });
+  });
+  for (const who of ["alice", "erin"]) {
+    await assertFails(getDoc(doc(db(who), "procoreProjects/4291776_373235/responsibilities/101")));
+    await assertFails(getDocs(collection(db(who), "procoreProjects/4291776_373235/responsibilities")));
+    await assertFails(setDoc(doc(db(who), "procoreProjects/4291776_373235/responsibilities/102"), { label: "PM" }));
+    await assertFails(getDoc(doc(db(who), "procoreProjects/4291776_373235")));
+  }
+  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), "procoreProjects/4291776_373235/responsibilities/101")));
+});

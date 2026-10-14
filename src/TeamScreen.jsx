@@ -33,7 +33,7 @@ async function sendLink(id, email, onNotice) {
     await navigator.clipboard.writeText(url);
     onNotice(`Invite link copied. Send it to ${email}.`);
   } catch {
-    if (navigator.share) await navigator.share({ title: "Join my team on PicTalk", url }).catch(() => {});
+    if (navigator.share) await navigator.share({ title: "Join my team on SiteSnap AI", url }).catch(() => {});
     else window.prompt("Copy this invite link:", url);
   }
 }

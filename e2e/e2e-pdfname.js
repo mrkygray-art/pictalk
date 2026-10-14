@@ -50,8 +50,8 @@ const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' 
   await waitText('Export PDF');
   await click('button::-p-text(Export PDF)');
   await waitText('PDF ready', 60000);
-  const shown = (await p.evaluate(() => document.body.innerText)).match(/PicTalk_[\w-]+\.pdf/)?.[0];
-  check('Sheet shows the new name', /^PicTalk_Acme-Company_123-West-Ave_\d{4}-\d{2}-\d{2}_\d{1,2}-\d{2}[AP]M\.pdf$/.test(shown || ''), shown);
+  const shown = (await p.evaluate(() => document.body.innerText)).match(/SiteSnap-AI_[\w-]+\.pdf/)?.[0];
+  check('Sheet shows the new name', /^SiteSnap-AI_Acme-Company_123-West-Ave_\d{4}-\d{2}-\d{2}_\d{1,2}-\d{2}[AP]M\.pdf$/.test(shown || ''), shown);
   check('PDF was uploaded to exports/{user}/{job}.pdf', storageHits.some((h) => h.startsWith('POST')), storageHits[0]);
 
   await click('button::-p-text(Download PDF)');

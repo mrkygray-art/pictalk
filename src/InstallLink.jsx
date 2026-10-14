@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import Sheet from "./Sheet";
 
-// "Install PicTalk on this phone". Chrome offers to install a site as an app with its own icon;
-// installed, PicTalk opens straight from the home screen, with or without signal. The offer can
+// "Install SiteSnap AI on this phone". Chrome offers to install a site as an app with its own icon;
+// installed, SiteSnap AI opens straight from the home screen, with or without signal. The offer can
 // arrive before React draws the page, so it's caught here as soon as this file loads.
 // iPhones never make that offer (and neither do Firefox, DuckDuckGo, or Samsung Internet), so on
 // those the link opens a sheet with numbered steps and pictures of the real buttons, matched to the
@@ -66,7 +66,7 @@ function steps() {
   }
 }
 
-/** "Install PicTalk on this phone": Chrome's install dialog, or the step-by-step guide. */
+/** "Install SiteSnap AI on this phone": Chrome's install dialog, or the step-by-step guide. */
 export default function InstallLink() {
   const [, redraw] = useState(0);
   const [guide, setGuide] = useState(false);
@@ -88,11 +88,11 @@ export default function InstallLink() {
   return (
     <>
       <button className="text-btn eng-toggle" onClick={install}>
-        Install PicTalk on this phone
+        Install SiteSnap AI on this phone
       </button>
       {guide && (
-        <Sheet title="Put PicTalk on your Home Screen" onClose={() => setGuide(false)}>
-          <p>{s.lead || "It takes about 20 seconds. Then PicTalk opens from its own icon, full screen, and works with no signal."}</p>
+        <Sheet title="Put SiteSnap AI on your Home Screen" onClose={() => setGuide(false)}>
+          <p>{s.lead || "It takes about 20 seconds. Then SiteSnap AI opens from its own icon, full screen, and works with no signal."}</p>
           <ol className="install-steps">
             {s.list.map(([icon, text, small], i) => (
               <li key={i}>

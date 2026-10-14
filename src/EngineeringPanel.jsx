@@ -44,7 +44,7 @@ export function EngineeringPanel({ pending, online, uid }) {
   return (
     <section className="eng-panel" aria-label="Engineering Mode">
       <h2>Engineering Mode</h2>
-      <p className="eng-fine">What PicTalk is doing under the hood, with real timings from this phone and your own records.</p>
+      <p className="eng-fine">What SiteSnap AI is doing under the hood, with real timings from this phone and your own records.</p>
 
       <ol className="eng-pipe" aria-label="How a stop is saved">
         {STEPS.map(([step, how]) => (

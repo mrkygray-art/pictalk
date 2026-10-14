@@ -474,7 +474,7 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
             id="pc-note-summary"
             label="Summary"
             text={hasSummary(summary) ? summary.summary : ""}
-            empty="No AI summary yet. It's built on the job page in PicTalk."
+            empty="No AI summary yet. It's built on the job page in SiteSnap AI."
             onEdit={isOwner && hasSummary(summary) ? () => setSheet({ type: "summary" }) : null}
           />
           <TextBlock id="pc-note-field_notes" label="Field notes" text={notes.field?.text} empty="No field notes." onEdit={isOwner ? () => setSheet({ type: "note", note: "field" }) : null} />
@@ -533,7 +533,7 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
           {teamControls}
           {isOwner && (
             <button className="text-btn" onClick={() => onOpenInPicTalk(job.id)}>
-              Add photos or notes in PicTalk
+              Add photos or notes in SiteSnap AI
             </button>
           )}
         </>
@@ -670,7 +670,7 @@ export default function PiccoloJob({ uid, job, stops, pendingStops, autoDraft, o
           {sorted.map((s) => (
             <MediaStop key={s.id} stop={s} number={stopNumber[s.id]} />
           ))}
-          <p className="demo-note">To change photos or words, use PicTalk.</p>
+          <p className="demo-note">To change photos or words, use SiteSnap AI.</p>
         </section>
       )}
 

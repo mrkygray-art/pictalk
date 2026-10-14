@@ -1,4 +1,4 @@
-// The Ask PicTalk help chat (functions/help.js): anyone signed in (guests too) can ask; answers
+// The Ask SiteSnap AI help chat (functions/help.js): anyone signed in (guests too) can ask; answers
 // come back with guide sections; bad input is refused; a daily limit per account, except the
 // app owner's accounts. Also checks the help guide's button names still exist in the app.
 import { test, after } from "node:test";
@@ -68,8 +68,8 @@ test("the help guide's sections are complete and its button names exist in the a
     "Finish & Send to Piccolo", "Keep Going", "Edit words", "Add location", "Edit location", "Remove Location", "Add photo", "Replace photo",
     "Move or delete this stop", "Move to a Different Job", "Delete Stop", "Describe photo", "Edit description", "Add field notes",
     "Add customer comments", "Approve Summary", "Regenerate summary", "My Jobs", "Recent jobs", "Download PDF", "Share PDF",
-    "Open in Piccolo", "Edit customer & location", "Reopen This Job", "Delete This Job", "Install PicTalk on this phone", "Save my work",
-    "Try Piccolo", "Try a different sample", "Add Line", "Finalize", "Export", "Add photos or notes in PicTalk", "Engineering Mode",
+    "Open in Piccolo", "Edit customer & location", "Reopen This Job", "Delete This Job", "Install SiteSnap AI on this phone", "Save my work",
+    "Try Piccolo", "Try a different sample", "Add Line", "Finalize", "Export", "Add photos or notes in SiteSnap AI", "Engineering Mode",
     "Evaluation Lab", "Writing it down", "No speech heard", "Waiting to upload", "Saved on this phone",
   ];
   const guide = SECTIONS.map((s) => s.text).join("\n");

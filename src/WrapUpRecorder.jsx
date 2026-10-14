@@ -202,7 +202,7 @@ export default function WrapUpRecorder({ type, jobLabel, mode, initialText, cons
       setPhase("recording");
       startLive();
     } catch {
-      setError("PicTalk needs your microphone. Tap Allow when your phone asks, or turn it on in your browser settings.");
+      setError("SiteSnap AI needs your microphone. Tap Allow when your phone asks, or turn it on in your browser settings.");
       setPhase(mode === "edit" ? "editing" : "paused");
     }
   };

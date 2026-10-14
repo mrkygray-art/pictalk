@@ -72,7 +72,7 @@ const FORMATS = [
 
 /**
  * Export the current version (marked DRAFT) or any final as PDF, CSV, or JSON, then share
- * or download it. Sharing needs a fresh tap, so it's a second step like PicTalk's PDF.
+ * or download it. Sharing needs a fresh tap, so it's a second step like SiteSnap AI's PDF.
  */
 export function ExportSheet({ jobId, ownerUid, base, finals, isGuest, initialChoice, onClose, onDone }) {
   const [choice, setChoice] = useState(initialChoice || (finals[0] ? finals[0].id : "current"));

@@ -44,6 +44,7 @@ body {
   font-size: 34px;
   font-weight: 700;
   letter-spacing: -0.4px;
+  white-space: nowrap; /* "SiteSnap AI" stays on one line */
 }
 
 .subtitle {
@@ -315,6 +316,7 @@ button:focus-visible {
 
 .header-row {
   display: flex;
+  flex-wrap: wrap; /* on a narrow phone the buttons drop below the name instead of splitting it */
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -1511,7 +1513,7 @@ button:focus-visible {
 }
 .eng-live { margin: 8px 0 0; }
 
-/* InstallLink.jsx: "Put PicTalk on your Home Screen" steps, with pictures of the real buttons. */
+/* InstallLink.jsx: "Put SiteSnap AI on your Home Screen" steps, with pictures of the real buttons. */
 .install-steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
 .install-steps li {
   counter-increment: step;
@@ -1679,7 +1681,7 @@ button:focus-visible {
 .pane-switch {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: auto auto; /* each tab as wide as its name; spare room shared */
   gap: 4px;
   padding: 4px;
   background: var(--surface);
@@ -1688,6 +1690,8 @@ button:focus-visible {
 
 .pane-switch button {
   min-height: 48px;
+  padding: 0 10px;
+  white-space: nowrap;
   border: none;
   border-radius: 12px;
   background: none;
@@ -1696,6 +1700,17 @@ button:focus-visible {
   font-size: 18px;
   font-weight: 700;
   cursor: pointer;
+}
+
+/* Narrow phones: "SiteSnap AI | Piccolo" and the account chip on one row */
+@media (max-width: 400px) {
+  .pane-switch button { font-size: 15px; padding: 0 8px; }
+  .header h1 { font-size: 30px; }
+}
+/* Phones: the name on its own line, ? and My Jobs together under it */
+@media (max-width: 480px) {
+  .header-row { justify-content: flex-start; }
+  .header-row h1 { flex-basis: 100%; }
 }
 
 .pane-switch button.is-on {
@@ -2662,7 +2677,7 @@ div.adm-stat {
   margin-top: 28px;
 }
 
-/* Help: quick-start PDF and the Ask PicTalk chat */
+/* Help: quick-start PDF and the Ask SiteSnap AI chat */
 .header-row h1 { margin-right: auto; }
 .help-btn { min-width: 48px; justify-content: center; font-size: 22px; font-weight: 700; padding: 10px 14px; }
 .help-link { font-size: 16px; color: var(--blue); }

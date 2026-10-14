@@ -1,6 +1,6 @@
 {
-  "name": "PicTalk",
-  "short_name": "PicTalk",
+  "name": "SiteSnap AI",
+  "short_name": "SiteSnap AI",
   "description": "Take a photo, say what you see. Works with no signal.",
   "start_url": "/",
   "scope": "/",

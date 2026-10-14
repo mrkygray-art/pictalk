@@ -24,7 +24,7 @@ async function reserveGlobalAi(kind) {
     const count = (await tx.get(ref)).get("count") || 0;
     if (count >= DAILY_CAP) {
       logger.error("Global AI daily cap reached", { alert: "ai-daily-cap", cap: DAILY_CAP, kind });
-      throw new HttpsError("resource-exhausted", "PicTalk's AI has reached its limit for today. Please try again tomorrow.");
+      throw new HttpsError("resource-exhausted", "SiteSnap AI has reached its daily AI limit. Please try again tomorrow.");
     }
     tx.set(ref, { count: count + 1, [kind]: FieldValue.increment(1), updatedAt: Date.now() }, { merge: true });
   });

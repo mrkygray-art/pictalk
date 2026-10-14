@@ -1,4 +1,4 @@
-// src/jobStore.js — PicTalk jobs
+// src/jobStore.js — SiteSnap AI jobs
 // A job groups stops (one visit to one site). Jobs live in Firestore at
 // users/{uid}/jobs/{jobId}. At most one job is 'open' at a time; new stops go into it.
 // Writes are not awaited: Firestore's local cache shows them right away and

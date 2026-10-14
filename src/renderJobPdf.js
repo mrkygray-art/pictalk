@@ -41,9 +41,9 @@ const fmtDate = (isoStr) =>
 
 function audioNote(stop, now) {
   if (!stop.hasAudio) return 'No voice note';
-  if (!stop.audioAvailableUntil) return 'Audio on file in PicTalk';
+  if (!stop.audioAvailableUntil) return 'Audio on file in SiteSnap AI';
   return new Date(stop.audioAvailableUntil) > now
-    ? `Audio on file in PicTalk until ${fmtDate(stop.audioAvailableUntil)}`
+    ? `Audio on file in SiteSnap AI until ${fmtDate(stop.audioAvailableUntil)}`
     : 'Audio recording expired';
 }
 
@@ -95,7 +95,7 @@ export async function renderJobPdf(data, photos) {
   };
 
   // ---------- cover block ----------
-  text('PicTalk job report', { size: 10, bold: true, color: MUTED, gap: 2 });
+  text('SiteSnap AI job report', { size: 10, bold: true, color: MUTED, gap: 2 });
   text(data.jobName, { size: 20, bold: true, gap: 10 });
   const rows = [
     ['Customer', data.customer],
@@ -151,7 +151,7 @@ export async function renderJobPdf(data, photos) {
       text(label, { size: 11, bold: true, color: MUTED, gap: 2 });
       text(body, { size: 11, gap: 8 });
     }
-    text('Text only. The original audio is kept in PicTalk for 5 days.', { size: 9, color: MUTED, gap: 6 });
+    text('Text only. The original audio is kept in SiteSnap AI for 5 days.', { size: 9, color: MUTED, gap: 6 });
     rule();
   }
 

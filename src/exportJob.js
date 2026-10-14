@@ -1,4 +1,4 @@
-// src/exportJob.js — PicTalk job export
+// src/exportJob.js — SiteSnap AI job export
 // buildJobExport() gathers one job into a plain object (JSON-safe, no Blobs), so the
 // same data can later be exported as JSON. renderJobPdf.js turns that object into a PDF.
 import {
@@ -11,7 +11,7 @@ import { jobTitle } from './jobStore';
 
 // ---------- initials shown as "Captured by" / "Exported by" ----------
 const INITIALS_KEY = 'pictalk-initials';
-export const ANONYMOUS_NAME = 'PicTalk user';
+export const ANONYMOUS_NAME = 'SiteSnap AI user';
 
 /** Saved initials on this phone: a string (possibly empty), or null if never asked. */
 export function getSavedInitials() {
@@ -98,7 +98,7 @@ export async function buildJobExport({ uid, jobId, initials }) {
       }
     : null;
 
-  // Wrap-up notes (text only; the audio stays in PicTalk)
+  // Wrap-up notes (text only; the audio stays in SiteSnap AI)
   const notesCol = collection(db, 'users', uid, 'jobs', jobId, 'wrapUpNotes');
   const notesSnap = await (offline ? getDocsFromCache(notesCol) : getDocs(notesCol)).catch(() => null);
   const noteText = (type) => ((notesSnap?.docs.find((d) => d.id === type)?.data().text) || '').trim() || null;
@@ -227,7 +227,7 @@ export async function loadPhotos(photoSources, onProgress = () => {}) {
 
 // ---------- file name and delivery ----------
 /**
- * "PicTalk_Acme-Company_123-West-Ave_2026-09-30_3-04PM.pdf": customer, location, and the
+ * "SiteSnap-AI_Acme-Company_123-West-Ave_2026-09-30_3-04PM.pdf": customer, location, and the
  * job's start date and time. Blank parts are left out; unsafe characters are removed.
  */
 export function exportFileName(data) {
@@ -244,7 +244,7 @@ export function exportFileName(data) {
   const h = d.getHours();
   const time = `${h % 12 || 12}-${pad(d.getMinutes())}${h < 12 ? 'AM' : 'PM'}`;
   const who = [part(data.customer), part(data.location)].filter(Boolean);
-  return ['PicTalk', ...(who.length ? who : ['Job']), date, time].join('_') + '.pdf';
+  return ['SiteSnap-AI', ...(who.length ? who : ['Job']), date, time].join('_') + '.pdf';
 }
 
 /**

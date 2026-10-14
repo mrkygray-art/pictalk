@@ -1,5 +1,5 @@
-// PicTalk service worker: keeps the app itself on the phone so it opens with no signal.
-// Only caches PicTalk's own files. Firebase uploads/data always go straight to the network.
+// SiteSnap AI service worker: keeps the app itself on the phone so it opens with no signal.
+// Only caches SiteSnap AI's own files. Firebase uploads/data always go straight to the network.
 
 // Filled in by the build (pictalkOfflineFiles in vite.config.js): an id for this build and
 // every file it's made of, so the whole app — PDF tools included — is saved at install.

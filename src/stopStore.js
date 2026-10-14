@@ -1,4 +1,4 @@
-// src/stopStore.js — PicTalk Phase 3
+// src/stopStore.js — SiteSnap AI Phase 3
 // Offline-first: every stop is saved to IndexedDB first, then synced to
 // Firebase Storage (photo + voice) and Firestore (the stop record).
 import { get, set, del, keys } from 'idb-keyval';

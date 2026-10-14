@@ -1,4 +1,4 @@
-// draftPiccolo: turns a finished PicTalk job into a Piccolo draft (work order, BOM, quote,
+// draftPiccolo: turns a finished SiteSnap AI job into a Piccolo draft (work order, BOM, quote,
 // open questions) with the Claude API, from the job's own data (no parts catalog).
 // Reads the job, its stops (words, photo descriptions, photos), wrap-up notes, and AI summary.
 // Writes ONLY users/{uid}/jobs/{jobId}/drafts/{draftId} (versioned, never overwritten),
@@ -386,7 +386,7 @@ exports.draftPiccolo = onCall(
     const owner = ownerOf(request);
     const job = await piccoloAccess(uid, owner, jobId);
     const jobRef = db().doc(`users/${owner}/jobs/${jobId}`);
-    if (job.status !== "finished") throw new HttpsError("failed-precondition", "Finish this job in PicTalk first (End Job).");
+    if (job.status !== "finished") throw new HttpsError("failed-precondition", "Finish this job in SiteSnap AI first (End Job).");
 
     const stops = (await db().collection(`users/${owner}/stops`).where("jobId", "==", jobId).get()).docs
       .map((d) => ({ id: d.id, ...d.data() }))

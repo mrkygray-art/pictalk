@@ -1,4 +1,4 @@
-// The PicTalk help guide: the only source the "Ask PicTalk" help chat answers from
+// The SiteSnap AI help guide: the only source the "Ask SiteSnap AI" help chat answers from
 // (functions/help.js). Written for field techs, in the app's own button names.
 // Keep it current: when a feature or a button name changes, update the matching section here
 // in the same change (the quick-start PDF in public/ only covers the core flow, so it rarely
@@ -7,8 +7,8 @@
 const SECTIONS = [
   {
     id: "what-is",
-    title: "What PicTalk is",
-    text: `PicTalk is a phone app for site walks. At each spot you take a photo and say what you see. PicTalk keeps the photo, the voice recording, and a written copy of your words together as a "stop," and groups the stops into a job, so a whole site walk stays together. When you end the job, PicTalk can write a short AI summary with action items, and you can download the job as a PDF report. A second tab, Piccolo, turns a finished job into a work order, parts list, and quote. PicTalk works with no signal: everything is saved on the phone first and uploads when signal comes back. It is a free demo app, so please don't record real customer information.`,
+    title: "What SiteSnap AI is",
+    text: `SiteSnap AI is a phone app for site walks. At each spot you take a photo and say what you see. SiteSnap AI keeps the photo, the voice recording, and a written copy of your words together as a "stop," and groups the stops into a job, so a whole site walk stays together. When you end the job, SiteSnap AI can write a short AI summary with action items, and you can download the job as a PDF report. A second tab, Piccolo, turns a finished job into a work order, parts list, and quote. SiteSnap AI works with no signal: everything is saved on the phone first and uploads when signal comes back. It is a free demo app, so please don't record real customer information.`,
   },
   {
     id: "quick-start",
@@ -17,12 +17,12 @@ const SECTIONS = [
 2. Tap Take Photo and take a picture of what you're looking at (or pick one from your photos).
 3. Tap Tap to Talk and say what you see. Tap the button again (it shows Stop and a timer) when you're done.
 4. Tap Save This Stop. The stop appears under Saved stops. Repeat steps 2 to 4 at each spot.
-5. When the walk is done, tap End Job. Add the customer and location if you like, then tap Save & Finish Job. PicTalk then writes the AI summary, and you can download the PDF from the job's page.`,
+5. When the walk is done, tap End Job. Add the customer and location if you like, then tap Save & Finish Job. SiteSnap AI then writes the AI summary, and you can download the PDF from the job's page.`,
   },
   {
     id: "jobs",
     title: "Starting a job and the job bar",
-    text: `Every stop goes into a job. Tap Start New Job on the main screen to open one. Only one job is open at a time; starting a new job finishes the one that was open. The bar at the top of the screen always shows where stops are going: "Saving to" and the job name, or "No job open, nothing is being saved." If you take a photo or talk with no job open, PicTalk asks you to start a new job first. A new job is named with its date and time until you add a customer and location when you end it. In this demo a job can hold up to 10 stops; end the job and start a new one to keep going.`,
+    text: `Every stop goes into a job. Tap Start New Job on the main screen to open one. Only one job is open at a time; starting a new job finishes the one that was open. The bar at the top of the screen always shows where stops are going: "Saving to" and the job name, or "No job open, nothing is being saved." If you take a photo or talk with no job open, SiteSnap AI asks you to start a new job first. A new job is named with its date and time until you add a customer and location when you end it. In this demo a job can hold up to 10 stops; end the job and start a new one to keep going.`,
   },
   {
     id: "photo",
@@ -32,17 +32,17 @@ const SECTIONS = [
   {
     id: "talk",
     title: "Recording a voice note (Tap to Talk)",
-    text: `Tap Tap to Talk and speak. The button turns into Stop with a timer while it records; tap it again to stop. You can listen back before saving. Tap Talk Again to record it over. The first time, your browser asks for permission to use the microphone; tap Allow. After the stop uploads, PicTalk writes down your words (the card shows "Writing it down…" for a moment, then the text). If nothing was said, the card shows "No speech heard." Voice recordings are deleted after 5 days in this demo, but the written words are kept for good. On a computer with more than one microphone, a "Microphone: … Change" line under Tap to Talk lets you pick which one to use.`,
+    text: `Tap Tap to Talk and speak. The button turns into Stop with a timer while it records; tap it again to stop. You can listen back before saving. Tap Talk Again to record it over. The first time, your browser asks for permission to use the microphone; tap Allow. After the stop uploads, SiteSnap AI writes down your words (the card shows "Writing it down…" for a moment, then the text). If nothing was said, the card shows "No speech heard." Voice recordings are deleted after 5 days in this demo, but the written words are kept for good. On a computer with more than one microphone, a "Microphone: … Change" line under Tap to Talk lets you pick which one to use.`,
   },
   {
     id: "save-stop",
     title: "Saving a stop and what the status means",
-    text: `Tap Save This Stop to save the photo and voice note together. The stop shows under Saved stops right away, newest first. It is saved on your phone first, then uploaded. Status lines on the stop card: "Saved on this phone" or "Waiting to upload" means it hasn't uploaded yet (usually no signal; it uploads by itself when signal comes back, so keep the app open or come back to it); "Writing it down…" means the words are being transcribed; then the words appear. You don't need to do anything to retry; PicTalk keeps trying.`,
+    text: `Tap Save This Stop to save the photo and voice note together. The stop shows under Saved stops right away, newest first. It is saved on your phone first, then uploaded. Status lines on the stop card: "Saved on this phone" or "Waiting to upload" means it hasn't uploaded yet (usually no signal; it uploads by itself when signal comes back, so keep the app open or come back to it); "Writing it down…" means the words are being transcribed; then the words appear. You don't need to do anything to retry; SiteSnap AI keeps trying.`,
   },
   {
     id: "offline",
     title: "Working with no signal",
-    text: `PicTalk is built for basements, mechanical rooms, and places with no signal. With no signal you can still start and end jobs, take photos, record voice notes, and save stops; they wait on the phone and upload by themselves when signal returns. Things that need signal: the written words (transcription), Describe photo, the AI summary, deleting a stop that already uploaded, signing in, Piccolo drafts, and the help chat. To open PicTalk with no signal at all, install it on your phone first (see Installing PicTalk). Don't clear your browser data while stops are still waiting to upload.`,
+    text: `SiteSnap AI is built for basements, mechanical rooms, and places with no signal. With no signal you can still start and end jobs, take photos, record voice notes, and save stops; they wait on the phone and upload by themselves when signal returns. Things that need signal: the written words (transcription), Describe photo, the AI summary, deleting a stop that already uploaded, signing in, Piccolo drafts, and the help chat. To open SiteSnap AI with no signal at all, install it on your phone first (see Installing SiteSnap AI). Don't clear your browser data while stops are still waiting to upload.`,
   },
   {
     id: "edit-stop",
@@ -62,7 +62,7 @@ const SECTIONS = [
     id: "end-job",
     title: "Ending a job",
     text: `Tap End Job at the bottom of the Saved stops list. The Finish sheet asks for the Customer and Location (both optional; they name the job, like "Customer – Location – date"). You can also add wrap-up notes there (see Wrap-up notes). Then tap:
-- Save & Finish Job to finish it and stay in PicTalk (the AI summary starts building), or
+- Save & Finish Job to finish it and stay in SiteSnap AI (the AI summary starts building), or
 - Finish & Send to Piccolo to finish it and open it in Piccolo for a work order and quote, or
 - Keep Going to go back without ending.
 Your saved stops stay saved either way. If a photo or voice note is on screen but not saved yet, ending the job throws it away, so save the stop first.`,
@@ -70,12 +70,12 @@ Your saved stops stay saved either way. If a photo or voice note is on screen bu
   {
     id: "wrap-up",
     title: "Wrap-up notes (field notes and customer comments)",
-    text: `When you end a job (or later, on the job's page) you can record two optional notes: Add field notes (your overall notes: scope, access, schedule, anything that isn't one spot) and Add customer comments (what the customer asked for; PicTalk asks you to confirm the customer agreed to be recorded). The recorder has Pause and Continue, and Done. On Android, your words appear on screen as you speak; elsewhere they're written down after the recording uploads. You can edit the text afterward, and recording again adds to the note instead of replacing it. Wrap-up notes are the most important input to the AI summary and Piccolo, and they appear in the PDF.`,
+    text: `When you end a job (or later, on the job's page) you can record two optional notes: Add field notes (your overall notes: scope, access, schedule, anything that isn't one spot) and Add customer comments (what the customer asked for; SiteSnap AI asks you to confirm the customer agreed to be recorded). The recorder has Pause and Continue, and Done. On Android, your words appear on screen as you speak; elsewhere they're written down after the recording uploads. You can edit the text afterward, and recording again adds to the note instead of replacing it. Wrap-up notes are the most important input to the AI summary and Piccolo, and they appear in the PDF.`,
   },
   {
     id: "summary",
     title: "The AI summary",
-    text: `After you end a job, PicTalk drafts a short summary and a list of action items ranked High, Medium, or Low, using your wrap-up notes, the words at each stop, and any photo descriptions. Each action item links to the stop or note it came from. The summary is marked as an AI draft: read it, use Edit summary or Edit action item to fix anything, then tap Approve Summary. Only an approved summary goes into the PDF. Editing an approved summary puts it back to draft. Regenerate summary builds a new one (limit 5 per job and 20 per account per day in the demo). If it says "out of date," you changed words, photos, or notes after it was written; regenerate it. A job with no speech, photo descriptions, or wrap-up notes gets no summary. It needs signal.`,
+    text: `After you end a job, SiteSnap AI drafts a short summary and a list of action items ranked High, Medium, or Low, using your wrap-up notes, the words at each stop, and any photo descriptions. Each action item links to the stop or note it came from. The summary is marked as an AI draft: read it, use Edit summary or Edit action item to fix anything, then tap Approve Summary. Only an approved summary goes into the PDF. Editing an approved summary puts it back to draft. Regenerate summary builds a new one (limit 5 per job and 20 per account per day in the demo). If it says "out of date," you changed words, photos, or notes after it was written; regenerate it. A job with no speech, photo descriptions, or wrap-up notes gets no summary. It needs signal.`,
   },
   {
     id: "my-jobs",
@@ -85,27 +85,27 @@ Your saved stops stay saved either way. If a photo or voice note is on screen bu
   {
     id: "pdf",
     title: "The PDF report",
-    text: `On a finished job's page, tap Download PDF (on a computer) or Share PDF (on a phone, to send it by text, email, or a drive). The first time, PicTalk asks for your initials for the report (blank is fine). The PDF has the customer, location, a revision number that goes up each time you export, each stop's photo, words, location, time, and photo description, the wrap-up notes, and the AI summary if you approved it. It needs signal to load the photos.`,
+    text: `On a finished job's page, tap Download PDF (on a computer) or Share PDF (on a phone, to send it by text, email, or a drive). The first time, SiteSnap AI asks for your initials for the report (blank is fine). The PDF has the customer, location, a revision number that goes up each time you export, each stop's photo, words, location, time, and photo description, the wrap-up notes, and the AI summary if you approved it. It needs signal to load the photos.`,
   },
   {
     id: "install",
-    title: "Installing PicTalk on your phone",
-    text: `PicTalk is a web app you can put on your home screen so it opens like an app, full screen, even with no signal. Tap Install PicTalk on this phone at the bottom of the main screen for steps that match your browser. In Chrome on Android it's one tap. On iPhone in Safari: tap Share, then Add to Home Screen, then Add. Firefox and other browsers: use Add to Home screen in the browser menu. If you opened PicTalk inside another app (like a text message or social app), open it in your phone's browser first.`,
+    title: "Installing SiteSnap AI on your phone",
+    text: `SiteSnap AI is a web app you can put on your home screen so it opens like an app, full screen, even with no signal. Tap Install SiteSnap AI on this phone at the bottom of the main screen for steps that match your browser. In Chrome on Android it's one tap. On iPhone in Safari: tap Share, then Add to Home Screen, then Add. Firefox and other browsers: use Add to Home screen in the browser menu. If you opened SiteSnap AI inside another app (like a text message or social app), open it in your phone's browser first.`,
   },
   {
     id: "account",
     title: "Guest mode, saving your work, and signing in",
-    text: `You can use PicTalk without an account: you start as a guest. Guest jobs are deleted after 7 days, so don't capture anything you need to keep until you save your work. Tap Save my work (top right) and sign in with Google or an emailed link; your jobs, photos, and notes stay with you and stop expiring, and you can open them on another device by signing in there. Piccolo needs a signed-in account.`,
+    text: `You can use SiteSnap AI without an account: you start as a guest. Guest jobs are deleted after 7 days, so don't capture anything you need to keep until you save your work. Tap Save my work (top right) and sign in with Google or an emailed link; your jobs, photos, and notes stay with you and stop expiring, and you can open them on another device by signing in there. Piccolo needs a signed-in account.`,
   },
   {
     id: "example-jobs",
     title: "The example jobs",
-    text: `A new visitor's PicTalk opens with seven made-up example jobs (a kitchen remodel, an EV charger, home security, a backyard fence, sprinkler repairs, flooring, and a warehouse lighting retrofit), so there's something to explore right away. They're your own copy: open them, edit them, send them to Piccolo, or delete them with Delete This Job. As a guest they're removed after 7 days like your other jobs.`,
+    text: `A new visitor's SiteSnap AI opens with seven made-up example jobs (a kitchen remodel, an EV charger, home security, a backyard fence, sprinkler repairs, flooring, and a warehouse lighting retrofit), so there's something to explore right away. They're your own copy: open them, edit them, send them to Piccolo, or delete them with Delete This Job. As a guest they're removed after 7 days like your other jobs.`,
   },
   {
     id: "piccolo",
     title: "Piccolo: work orders, parts lists, and quotes",
-    text: `Piccolo is the second tab at the top (PicTalk | Piccolo). It turns a finished job into an AI-drafted work order, parts list, and quote, and needs a quick sign-in. New? Tap Try Piccolo to open a sample site walk from one of eight trades; "Try a different sample" swaps it. For your own job, use Finish & Send to Piccolo when ending it, or Open in Piccolo on the job's page. The draft has tabs: Overview, Work Order, Parts, Quote, and Media. Every line shows where it came from; tap it to see the stop. Lines marked Verify have a part number the AI suggested that wasn't in your words; prices stay blank unless they come from your labor rate or a past quote. Tap a line to edit it, Add Line to add one, and set markup, tax, and terms on the Quote tab. Changes save by themselves and Undo is available. Tap Finalize to lock a version (it lists anything still unpriced or unchecked first), then Export a PDF (work order, parts list, quote), CSV files, or a full package. Add photos or notes in PicTalk sends you back to the job; a newer draft can then be compared with yours.`,
+    text: `Piccolo is the second tab at the top (SiteSnap AI | Piccolo). It turns a finished job into an AI-drafted work order, parts list, and quote, and needs a quick sign-in. New? Tap Try Piccolo to open a sample site walk from one of eight trades; "Try a different sample" swaps it. For your own job, use Finish & Send to Piccolo when ending it, or Open in Piccolo on the job's page. The draft has tabs: Overview, Work Order, Parts, Quote, and Media. Every line shows where it came from; tap it to see the stop. Lines marked Verify have a part number the AI suggested that wasn't in your words; prices stay blank unless they come from your labor rate or a past quote. Tap a line to edit it, Add Line to add one, and set markup, tax, and terms on the Quote tab. Changes save by themselves and Undo is available. Tap Finalize to lock a version (it lists anything still unpriced or unchecked first), then Export a PDF (work order, parts list, quote), CSV files, or a full package. Add photos or notes in SiteSnap AI sends you back to the job; a newer draft can then be compared with yours.`,
   },
   {
     id: "best-practices",
@@ -121,14 +121,14 @@ Your saved stops stay saved either way. If a photo or voice note is on screen bu
 - Use wrap-up notes for the big picture: overall scope, access and schedule, and what the customer asked for.
 - Before you leave the site, scroll through Saved stops and fix any words that came out wrong.
 - Read and approve the AI summary before you share the PDF; the summary only reports what you said.
-- Install PicTalk on your phone before you go somewhere with no signal.
+- Install SiteSnap AI on your phone before you go somewhere with no signal.
 - Sign in with Save my work so your jobs don't expire, and don't record real customer data in this demo.`,
   },
   {
     id: "troubleshooting",
     title: "Troubleshooting",
     text: `- Tap to Talk does nothing or says the microphone is blocked: allow the microphone for this site in your browser's settings (site settings, Microphone), then reload.
-- A stop says "Saved on this phone" or "Waiting to upload" for a long time: you probably have no signal. It uploads by itself when signal returns; keep PicTalk open for a minute once you're back in signal. Don't clear browser data until it uploads.
+- A stop says "Saved on this phone" or "Waiting to upload" for a long time: you probably have no signal. It uploads by itself when signal returns; keep SiteSnap AI open for a minute once you're back in signal. Don't clear browser data until it uploads.
 - "Writing it down…" for more than a few minutes: check your signal; it finishes after the voice note uploads.
 - "No speech heard": the recording was silent or too quiet. Use Edit words to type it, or record a new stop closer to the phone.
 - "Recording expired" or a voice note won't play: recordings are deleted after 5 days in this demo. The written words are kept.
@@ -140,7 +140,7 @@ Your saved stops stay saved either way. If a photo or voice note is on screen bu
   {
     id: "limits",
     title: "Demo limits",
-    text: `PicTalk is a public demo. Limits: up to 10 stops per job; voice recordings are deleted after 5 days (the words are kept); guest jobs are deleted after 7 days unless you save your work; AI summaries: 5 per job and 20 per day; photo descriptions: 3 per stop and 30 per day; Piccolo drafts are limited per day and per job; the help chat answers a limited number of questions per day. Please don't record real customer information.`,
+    text: `SiteSnap AI is a public demo. Limits: up to 10 stops per job; voice recordings are deleted after 5 days (the words are kept); guest jobs are deleted after 7 days unless you save your work; AI summaries: 5 per job and 20 per day; photo descriptions: 3 per stop and 30 per day; Piccolo drafts are limited per day and per job; the help chat answers a limited number of questions per day. Please don't record real customer information.`,
   },
   {
     id: "engineering",

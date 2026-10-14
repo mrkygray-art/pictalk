@@ -36,7 +36,7 @@ export function errorText(err) {
   if (err instanceof AccountError) return err.message;
   if (code.startsWith("functions/") && code !== "functions/internal") return err.message;
   if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return "";
-  if (code === "auth/popup-blocked") return "Your browser blocked the Google window. Allow pop-ups for PicTalk and try again.";
+  if (code === "auth/popup-blocked") return "Your browser blocked the Google window. Allow pop-ups for SiteSnap AI and try again.";
   if (code === "auth/network-request-failed" || !navigator.onLine) return "You need signal for this. Try again when you're online.";
   if (code === "auth/invalid-action-code" || code === "auth/expired-action-code") {
     return "This sign-in link was already used or has expired. Ask for a new one.";

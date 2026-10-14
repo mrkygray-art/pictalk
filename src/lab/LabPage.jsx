@@ -16,10 +16,10 @@ export default function LabPage() {
 
   return (
     <main className="lab">
-      <a className="lab-back" href="/">← PicTalk</a>
+      <a className="lab-back" href="/">← SiteSnap AI</a>
       <h1>Evaluation Lab</h1>
       <p className="lab-lead">
-        A simulator uses PicTalk like a field tech would. It takes photos, records voice notes, and cuts the signal at
+        A simulator uses SiteSnap AI like a field tech would. It takes photos, records voice notes, and cuts the signal at
         the worst moments. Then it checks that every recording still reaches the cloud whole and gets written down.
       </p>
 

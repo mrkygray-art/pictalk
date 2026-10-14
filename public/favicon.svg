@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- PicTalk: a camera with a voice wave in the lens, white on black -->
+  <!-- SiteSnap AI: a camera with a voice wave in the lens, white on black -->
   <rect width="512" height="512" rx="96" fill="#000"/>
   <path d="M182 150l22-34h104l22 34h54a38 38 0 0 1 38 38v172a38 38 0 0 1-38 38H128a38 38 0 0 1-38-38V188a38 38 0 0 1 38-38z"
         fill="none" stroke="#f2f2f7" stroke-width="28" stroke-linejoin="round"/>

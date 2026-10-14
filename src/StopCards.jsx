@@ -56,8 +56,8 @@ function PhotoDescription({ stop, number, online, hasPhoto, actions }) {
   }
   const problem = state === "failed" || state === "stuck";
   const text = {
-    queued: "PicTalk will describe the photo once this stop uploads.",
-    offline: "No signal right now. PicTalk will describe the photo when you're back online.",
+    queued: "SiteSnap AI will describe the photo once this stop uploads.",
+    offline: "No signal right now. SiteSnap AI will describe the photo when you're back online.",
     working: "Describing the photo…",
     stuck: "Couldn't describe the photo.",
     failed: stop.photoDescError || "Couldn't describe the photo.",

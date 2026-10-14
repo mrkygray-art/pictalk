@@ -30,7 +30,7 @@ export default function MicPicker({ disabled }) {
     try {
       setMics(await listMicsWithNames());
     } catch {
-      setError("PicTalk needs permission to use the microphone. Allow it in the browser, then try again.");
+      setError("SiteSnap AI needs permission to use the microphone. Allow it in the browser, then try again.");
       setMics([]);
     }
   };

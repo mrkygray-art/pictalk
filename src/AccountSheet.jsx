@@ -68,7 +68,7 @@ function SaveWork({ inviteId, onSignedIn }) {
       <p>
         {inviteId
           ? "You've been invited to join a team. Sign in with the email address the invite was sent to."
-          : "You're using PicTalk as a guest on this device. Guest jobs are deleted after 7 days. Sign in to keep them in your account and open them on other devices. The jobs you have now come with you."}
+          : "You're using SiteSnap AI as a guest on this device. Guest jobs are deleted after 7 days. Sign in to keep them in your account and open them on other devices. The jobs you have now come with you."}
       </p>
       {error && <p className="error" role="alert">{error}</p>}
       {busy && <p className="sent-note" role="status">Saving your work…</p>}
@@ -167,7 +167,7 @@ function FinishLink({ onSignedIn, onCancel }) {
         <>
           <p>
             This link opened in a different browser or app than the one you started in. Your guest jobs are there, so
-            finish signing in there: copy this link, go back to PicTalk, tap Save my work, and paste it.
+            finish signing in there: copy this link, go back to SiteSnap AI, tap Save my work, and paste it.
           </p>
           <button className="big-btn photo-btn" onClick={copyLink}>
             {copied ? "Link Copied" : "Copy This Link"}

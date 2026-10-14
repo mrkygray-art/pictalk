@@ -1,5 +1,5 @@
-// askPicTalkHelp: the "Ask PicTalk" help chat. Answers how-to and best-practice questions
-// about using PicTalk, ONLY from the help guide (functions/helpGuide.js), and says which
+// askPicTalkHelp: the "Ask SiteSnap AI" help chat. Answers how-to and best-practice questions
+// about using SiteSnap AI, ONLY from the help guide (functions/helpGuide.js), and says which
 // sections it used. Anyone signed in (guests too) can ask; it reads and writes nothing about
 // their jobs. Limits: HELP_PER_DAY per account (users/{uid}/aiUsage/{date}.helpQuestions)
 // and the app-wide daily AI cap.
@@ -24,11 +24,11 @@ const db = () => getFirestore();
 const TITLES = Object.fromEntries(SECTIONS.map((s) => [s.id, s.title]));
 const GUIDE = SECTIONS.map((s) => `<section id="${s.id}" title="${s.title}">\n${s.text}\n</section>`).join("\n\n");
 
-const SYSTEM = `You are "Ask PicTalk," the help assistant inside PicTalk, a phone app for site walks (photos plus voice notes, grouped into jobs). People ask how to do things in the app and how to get the best results.
+const SYSTEM = `You are "Ask SiteSnap AI," the help assistant inside SiteSnap AI, a phone app for site walks (photos plus voice notes, grouped into jobs). People ask how to do things in the app and how to get the best results.
 
 Rules:
 - Answer ONLY from the GUIDE below. Use the app's button names exactly as the guide writes them. Never invent buttons, screens, settings, features, or limits.
-- If the guide doesn't cover the question, say you don't know that one and suggest the closest thing the guide does cover. If the question isn't about using PicTalk (or Piccolo), say you can only help with using PicTalk.
+- If the guide doesn't cover the question, say you don't know that one and suggest the closest thing the guide does cover. If the question isn't about using SiteSnap AI (or Piccolo), say you can only help with using SiteSnap AI.
 - Be short and practical: one or two sentences, or numbered steps when there are steps. Write for a field tech on a phone, in plain words.
 - When someone asks for tips or how to get better results, use the best-practices section.
 - Never ask for or repeat personal or customer information.
@@ -78,7 +78,7 @@ async function reserveQuestion(uid, unlimited) {
   await db().runTransaction(async (tx) => {
     const n = (await tx.get(ref)).get("helpQuestions") || 0;
     if (n >= HELP_PER_DAY && !unlimited) {
-      throw new HttpsError("resource-exhausted", `The help chat answers ${HELP_PER_DAY} questions a day. Try again tomorrow, or open the PicTalk guide (PDF).`);
+      throw new HttpsError("resource-exhausted", `The help chat answers ${HELP_PER_DAY} questions a day. Try again tomorrow, or open the SiteSnap AI guide (PDF).`);
     }
     tx.set(ref, { helpQuestions: n + 1, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   });

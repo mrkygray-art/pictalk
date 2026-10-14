@@ -115,7 +115,7 @@ function JobBar({ job }) {
   );
 }
 
-// Demo limit: keeps storage and transcription costs small while PicTalk is a public demo
+// Demo limit: keeps storage and transcription costs small while SiteSnap AI is a public demo
 const STOP_LIMIT = 10;
 const RECENT_JOBS = 7; // finished jobs listed on the front page when no job is open
 
@@ -239,7 +239,7 @@ function EndJobSheet({ uid, job, hasDraft, online, onFinish, onClose, canSendToP
 }
 
 // onSendToPiccolo(jobId) opens a finished job in the Piccolo pane; openJob ({ jobId, key })
-// asks PicTalk to show that job's page (from Piccolo). Both optional.
+// asks SiteSnap AI to show that job's page (from Piccolo). Both optional.
 // embedded: running inside another site's iframe; live voice is swapped for a button that
 // opens this same link in a new tab (photo capture stays).
 export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false, embedded = false }) {
@@ -258,12 +258,12 @@ export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false, e
   const [sheet, setSheet] = useState(null); // { type: "nojob", next } | { type: "end" }
   const [toast, setToast] = useState(null);
   const [view, setView] = useState("camera"); // "camera" | "jobs" | "help"
-  const [helpChat, setHelpChat] = useState([]); // the Ask PicTalk conversation (kept while switching screens)
+  const [helpChat, setHelpChat] = useState([]); // the Ask SiteSnap AI conversation (kept while switching screens)
   const [jobsTarget, setJobsTarget] = useState(null); // { jobId, autoSummary, key } when opening a job directly
   const [deleting, setDeleting] = useState(false);
   const [seenOpenJob, setSeenOpenJob] = useState(null);
 
-  // Piccolo asked to show a job here ("Add photos or notes in PicTalk")
+  // Piccolo asked to show a job here ("Add photos or notes in SiteSnap AI")
   if (openJob && openJob.key !== seenOpenJob) {
     setSeenOpenJob(openJob.key);
     setJobsTarget((t) => ({ jobId: openJob.jobId, key: (t?.key ?? 0) + 1 }));
@@ -399,7 +399,7 @@ export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false, e
       timer.current = setInterval(() => setSeconds((s) => s + 1), 1000);
       setRecording(true);
     } catch {
-      setError("PicTalk needs your microphone. Tap Allow when your phone asks, or turn it on in your browser settings.");
+      setError("SiteSnap AI needs your microphone. Tap Allow when your phone asks, or turn it on in your browser settings.");
     }
   };
 
@@ -429,7 +429,7 @@ export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false, e
 
   const beginJob = () => {
     if (!uid) {
-      setError("PicTalk needs to be online the first time you start a job. Connect and try again.");
+      setError("SiteSnap AI needs to be online the first time you start a job. Connect and try again.");
       return null;
     }
     setError("");
@@ -539,7 +539,7 @@ export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false, e
   const photoDesc = {
     onDescribe: (stop) => {
       requestPhotoDescription(uid, stop);
-      if (!navigator.onLine) showToast("PicTalk will describe the photo when you're back online");
+      if (!navigator.onLine) showToast("SiteSnap AI will describe the photo when you're back online");
     },
     onEdit: (stop, number) => setSheet({ type: "photodesc", stop, number }),
     onDelete: (stop, number) => setSheet({ type: "photodesc-delete", stop, number }),
@@ -638,8 +638,8 @@ export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false, e
         <>
           <header className="header">
             <div className="header-row">
-              <h1>PicTalk</h1>
-              <button className="link-btn help-btn" onClick={() => showView("help")} disabled={recording} aria-label="Help: how to use PicTalk">
+              <h1>SiteSnap AI</h1>
+              <button className="link-btn help-btn" onClick={() => showView("help")} disabled={recording} aria-label="Help: how to use SiteSnap AI">
                 ?
               </button>
               <button
@@ -785,7 +785,7 @@ export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false, e
           <EngineeringPanel pending={pending} online={online} uid={uid} />
           <div className="bottom-links">
             <button type="button" className="text-btn help-link" onClick={() => showView("help")} disabled={recording}>
-              How to use PicTalk
+              How to use SiteSnap AI
             </button>
             <InstallLink />
             <EngineeringToggle />

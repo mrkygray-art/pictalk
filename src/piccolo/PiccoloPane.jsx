@@ -34,8 +34,8 @@ function JobCard({ job, shared, onOpen }) {
   );
 }
 
-// Piccolo: turns a finished PicTalk job into a work order, parts list (BOM), and quote.
-// It reads the same jobs and stops as PicTalk (nothing is copied), plus jobs shared with
+// Piccolo: turns a finished SiteSnap AI job into a work order, parts list (BOM), and quote.
+// It reads the same jobs and stops as SiteSnap AI (nothing is copied), plus jobs shared with
 // the viewer's company. Admins and estimators get the full editor on those; field and
 // installer roles get the price-free work order.
 export default function PiccoloPane({ uid, isGuest, profile, target, onAccount, onOpenInPicTalk, onNotice }) {
@@ -112,7 +112,7 @@ export default function PiccoloPane({ uid, isGuest, profile, target, onAccount, 
     }
   };
 
-  // Piccolo needs an account (the server refuses guests too); PicTalk capture doesn't
+  // Piccolo needs an account (the server refuses guests too); SiteSnap AI capture doesn't
   if (isGuest) {
     return (
       <main className="app piccolo">
@@ -122,7 +122,7 @@ export default function PiccoloPane({ uid, isGuest, profile, target, onAccount, 
         </header>
         <div className="piccolo-callout is-try">
           <p>
-            Sign in to use Piccolo. Your PicTalk jobs come with you, and Piccolo drafts the work order, parts, and quote from your photos and voice
+            Sign in to use Piccolo. Your SiteSnap AI jobs come with you, and Piccolo drafts the work order, parts, and quote from your photos and voice
             notes.
           </p>
           <button className="big-btn photo-btn" onClick={onAccount}>
@@ -189,7 +189,7 @@ export default function PiccoloPane({ uid, isGuest, profile, target, onAccount, 
 
       <section aria-label="Your finished jobs">
         <h2 className="section-title">{orgId ? "Your finished jobs" : "Finished jobs"}</h2>
-        {finished.length === 0 && <p className="empty">No finished jobs yet. Capture a job in PicTalk and tap End Job.</p>}
+        {finished.length === 0 && <p className="empty">No finished jobs yet. Capture a job in SiteSnap AI and tap End Job.</p>}
         {finished.map((j) => (
           <JobCard key={j.id} job={j} shared={!!j.orgId} onOpen={() => open(j)} />
         ))}

@@ -1,4 +1,4 @@
-// src/engineering.js — Engineering Mode: what PicTalk is doing under the hood, with real
+// src/engineering.js — Engineering Mode: what SiteSnap AI is doing under the hood, with real
 // timings. Off by default (field techs never see it); the choice is remembered on this
 // device. Everything here is measured in this browser or read from the user's own records;
 // nothing new leaves the phone.

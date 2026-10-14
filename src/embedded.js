@@ -1,4 +1,4 @@
-// Embedded mode: PicTalk opened inside another site's iframe, e.g.
+// Embedded mode: SiteSnap AI opened inside another site's iframe, e.g.
 // /?companyId=123&projectId=456. The host fills those in from its own
 // template, so an unfilled value can arrive as the literal "{{projectId}}".
 

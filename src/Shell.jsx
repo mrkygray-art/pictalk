@@ -15,7 +15,7 @@ const BANNER_KEY = "pictalk-guest-banner"; // dismissed for this visit
 const DAY = 24 * 60 * 60 * 1000;
 
 // Embedded mode, for now: a small debug strip with what the host page sent. Shown inside an
-// iframe, or when the link carries companyId / projectId; ordinary PicTalk links never show it.
+// iframe, or when the link carries companyId / projectId; ordinary SiteSnap AI links never show it.
 function EmbedStrip({ embed }) {
   if (!embed.embedded && !embed.hasIds) return null;
   return (
@@ -171,8 +171,8 @@ function useAccount() {
   return { user, profile };
 }
 
-// The two panes (PicTalk capture, Piccolo quoting) over the same account and the same jobs.
-// PicTalk stays mounted while Piccolo shows, so a recording or an open sheet isn't lost.
+// The two panes (SiteSnap AI capture, Piccolo quoting) over the same account and the same jobs.
+// SiteSnap AI stays mounted while Piccolo shows, so a recording or an open sheet isn't lost.
 export default function Shell() {
   const { user, profile } = useAccount();
   const [pane, setPane] = useState(savedPane);
@@ -246,10 +246,10 @@ export default function Shell() {
       <EmbedStrip embed={embed} />
       {/* Procore sign-in only in a top-level tab (its login page can't load in an iframe) */}
       {!embed.embedded && embed.hasIds && <ProcorePanel companyId={embed.companyId} projectId={embed.projectId} />}
-      <nav className="pane-bar" aria-label="Switch between PicTalk and Piccolo">
+      <nav className="pane-bar" aria-label="Switch between SiteSnap AI and Piccolo">
         <div className="pane-switch" role="tablist">
           {[
-            ["pictalk", "PicTalk"],
+            ["pictalk", "SiteSnap AI"],
             ["piccolo", "Piccolo"],
           ].map(([id, label]) => (
             <button

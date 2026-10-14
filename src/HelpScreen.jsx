@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "./firebase";
 
-// Help: the quick-start PDF (public/PicTalk-Quick-Start.pdf, works offline once installed) and
-// "Ask PicTalk," a chat that answers how-to and best-practice questions from the help guide
+// Help: the quick-start PDF (public/SiteSnap-AI-Quick-Start.pdf, works offline once installed) and
+// "Ask SiteSnap AI," a chat that answers how-to and best-practice questions from the help guide
 // (functions/helpGuide.js via askPicTalkHelp). Type or tap the mic (the browser's own speech
 // recognition; the mic is hidden where it isn't available). The conversation lives in App's
 // state, so it's still there after visiting another screen.
 
-export const QUICK_START_PDF = "/PicTalk-Quick-Start.pdf";
+export const QUICK_START_PDF = "/SiteSnap-AI-Quick-Start.pdf";
 const MAX_QUESTION = 500;
 const SUGGESTIONS = [
   "How do I start my first job?",
@@ -93,7 +93,7 @@ export default function HelpScreen({ online, chat, setChat, onClose }) {
     r.onerror = (e) => {
       heard.current = "";
       const msg = {
-        "not-allowed": "The microphone is blocked for PicTalk. Allow it in your browser settings, or type your question.",
+        "not-allowed": "The microphone is blocked for SiteSnap AI. Allow it in your browser settings, or type your question.",
         "service-not-allowed": "Voice questions aren't available in this browser. Type your question instead.",
         "no-speech": "I didn't hear anything. Tap the mic and try again.",
         "audio-capture": "No microphone was found. Type your question instead.",
@@ -126,11 +126,11 @@ export default function HelpScreen({ online, chat, setChat, onClose }) {
       {/* No `download`: with target=_blank, an installed desktop app opened a blank window and
           only downloaded the file. Opening it shows the PDF; sw.js serves it offline. */}
       <a className="help-guide" href={QUICK_START_PDF} target="_blank" rel="noopener">
-        <strong>PicTalk quick-start guide</strong>
+        <strong>SiteSnap AI quick-start guide</strong>
         <span>One-page PDF: your first job in five steps, plus tips. Works without signal.</span>
       </a>
 
-      <h2 className="help-h2">Ask PicTalk</h2>
+      <h2 className="help-h2">Ask SiteSnap AI</h2>
       <p className="help-intro">Ask how to do something, or for tips on getting the best results. Type, or tap the mic and say it.</p>
 
       <div className="help-chat" aria-live="polite">

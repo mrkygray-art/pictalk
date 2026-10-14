@@ -1,7 +1,8 @@
 // Embedded mode test: PicTalk inside a cross-origin iframe (a host page on another port).
 // Checks the debug strip, unfilled {{procore...}} placeholders, the "Capture in a new tab"
 // button (new tab carries the same companyId / projectId, voice works there), and that
-// ordinary links outside an iframe are unchanged.
+// ordinary links outside an iframe are unchanged. Also the Procore panel in the top-level tab,
+// with /api/procore/* mocked in the browser (the dev server has no /api).
 // Needs only the dev server: npx vite --port 5176 (no emulators; sign-in may warn, that's fine).
 const puppeteer = require('puppeteer-core');
 const http = require('http');
@@ -86,7 +87,49 @@ const stripOf = (text) => {
     const tb = await buttons(tab);
     check('new tab: Tap to Talk is back, no "Capture in a new tab"',
       tb.includes('Tap to Talk') && !tb.includes('Capture in a new tab'), tb.join(' | '));
+    check('iframe: no Procore panel (its login page can\'t load in an iframe)', !text.includes('Procore'));
     await tab.close();
+    await page.close();
+  }
+
+  // ---------- 1b. Procore panel in the top-level tab (the /api/procore functions mocked) ----------
+  {
+    const page = await browser.newPage();
+    page.on('pageerror', (e) => console.log('PAGE ERROR:', e.message));
+    let signedIn = false;
+    const asked = [];
+    await page.setRequestInterception(true);
+    page.on('request', (r) => {
+      const u = new URL(r.url());
+      if (!u.pathname.startsWith('/api/procore/')) return r.continue();
+      asked.push(u.pathname + u.search);
+      const json = (status, body) => r.respond({ status, contentType: 'application/json', body: JSON.stringify(body) });
+      if (u.pathname === '/api/procore/login') { // pretend Procore signed in and sent us back
+        signedIn = true;
+        return r.respond({ status: 302, headers: { location: `/?${u.searchParams}&procore=connected` } });
+      }
+      if (!signedIn) return json(401, { error: 'not_connected' });
+      if (u.pathname === '/api/procore/me') return json(200, { name: 'Carl Contractor', email: 'carl.contractor@example.com' });
+      if (u.pathname === '/api/procore/directory') return json(200, { people: [
+        { id: 1, name: 'Jane Doe', company: 'Doe Plumbing', role: 'Superintendent' },
+        { id: 2, name: 'Sam Lee', company: null, role: null },
+      ] });
+      return json(404, {});
+    });
+    await page.goto(`${APP}?companyId=123&projectId=456`, { waitUntil: 'load' });
+    const btn = await page.waitForSelector('::-p-text(Connect Procore)', { timeout: 30000 });
+    check('top-level tab, not signed in: "Connect Procore" button', !!btn);
+    await Promise.all([page.waitForNavigation({ waitUntil: 'load' }), btn.click()]);
+    check('Connect Procore starts sign-in with the same ids',
+      asked.includes('/api/procore/login?companyId=123&projectId=456'), asked.join(' , '));
+    await page.waitForFunction(() => document.body.innerText.includes('Project people'), { timeout: 30000 });
+    const t = await page.evaluate(() => document.body.innerText);
+    check('after sign-in: back on the same project, "Connected to Procore."', page.url().includes('companyId=123&projectId=456') && t.includes('Connected to Procore.'), page.url());
+    check('shows the signed-in name and email', t.includes('Carl Contractor') && t.includes('carl.contractor@example.com'));
+    check('lists the project people with company and role', t.includes('Project people (2)') && t.includes('Jane Doe') && t.includes('Doe Plumbing · Superintendent') && t.includes('Sam Lee'));
+    const meIdx = asked.findIndex((a) => a.startsWith('/api/procore/me?companyId=123'));
+    const dirIdx = asked.findIndex((a) => a === '/api/procore/directory?companyId=123&projectId=456');
+    check('asks /me (with companyId), then the directory', meIdx >= 0 && dirIdx > meIdx, asked.join(' , '));
     await page.close();
   }
 
@@ -143,6 +186,7 @@ const stripOf = (text) => {
     check('top level, ordinary link: no debug strip', !text.includes('Embedded:'));
     check('top level, ordinary link: Tap to Talk, no Capture in a new tab',
       b.includes('Tap to Talk') && !b.includes('Capture in a new tab'));
+    check('top level, ordinary link: no Procore panel', !text.includes('Procore'));
     await page.close();
   }
 

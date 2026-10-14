@@ -30,5 +30,10 @@ dist-lab
 lab/out
 lab/clips/*.wav
 
+# Vercel link and local secrets (PROCORE_CLIENT_SECRET, SESSION_SECRET live in Vercel's env settings only)
+.vercel
+.env
+.env.*.local
+
 # Functions settings that must stay private (e.g. UNLIMITED_AI_EMAILS); deployed from this machine
 functions/.env

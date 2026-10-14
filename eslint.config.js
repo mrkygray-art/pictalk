@@ -29,6 +29,11 @@ export default defineConfig([
     languageOptions: { sourceType: 'commonjs', globals: { ...globals.node, ...globals.browser } },
   },
   {
+    // Vercel functions (Procore OAuth): ES modules on Node
+    files: ['api/**/*.js'],
+    languageOptions: { globals: globals.node },
+  },
+  {
     files: ['public/sw.js'],
     languageOptions: { globals: globals.serviceworker },
   },

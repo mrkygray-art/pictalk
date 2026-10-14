@@ -1630,6 +1630,34 @@ button:focus-visible {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+/* Procore connection (ProcorePanel.jsx), top-level tab only */
+.procore-panel {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 10px 20px;
+  display: grid;
+  gap: 8px;
+  border-bottom: 1px solid var(--surface-2);
+}
+.procore-panel h2 { font-size: 16px; }
+.procore-note { color: var(--muted); font-size: 14px; }
+.procore-btn {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 12px;
+  background: var(--orange);
+  color: #000000;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.procore-people { list-style: none; padding: 0; display: grid; gap: 6px; max-height: 40vh; overflow-y: auto; }
+.procore-people li { display: grid; padding: 8px 12px; border-radius: 10px; background: var(--surface); font-size: 15px; }
+.procore-people span { color: var(--muted); font-size: 13px; }
+
 .pane-bar {
   --pane-bar-h: 68px;
   position: sticky;

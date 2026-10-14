@@ -8,6 +8,7 @@ import AdminConsole from "./admin/AdminConsole";
 import { watchProfile, ensureProfile, createExampleJobs, acceptInvite, isEmailLinkVisit, roleLabel, errorText, retryGuestMerge } from "./accountStore";
 import { watchJobs } from "./jobStore";
 import { readEmbed } from "./embedded";
+import ProcorePanel from "./ProcorePanel";
 
 const PANE_KEY = "pictalk-pane";
 const BANNER_KEY = "pictalk-guest-banner"; // dismissed for this visit
@@ -243,6 +244,8 @@ export default function Shell() {
   return (
     <>
       <EmbedStrip embed={embed} />
+      {/* Procore sign-in only in a top-level tab (its login page can't load in an iframe) */}
+      {!embed.embedded && embed.hasIds && <ProcorePanel companyId={embed.companyId} projectId={embed.projectId} />}
       <nav className="pane-bar" aria-label="Switch between PicTalk and Piccolo">
         <div className="pane-switch" role="tablist">
           {[

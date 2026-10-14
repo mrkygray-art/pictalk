@@ -69,6 +69,7 @@ test("the help guide's sections are complete and its button names exist in the a
     "Move or delete this stop", "Move to a Different Job", "Delete Stop", "Describe photo", "Edit description", "Add field notes",
     "Add customer comments", "Approve Summary", "Regenerate summary", "My Jobs", "Recent jobs", "Download PDF", "Share PDF",
     "Open in Piccolo", "Edit customer & location", "Reopen This Job", "Delete This Job", "Install SiteSnap AI on this phone", "Sign in to SiteSnap",
+    "Connect Procore", "Switch Project", "Who is this for?", "Refresh Directory", "Done", "Clear",
     "Try Piccolo", "Try a different sample", "Add Line", "Finalize", "Export", "Add photos or notes in SiteSnap AI", "Engineering Mode",
     "Writing it down", "No speech heard", "Waiting to upload", "Saved on this phone",
   ];

@@ -119,7 +119,7 @@ service cloud.firestore {
                                    'editedTranscript', 'transcriptEditedAt',
                                    'photoDescStatus', 'photoDescription', 'photoDescRequestedAt',
                                    'photoDescEdited', 'photoDescCount', 'photoDescModel',
-                                   'photoDescribedAt', 'photoDescError', 'orgId', 'place'])
+                                   'photoDescribedAt', 'photoDescError', 'orgId', 'place', 'recipients'])
             && d.note is string && d.note.size() < 2000
             && (d.get('photoDescStatus', null) == null
                 || d.photoDescStatus in ['requested', 'describing', 'described', 'failed'])
@@ -127,6 +127,8 @@ service cloud.firestore {
                 || (d.photoDescription is string && d.photoDescription.size() <= 3000))
             && (d.get('jobId', null) == null || (d.jobId is string && d.jobId.size() <= 64))
             && (d.get('place', null) == null || (d.place is string && d.place.size() <= 120))
+            // Who it's for: Procore people picked in the directory search (id, name, company, title)
+            && (d.get('recipients', null) == null || (d.recipients is list && d.recipients.size() <= 10))
             && (d.get('editedTranscript', null) == null
                 || (d.editedTranscript is string && d.editedTranscript.size() <= 5000))
             && (d.photoPath == null || d.photoPath is string)

@@ -36,13 +36,23 @@ const notify = () => listeners.forEach((fn) => fn());
 
 // ---------- local queue ----------
 /** Save a stop locally (instant, survives refresh/offline), then try to sync. */
-export async function queueStop({ photoBlob, audioBlob, note = '', jobId }) {
+/** At most 10 people, each { procoreUserId, name, company, title } as short strings (matches the rules). */
+export function cleanRecipients(list) {
+  const str = (v) => (v == null || v === '' ? null : String(v).slice(0, 120));
+  return (Array.isArray(list) ? list : []).slice(0, 10)
+    .filter((r) => r && /^\d{1,20}$/.test(String(r.procoreUserId ?? '')) && r.name)
+    .map((r) => ({ procoreUserId: String(r.procoreUserId), name: str(r.name), company: str(r.company), title: str(r.title) }));
+}
+
+export async function queueStop({ photoBlob, audioBlob, note = '', jobId, recipients = [] }) {
   const stop = {
     id: crypto.randomUUID(),
     jobId,
     photoBlob: photoBlob || null,
     audioBlob: audioBlob || null,
     note,
+    // Who it's for (Procore people picked in the directory search): id, name, company, title only
+    recipients: cleanRecipients(recipients),
     clientCreatedAt: Date.now(),
     attempts: 0,
   };
@@ -322,6 +332,7 @@ async function uploadStop(uid, stop) {
     audioExpiresAt: audioPath ? stop.clientCreatedAt + VOICE_DAYS * 86400000 : null,
     note: stop.note || '',
     ...(stop.place ? { place: stop.place } : {}),
+    ...(stop.recipients?.length ? { recipients: stop.recipients } : {}),
     transcript: null, // filled in later by Cloud Functions
     status: 'uploaded',
     clientCreatedAt: stop.clientCreatedAt,

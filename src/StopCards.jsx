@@ -105,6 +105,9 @@ function StopCard({ stop, anchor, number, time, photoUrl, photoWaiting, audioUrl
           {stopPlace(stop) && <span className="stop-place"> · {stopPlace(stop)}</span>}
         </strong>
         <span>{whenLabel(time)}</span>
+        {stop.recipients?.length > 0 && (
+          <span className="stop-to">To: {stop.recipients.map((r) => (r.company ? `${r.name} (${r.company})` : r.name)).join(", ")}</span>
+        )}
         <span className={`stop-status is-${status}`}>{statusText}</span>
         {hasVoice && (
           <div className="stop-box voice-box">

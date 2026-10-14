@@ -181,6 +181,8 @@ export default function Shell() {
       .catch((err) => showToast(err.message));
   }, [signedInUid]);
 
+  // Who the next stop is for, picked in the Procore panel's search (name, company, title; no contact details)
+  const [recipients, setRecipients] = useState([]);
   const isAdmin = profile?.role === "admin" && profile?.status === "active" && !!profile?.orgId;
   const guest = !user || user.isAnonymous;
   const chip = guest ? "Sign in to SiteSnap" : (user.displayName || user.email || "Account").split(/[ @]/)[0];
@@ -200,8 +202,11 @@ export default function Shell() {
   return (
     <>
       <EmbedStrip embed={embed} />
-      {/* Procore sign-in only in a top-level tab (its login page can't load in an iframe) */}
-      {!embed.embedded && embed.hasIds && <ProcorePanel companyId={embed.companyId} projectId={embed.projectId} />}
+      {/* Procore sign-in, project picker and Who is this for? search, only in a top-level tab
+          (its login page can't load in an iframe). Hidden where there's no /api (dev server). */}
+      {!embed.embedded && (
+        <ProcorePanel companyId={embed.companyId} projectId={embed.projectId} recipients={recipients} onRecipients={setRecipients} />
+      )}
       {!PICCOLO ? (
         // SiteSnap AI: no panes, just who's signed in
         <nav className="pane-bar account-bar" aria-label="Account">
@@ -236,6 +241,8 @@ export default function Shell() {
 
       <div className="pane-body" hidden={pane !== "pictalk" || view !== "panes"}>
         <App
+          recipients={recipients}
+          onClearRecipients={() => setRecipients([])}
           onSendToPiccolo={sendToPiccolo}
           openJob={pictalkTarget}
           canDeleteJobs={!!profile?.canDeleteJobs}

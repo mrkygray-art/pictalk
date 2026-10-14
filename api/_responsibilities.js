@@ -53,6 +53,9 @@ export function person(u, roles = new Map(), tags = new Map()) {
   return {
     id: u.id,
     name: u.name || [u.first_name, u.last_name].filter(Boolean).join(" ") || null,
+    firstName: u.first_name ?? null,
+    lastName: u.last_name ?? null,
+    title: u.job_title || null, // the Directory job title on its own, for Title search
     company: u.vendor?.name ?? null,
     role,
     roleSource,

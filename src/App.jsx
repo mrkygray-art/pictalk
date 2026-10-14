@@ -242,7 +242,7 @@ function EndJobSheet({ uid, job, hasDraft, online, onFinish, onClose, canSendToP
 // asks SiteSnap AI to show that job's page (from Piccolo). Both optional.
 // embedded: running inside another site's iframe; live voice is swapped for a button that
 // opens this same link in a new tab (photo capture stays).
-export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false, embedded = false }) {
+export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false, embedded = false, recipients = [], onClearRecipients }) {
   const [pending, setPending] = useState([]); // saved on this phone, not uploaded yet
   const [localPhotos, setLocalPhotos] = useState(new Map()); // uploaded stop id -> new photo still on this phone
   const [synced, setSynced] = useState([]); // safely in the cloud
@@ -481,7 +481,7 @@ export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false, e
     setError("");
     try {
       // Saved to the phone first, then uploaded in the background
-      await queueStop({ photoBlob: photo?.file, audioBlob: audio?.blob, jobId: activeJob.id });
+      await queueStop({ photoBlob: photo?.file, audioBlob: audio?.blob, jobId: activeJob.id, recipients });
       touchJob(uid, activeJob.id);
       clearDraft();
       showToast(`Stop saved to ${jobTitle(activeJob)}`);
@@ -695,6 +695,13 @@ export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false, e
               hidden
               onChange={handlePhoto}
             />
+
+            {recipients.length > 0 && (
+              <div className="to-line" role="status">
+                <p>To: <strong>{recipients.map((r) => r.name).join(", ")}</strong></p>
+                <button type="button" className="stop-more" onClick={onClearRecipients} disabled={recording}>Clear</button>
+              </div>
+            )}
 
             <button
               className="big-btn photo-btn"

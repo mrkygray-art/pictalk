@@ -93,6 +93,11 @@ Your saved stops stay saved either way. If a photo or voice note is on screen bu
     text: `SiteSnap AI is a web app you can put on your home screen so it opens like an app, full screen, even with no signal. Tap Install SiteSnap AI on this phone at the bottom of the main screen for steps that match your browser. In Chrome on Android it's one tap. On iPhone in Safari: tap Share, then Add to Home Screen, then Add. Firefox and other browsers: use Add to Home screen in the browser menu. If you opened SiteSnap AI inside another app (like a text message or social app), open it in your phone's browser first.`,
   },
   {
+    id: "procore-people",
+    title: "Procore: picking a project and finding who a stop is for",
+    text: `In a normal browser tab (not inside Procore's frame), tap Connect Procore and sign in with your Procore account. SiteSnap AI then lists the Procore projects you're on; if you're on just one it opens by itself, and it remembers the last one you used. Tap Switch Project to change it. Under Who is this for?, type in the search box and tap Name, Title, or Company to choose what it searches (All searches all three). Title helps when you don't remember a name: type foreman or electrical. Company finds everyone at a company, like ABC Mechanical. Tap a person to pick them (tap again to unpick; you can pick more than one), then tap Done. The capture screen shows To: with their names, and the next stop you save is marked for them. Tap Clear to pick no one. The people come from the project's Directory in Procore; if names have no title, Procore has none for them. The list is saved on your phone, so it works with weak or no signal; tap Refresh Directory to get the newest list from Procore. Searching is typing and tapping only, no microphone.`,
+  },
+  {
     id: "account",
     title: "Guest mode, saving your work, and signing in",
     text: `You can start using SiteSnap AI right away: until you sign in, your jobs are kept only for this device. Tap Sign in to SiteSnap (top right) and sign in with Google or an emailed link, once; your jobs, photos, and notes come with you, and you can open them on another device by signing in there. Piccolo needs a signed-in account.`,

@@ -102,3 +102,17 @@ test("SiteSnap Procore project data (responsibility tags) is server-only: no cli
   }
   await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), "procoreProjects/4291776_373235/responsibilities/101")));
 });
+
+test("a stop can say who it's for (up to 10 Procore people picked in the directory search)", async () => {
+  const stop = (recipients) => ({
+    jobId: "j1", photoPath: null, audioPath: null, audioType: null, audioExpiresAt: null, note: "",
+    transcript: null, status: "uploaded", clientCreatedAt: 1, ...(recipients === undefined ? {} : { recipients }),
+  });
+  const one = { procoreUserId: "101", name: "Jon Smith", company: "ABC Mechanical", title: "Electrical Foreman" };
+  await assertSucceeds(setDoc(doc(db("erin"), "users/erin/stops/r1"), stop([one])));
+  await assertSucceeds(setDoc(doc(db("erin"), "users/erin/stops/r2"), stop(undefined)), "no one picked is fine");
+  await assertSucceeds(setDoc(doc(db("erin"), "users/erin/stops/r3"), stop(Array.from({ length: 10 }, () => one))));
+  await assertFails(setDoc(doc(db("erin"), "users/erin/stops/r4"), stop(Array.from({ length: 11 }, () => one))), "more than 10");
+  await assertFails(setDoc(doc(db("erin"), "users/erin/stops/r5"), stop("Jon Smith")), "must be a list");
+  await assertFails(getDoc(doc(db("alice"), "users/erin/stops/r1")), "still private to its owner");
+});

@@ -3,7 +3,8 @@
 // header required). Returns name, company (vendor), and role: the project team's Project Role, else
 // the job title, else the permission template, else a tag a PM set in SiteSnap (api/_responsibilities.js).
 // Also says whether the signed-in person may tag (a Project Manager / Executive on this project).
-// Users without Directory read access get Procore's compact view, which has no title or template.
+// Users without Directory read access get Procore's compact view, which has no title or template
+// (reported as compact: true). People come back without email or phone; those stay on the server.
 // ?shape=1 (diagnostic): the first page's field names and how many people have each one filled
 // in, never the values, so we can see where title / company / role live in a real project.
 import { config, HttpError, procoreGet, procoreId, queryOf, sendError, sendJson } from "../_procore.js";
@@ -42,14 +43,21 @@ export default async function handler(req, res) {
     }
     // One Procore call after another (a token refresh replaces the refresh token)
     const users = [];
-    for (let page = 1; page <= MAX_PAGES; page++) {
-      const batch = await procoreGet(req, res, cfg, `/rest/v1.0/projects/${projectId}/users`, {
-        companyId, query: { page, per_page: PER_PAGE },
-      });
-      if (!Array.isArray(batch)) break;
-      users.push(...batch);
-      if (batch.length < PER_PAGE) break;
+    try {
+      for (let page = 1; page <= MAX_PAGES; page++) {
+        const batch = await procoreGet(req, res, cfg, `/rest/v1.0/projects/${projectId}/users`, {
+          companyId, query: { page, per_page: PER_PAGE },
+        });
+        if (!Array.isArray(batch)) break;
+        users.push(...batch);
+        if (batch.length < PER_PAGE) break;
+      }
+    } catch (err) {
+      if (err?.status === 403) throw new HttpError(403, "no_directory", "You don't have access to this project's directory in Procore.");
+      throw err;
     }
+    // Procore's compact view (no Directory read permission) has names and companies but no titles
+    const compact = users.length > 0 && users.every((u) => !("job_title" in (u ?? {})) && !("email_address" in (u ?? {})));
     const { roles, available: rolesAvailable } = await projectRoles(req, res, cfg, companyId, projectId);
     const me = await procoreGet(req, res, cfg, "/rest/v1.0/me", { companyId, query: { company_id: companyId } });
     // Tags are extra: if SiteSnap's Firestore isn't reachable, the list still shows
@@ -65,6 +73,7 @@ export default async function handler(req, res) {
       people: users.map((u) => person(u, roles, tags)),
       rolesAvailable,
       tagsAvailable,
+      compact,
       canTag: tagsAvailable && canTag(roles, me?.id),
       labels: LABELS,
     });

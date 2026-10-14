@@ -80,6 +80,30 @@ Also:
 - Built in Step 2 (branch `sitesnap-step2`), but not yet called against the sandbox. The list still loads if Procore refuses Project Roles (403): `rolesAvailable: false`.
 - PM tags: only someone whose Project Role is Project Manager or Project Executive can tag. Before saving, the person is checked with `GET /rest/v1.0/projects/{project_id}/users/{id}` ("Show project user"). Procore documents only 200, 401 and 403 for that call, not a 404 for someone outside the project, but any error refuses the save.
 
+## Directory search: projects and people (2026-10-14)
+
+For `docs/` spec "Project-Aware Directory Search". Checked against Procore's published reference data (developers.procore.com/api/v1/resource_groups, the JSON behind /reference). Not yet tried in the sandbox.
+
+**Projects the user can open**
+- `GET /rest/v1.0/companies`: "Returns companies visible to the current user." No `Procore-Company-Id` header needed. Fields: `id, name, is_active, logo_url, my_company`.
+- `GET /rest/v1.1/projects?company_id=` (header required): "Return a list of active Projects. If the authenticated user has full company admin permissions the request will return all of the projects in the company. If the user does not have full company admin permissions, the request will only return the projects that the user has been added to." 100 per page by default, 300 max. `view=compact` returns `id, name`.
+- There is no separate "projects I'm on" endpoint in the reference (open question 3). So for a **full company admin**, the picker shows every company project. For a normal user it shows only projects they were added to.
+- Built as `GET /api/procore/projects` (companies, then each active company's projects, one call after another). A company that answers 403 or 404 is skipped and counted as `refused`.
+
+**People (List Project Users, `GET /rest/v1.0/projects/{project_id}/users`)**
+- Returns active users only.
+- Normal view fields include `job_title`, `vendor{id, name}`, `email_address`, `business_phone`, `mobile_phone`, `is_active`.
+- "Users without read permissions to Directory are limited to the compact view": `id, first_name, last_name, name, initials, party_id, vendor`. No title, email or phone. The directory route now reports `compact: true` when every row is compact, and the app says Title search may find no one.
+- A 403 on the list becomes "You don't have access to this project's directory in Procore." (`no_directory`).
+- Procore also has `filters[search]` (first name, last name, email, keywords, job title, or company), but the app loads the whole list once and searches on the phone instead.
+
+**Open questions from the spec**
+1. *Phones and titles for sandbox users:* the fields exist in the normal view. The sandbox data from 2026-10-14 had `job_title` filled for 1 of 9 people and company for 2 of 9. Phone fill rates aren't measured yet: run `?shape=1` (it counts every field, phones included).
+2. *Can a standard user read the full directory?* Only with Directory read permission on the project. Without it, Procore sends the compact view (names and companies). No extra OAuth scope exists for this; it's the user's permission template in Procore. Needs a sandbox test with a non-admin user.
+3. *A cleaner "my projects" endpoint?* Not in the reference. v1.1 List Projects already limits non-admins to their own projects.
+
+**Email and phone stay on the server.** The spec's normalized shape lists them, but Step 2's rule is that phone and email reach the browser only when needed. Nothing needs them yet, so the directory route doesn't send them.
+
 ## Webhooks (Step 8)
 
 - **Create a hook:** `POST /rest/v2.0/companies/{company_id}/projects/{project_id}/webhooks/hooks` with `{payload_version: "v4.0", namespace, destination_url (https), destination_headers.Authorization}`.

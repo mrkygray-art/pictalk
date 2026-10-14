@@ -10,6 +10,7 @@ import login from "../api/procore/login.js";
 import callback from "../api/procore/callback.js";
 import me from "../api/procore/me.js";
 import directory from "../api/procore/directory.js";
+import projects from "../api/procore/projects.js";
 import responsibility from "../api/procore/responsibility.js";
 import { setTagStore } from "../api/_responsibilities.js";
 import { serviceAccount } from "../api/_firestore.js";
@@ -322,9 +323,10 @@ test("directory lists the project's people (name, company, role) with the Procor
   assert.equal(out.statusCode, 200);
   const { people, canTag, labels, rolesAvailable, tagsAvailable } = out.json();
   assert.equal(people.length, 102);
-  assert.deepEqual(people[0], { id: 1, name: "Person 1", company: "Acme Electric", role: "Superintendent", roleSource: "job_title", tag: null });
-  assert.deepEqual(people[100], { id: 900, name: "Jane Doe", company: "Doe Plumbing", role: null, roleSource: null, tag: null });
-  assert.deepEqual(people[101], { id: 901, name: "No Title", company: null, role: "Subcontractor", roleSource: "permission_template", tag: null });
+  assert.deepEqual(people[0], { id: 1, name: "Person 1", firstName: "Person", lastName: "1", title: "Superintendent", company: "Acme Electric", role: "Superintendent", roleSource: "job_title", tag: null });
+  assert.deepEqual(people[100], { id: 900, name: "Jane Doe", firstName: "Jane", lastName: "Doe", title: null, company: "Doe Plumbing", role: null, roleSource: null, tag: null });
+  assert.deepEqual(people[101], { id: 901, name: "No Title", firstName: null, lastName: null, title: null, company: null, role: "Subcontractor", roleSource: "permission_template", tag: null });
+  assert.equal(out.json().compact, false, "a mix of normal and compact rows is the normal view");
   assert.ok(!JSON.stringify(out.json()).includes("@example.com"), "no emails go back to the browser");
   assert.equal(canTag, false, "nobody is a PM in the project roles");
   assert.deepEqual(labels, ["PM", "Superintendent", "Purchasing", "Sub foreman"]);
@@ -353,11 +355,76 @@ test("directory needs real company and project ids; placeholders are refused bef
   assert.equal(calls.length, 0);
 });
 
-test("directory passes on Procore's 403 as no access", async () => {
+test("directory turns Procore's 403 into a plain no-directory-access message", async () => {
   replies.push({ status: 403, body: { error: "forbidden" } });
   const out = await run(directory, req("/api/procore/directory?companyId=123&projectId=456", { [SESSION_COOKIE]: sessionCookie(freshTokens()) }));
   assert.equal(out.statusCode, 403);
-  assert.equal(out.json().error, "no_access");
+  assert.equal(out.json().error, "no_directory");
+  assert.equal(out.json().message, "You don't have access to this project's directory in Procore.");
+});
+
+test("directory says when Procore gave only the compact view (no Directory read permission)", async () => {
+  replies.push({ body: [
+    { id: 1, first_name: "Jane", last_name: "Doe", name: "Jane Doe", initials: "JD", vendor: { id: 6, name: "Doe Plumbing" } },
+    { id: 2, first_name: "Al", last_name: "Ray", name: "Al Ray", initials: "AR", vendor: null },
+  ] });
+  replies.push({ body: [] }); // project roles
+  replies.push({ body: { id: 7, login: "x@example.com", name: "X" } }); // me
+  const out = await run(directory, req("/api/procore/directory?companyId=123&projectId=456", { [SESSION_COOKIE]: sessionCookie(freshTokens()) }));
+  assert.equal(out.statusCode, 200);
+  assert.equal(out.json().compact, true);
+  assert.equal(out.json().people[0].title, null);
+});
+
+// ---------- projects (the project picker) ----------
+
+test("projects lists the user's projects across their companies, one call after another, read-only", async () => {
+  replies.push({ body: [{ id: 123, name: "Kyco Builders", is_active: true }, { id: 124, name: "Old Co", is_active: false }, { id: 125, name: "Sub Co", is_active: true }] });
+  replies.push({ body: [{ id: 456, name: "Tower B" }, { id: 457, name: "Annex" }] });
+  replies.push({ body: [{ id: 900, name: "Clinic" }] });
+  const out = await run(projects, req("/api/procore/projects", { [SESSION_COOKIE]: sessionCookie(freshTokens()) }));
+  assert.equal(out.statusCode, 200);
+  assert.deepEqual(out.json().projects, [
+    { companyId: "123", companyName: "Kyco Builders", projectId: "457", name: "Annex" },
+    { companyId: "125", companyName: "Sub Co", projectId: "900", name: "Clinic" },
+    { companyId: "123", companyName: "Kyco Builders", projectId: "456", name: "Tower B" },
+  ]);
+  assert.deepEqual(calls.map((c) => c.url), [
+    "https://sandbox.procore.test/rest/v1.0/companies?page=1&per_page=100",
+    "https://sandbox.procore.test/rest/v1.1/projects?company_id=123&view=compact&page=1&per_page=100",
+    "https://sandbox.procore.test/rest/v1.1/projects?company_id=125&view=compact&page=1&per_page=100",
+  ], "inactive companies are skipped");
+  assert.equal(calls[0].headers["Procore-Company-Id"], undefined, "List Companies doesn't take the company header");
+  assert.equal(calls[1].headers["Procore-Company-Id"], "123");
+  assert.equal(calls[2].headers["Procore-Company-Id"], "125");
+  for (const c of calls) assert.equal(c.method, "GET");
+  assertNoLeaks(out, ["access-1", "refresh-1"]);
+});
+
+test("projects pages through big lists; a company that refuses (403) doesn't hide the rest", async () => {
+  replies.push({ body: [{ id: 1, name: "A", is_active: true }, { id: 2, name: "B", is_active: true }] });
+  replies.push({ body: Array.from({ length: 100 }, (_, i) => ({ id: 1000 + i, name: `P${String(i).padStart(3, "0")}` })) });
+  replies.push({ body: [{ id: 2000, name: "Last" }] });
+  replies.push({ status: 403, body: { error: "app not connected" } });
+  const out = await run(projects, req("/api/procore/projects", { [SESSION_COOKIE]: sessionCookie(freshTokens()) }));
+  assert.equal(out.statusCode, 200);
+  assert.equal(out.json().projects.length, 101);
+  assert.equal(out.json().refused, 1);
+  assert.ok(calls[2].url.includes("company_id=1&view=compact&page=2&per_page=100"));
+});
+
+test("projects with no companies or no projects is an empty list, not an error", async () => {
+  replies.push({ body: [] });
+  const out = await run(projects, req("/api/procore/projects", { [SESSION_COOKIE]: sessionCookie(freshTokens()) }));
+  assert.equal(out.statusCode, 200);
+  assert.deepEqual(out.json().projects, []);
+});
+
+test("projects without a Procore session is 401 and calls nothing", async () => {
+  const out = await run(projects, req("/api/procore/projects"));
+  assert.equal(out.statusCode, 401);
+  assert.equal(out.json().error, "not_connected");
+  assert.equal(calls.length, 0);
 });
 
 // ---------- callback: a code after '#' (read by the page, posted back) ----------

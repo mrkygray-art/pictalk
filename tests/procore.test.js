@@ -329,3 +329,116 @@ test("directory passes on Procore's 403 as no access", async () => {
   assert.equal(out.statusCode, 403);
   assert.equal(out.json().error, "no_access");
 });
+
+// ---------- callback: a code after '#' (read by the page, posted back) ----------
+
+const postReq = (body, cookies = {}, headers = {}) => ({
+  method: "POST",
+  url: "/api/procore/callback",
+  headers: {
+    host: "sitesnap-procore.vercel.app",
+    origin: "https://sitesnap-procore.vercel.app",
+    "content-type": "application/json",
+    cookie: Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join("; "),
+    ...headers,
+  },
+  body,
+});
+
+test("callback with nothing in the query serves the '#' reader page and leaves the state cookie alone", async () => {
+  const out = await run(callback, { method: "GET", url: "/api/procore/callback", headers: {} });
+  assert.equal(out.statusCode, 200);
+  assert.match(out.getHeader("content-type"), /text\/html/);
+  assert.equal(out.getHeader("referrer-policy"), "no-referrer");
+  const csp = out.getHeader("content-security-policy");
+  const nonce = csp.match(/script-src 'nonce-([^']+)'/)[1];
+  assert.match(csp, /default-src 'none'/);
+  assert.match(csp, /connect-src 'self'/);
+  assert.match(csp, /frame-ancestors 'none'/);
+  assert.ok(out.body.includes(`<script nonce="${nonce}">`));
+  assert.ok(out.body.includes("history.replaceState"), "takes the code out of the address bar");
+  assert.ok(!/localStorage|sessionStorage|document\.cookie/.test(out.body), "stores nothing in the browser");
+  assert.equal(out.getHeader("set-cookie"), undefined, "state cookie kept for the POST");
+  assert.equal(calls.length, 0);
+});
+
+test("a code posted from the '#' page goes through the same state check and token exchange", async () => {
+  const s = startedState();
+  replies.push({ body: TOKEN });
+  const out = await run(callback, postReq({ code: "hash-code", state: s.state }, { [STATE_COOKIE]: s.cookie }));
+  assert.equal(out.statusCode, 200);
+  assert.deepEqual(out.json(), { location: "/?companyId=123&projectId=456&procore=connected" });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://login-sandbox.procore.test/oauth/token");
+  assert.equal(new URLSearchParams(calls[0].body).get("code"), "hash-code");
+  assert.equal(new URLSearchParams(calls[0].body).get("grant_type"), "authorization_code");
+  assert.match(out.cookie(STATE_COOKIE).raw, /Max-Age=0/);
+  assert.equal(unseal(out.cookie(SESSION_COOKIE).value, ENV.SESSION_SECRET, SESSION_COOKIE).at, "access-1");
+  assert.ok(!out.body.includes("access-1"), "the token never goes back to the page");
+  assert.ok(logs.some((l) => l.includes("after '#'")), "logs which way the code came");
+  assertNoLeaks(out, ["access-1", "refresh-1", "hash-code"]);
+});
+
+test("the '#' POST also reads a raw JSON body (plain Node request, not pre-parsed)", async () => {
+  const s = startedState();
+  replies.push({ body: TOKEN });
+  const r = postReq(undefined, { [STATE_COOKIE]: s.cookie });
+  r[Symbol.asyncIterator] = async function* () { yield JSON.stringify({ code: "c", state: s.state }); };
+  const out = await run(callback, r);
+  assert.equal(out.statusCode, 200);
+  assert.equal(out.json().location, "/?companyId=123&projectId=456&procore=connected");
+});
+
+test("the '#' POST refuses a wrong state, no cookie, another site, or a non-JSON form; Procore is never called", async () => {
+  const s = startedState();
+  const cases = {
+    "wrong state": [postReq({ code: "c", state: "y".repeat(43) }, { [STATE_COOKIE]: s.cookie }), 400, "bad_state"],
+    "no cookie": [postReq({ code: "c", state: s.state }), 400, "bad_state"],
+    "other site": [postReq({ code: "c", state: s.state }, { [STATE_COOKIE]: s.cookie }, { origin: "https://evil.example" }), 403, "bad_origin"],
+    "form post": [postReq("code=c", { [STATE_COOKIE]: s.cookie }, { "content-type": "application/x-www-form-urlencoded" }), 415, "bad_request"],
+    "not json": [postReq("{nope", { [STATE_COOKIE]: s.cookie }), 400, "bad_request"],
+  };
+  for (const [name, [r, status, error]] of Object.entries(cases)) {
+    const out = await run(callback, r);
+    assert.equal(out.statusCode, status, name);
+    assert.equal(out.json().error, error, name);
+    assert.equal(out.cookie(SESSION_COOKIE), undefined, name);
+  }
+  assert.equal(calls.length, 0);
+});
+
+test("the '#' POST with Procore's error goes back to the app as denied", async () => {
+  const s = startedState();
+  const out = await run(callback, postReq({ error: "access_denied", state: s.state }, { [STATE_COOKIE]: s.cookie }));
+  assert.equal(out.json().location, "/?companyId=123&projectId=456&procore=denied");
+  assert.equal(calls.length, 0);
+});
+
+// ---------- tokens never reach browser storage or the build ----------
+
+test("no Procore token or secret in localStorage / sessionStorage or a VITE_ variable", async () => {
+  const { readFileSync, readdirSync, statSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const root = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
+  const files = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name);
+      if (statSync(p).isDirectory()) walk(p);
+      else if (/\.(js|jsx|html)$/.test(name)) files.push(p);
+    }
+  };
+  walk(join(root, "src"));
+  walk(join(root, "api"));
+  assert.ok(files.some((f) => f.endsWith("ProcorePanel.jsx")) && files.some((f) => f.endsWith("_procore.js")), "scanned the Procore files");
+  for (const f of files) {
+    const text = readFileSync(f, "utf8");
+    assert.ok(!/VITE_[A-Z0-9_]*(PROCORE|SESSION|SECRET|TOKEN)/.test(text), `${f}: secret-looking VITE_ variable`);
+    if (/procore/i.test(f) || f.includes(`${join("api", "")}`)) {
+      assert.ok(!/localStorage|sessionStorage|indexedDB|idb-keyval/.test(text), `${f}: browser storage near Procore code`);
+    }
+  }
+  for (const f of readdirSync(root).filter((n) => n.startsWith(".env"))) {
+    assert.ok(!/^\s*VITE_[A-Z0-9_]*(PROCORE|SESSION|SECRET|TOKEN)/m.test(readFileSync(join(root, f), "utf8")), `${f}: secret in a VITE_ variable`);
+  }
+});

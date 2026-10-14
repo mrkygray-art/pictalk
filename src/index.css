@@ -1618,6 +1618,18 @@ button:focus-visible {
 /* ---------- Piccolo: pane switcher, account, team ---------- */
 
 /* Always on screen (the spec's persistent switcher); the job bar sticks just below it */
+/* Embedded mode debug strip (Shell.jsx EmbedStrip) */
+.embed-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: calc(6px + env(safe-area-inset-top)) 20px 6px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
 .pane-bar {
   --pane-bar-h: 68px;
   position: sticky;

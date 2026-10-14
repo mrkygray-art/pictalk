@@ -7,10 +7,24 @@ import AccountSheet from "./AccountSheet";
 import AdminConsole from "./admin/AdminConsole";
 import { watchProfile, ensureProfile, createExampleJobs, acceptInvite, isEmailLinkVisit, roleLabel, errorText, retryGuestMerge } from "./accountStore";
 import { watchJobs } from "./jobStore";
+import { readEmbed } from "./embedded";
 
 const PANE_KEY = "pictalk-pane";
 const BANNER_KEY = "pictalk-guest-banner"; // dismissed for this visit
 const DAY = 24 * 60 * 60 * 1000;
+
+// Embedded mode, for now: a small debug strip with what the host page sent. Shown inside an
+// iframe, or when the link carries companyId / projectId; ordinary PicTalk links never show it.
+function EmbedStrip({ embed }) {
+  if (!embed.embedded && !embed.hasIds) return null;
+  return (
+    <div className="embed-strip" role="status">
+      <span>Embedded: {embed.embedded ? "yes" : "no"}</span>
+      <span>Company: {embed.companyId ?? "not received"}</span>
+      <span>Project: {embed.projectId ?? "not received"}</span>
+    </div>
+  );
+}
 
 // Guests: a privacy line, then "save your work" after a finished job, then a warning the
 // day before a job is deleted (that one can't be dismissed).
@@ -169,6 +183,7 @@ export default function Shell() {
   const [toast, setToast] = useState(null);
   const [piccoloTarget, setPiccoloTarget] = useState(null); // { jobId, autoDraft, key }
   const [pictalkTarget, setPictalkTarget] = useState(null); // { jobId, key }
+  const [embed] = useState(() => readEmbed()); // { embedded, companyId, projectId }, read once on load
 
   const showToast = (text) => text && setToast((t) => ({ text, id: (t?.id ?? 0) + 1 }));
   useEffect(() => {
@@ -227,6 +242,7 @@ export default function Shell() {
 
   return (
     <>
+      <EmbedStrip embed={embed} />
       <nav className="pane-bar" aria-label="Switch between PicTalk and Piccolo">
         <div className="pane-switch" role="tablist">
           {[
@@ -259,6 +275,7 @@ export default function Shell() {
           }}
           openJob={pictalkTarget}
           canDeleteJobs={!!profile?.canDeleteJobs}
+          embedded={embed.embedded}
         />
       </div>
       {pane === "piccolo" && view === "panes" && (

@@ -240,7 +240,9 @@ function EndJobSheet({ uid, job, hasDraft, online, onFinish, onClose, canSendToP
 
 // onSendToPiccolo(jobId) opens a finished job in the Piccolo pane; openJob ({ jobId, key })
 // asks PicTalk to show that job's page (from Piccolo). Both optional.
-export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false }) {
+// embedded: running inside another site's iframe; live voice is swapped for a button that
+// opens this same link in a new tab (photo capture stays).
+export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false, embedded = false }) {
   const [pending, setPending] = useState([]); // saved on this phone, not uploaded yet
   const [localPhotos, setLocalPhotos] = useState(new Map()); // uploaded stop id -> new photo still on this phone
   const [synced, setSynced] = useState([]); // safely in the cloud
@@ -703,15 +705,28 @@ export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false })
               {photo ? "Retake Photo" : "Take Photo"}
             </button>
 
-            <button
-              className={`big-btn talk-btn${recording ? " is-recording" : ""}`}
-              onClick={talk}
-              aria-pressed={recording}
-            >
-              {recording ? <StopIcon /> : <MicIcon />}
-              {recording ? `Stop  ${formatTime(seconds)}` : audio ? "Talk Again" : "Tap to Talk"}
-            </button>
-            <MicPicker disabled={recording} />
+            {embedded ? (
+              // Same link (companyId / projectId included), full page, where voice works
+              <button
+                className="big-btn talk-btn"
+                onClick={() => window.open(window.location.href, "_blank", "noopener")}
+              >
+                <MicIcon />
+                Capture in a new tab
+              </button>
+            ) : (
+              <>
+                <button
+                  className={`big-btn talk-btn${recording ? " is-recording" : ""}`}
+                  onClick={talk}
+                  aria-pressed={recording}
+                >
+                  {recording ? <StopIcon /> : <MicIcon />}
+                  {recording ? `Stop  ${formatTime(seconds)}` : audio ? "Talk Again" : "Tap to Talk"}
+                </button>
+                <MicPicker disabled={recording} />
+              </>
+            )}
 
             <button className="save-btn" onClick={saveStop} disabled={!canSave}>
               {saving ? "Saving…" : "Save This Stop"}

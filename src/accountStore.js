@@ -42,6 +42,9 @@ export function errorText(err) {
     return "This sign-in link was already used or has expired. Ask for a new one.";
   }
   if (code === "auth/invalid-email") return "That email address doesn't look right.";
+  // Firebase only allows sign-in from listed web addresses (Authentication → Settings → Authorized domains)
+  if (code === "auth/unauthorized-domain") return `Sign-in isn't allowed on this web address (${location.hostname}). Use the main SiteSnap address.`;
+  if (code === "auth/operation-not-allowed") return "This way of signing in is turned off for SiteSnap.";
   console.warn("Account error:", err);
   return "Something went wrong. Please try again.";
 }

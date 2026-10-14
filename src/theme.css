@@ -58,38 +58,40 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #14110e;
-    --surface: #221d18;
-    --surface-2: #2e2721;
-    --fill: #2e2721;
-    --text: #f5efe6;
-    --text-2: #b8ac9c;
-    --text-3: #6e6458;
-    --brand: #ffb81c;
-    --brand-press: #e6a200;
-    --brand-soft: #3a2c0e;
-    --on-brand: #1f1a14;
-    --brand-ink: #ffc24d;
-    --record: #ff5f57;
-    --record-soft: #3d1a17;
-    --success: #30d158;
-    --success-ink: #30d158;
-    --success-soft: #12301a;
-    --warning: #ff8a3d;
-    --warning-ink: #ff8a3d;
-    --warning-soft: #3a2214;
-    --danger: #ff5f57;
-    --danger-soft: #3d1a17;
-    --violet: #bf5af2;
-    --violet-soft: #2a1636;
-    --separator: #3a332b;
-    --shade: rgba(0, 0, 0, 0.6);
-    --card-shadow: none;
-    --bar-bg: rgba(20, 17, 14, 0.82);
-    --segment-track: rgba(118, 118, 128, 0.24);
-  }
+/* Black page, always (whatever the phone's light/dark setting): this set overrides the
+   light one above, which is kept so the light look is one wrapper away
+   (put this block back inside @media (prefers-color-scheme: dark) to follow the phone). */
+:root {
+  color-scheme: dark;
+  --bg: #000000;
+  --surface: #221d18;
+  --surface-2: #2e2721;
+  --fill: #2e2721;
+  --text: #f5efe6;
+  --text-2: #b8ac9c;
+  --text-3: #6e6458;
+  --brand: #ffb81c;
+  --brand-press: #e6a200;
+  --brand-soft: #3a2c0e;
+  --on-brand: #1f1a14;
+  --brand-ink: #ffc24d;
+  --record: #ff5f57;
+  --record-soft: #3d1a17;
+  --success: #30d158;
+  --success-ink: #30d158;
+  --success-soft: #12301a;
+  --warning: #ff8a3d;
+  --warning-ink: #ff8a3d;
+  --warning-soft: #3a2214;
+  --danger: #ff5f57;
+  --danger-soft: #3d1a17;
+  --violet: #bf5af2;
+  --violet-soft: #2a1636;
+  --separator: #3a332b;
+  --shade: rgba(0, 0, 0, 0.6);
+  --card-shadow: none;
+  --bar-bg: rgba(0, 0, 0, 0.82);
+  --segment-track: rgba(118, 118, 128, 0.24);
 }
 
 /* Shared shapes (the spec's component classes) */

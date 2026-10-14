@@ -60,7 +60,24 @@ Invited or not:
 - `welcome_email_sent_at` and `last_login_at` come back as fields.
 - A company user only appears once added to the project.
 
-**Diagnostic:** `GET /api/procore/directory?companyId=4291776&projectId=373235&shape=1`, after Connect Procore, returns each field name and how many people have it filled in, with no values. It shows why the list has dashes.
+**Diagnostic:** `GET /api/procore/directory?companyId=4291776&projectId=373235&shape=1`, after Connect Procore, returns each field name and how many people have it filled in, with no values.
+
+**Sandbox result (2026-10-14, project 373235, 9 people, full view):**
+- `job_title` is filled for 1 of 9.
+- `vendor.name` (company) is filled for 2.
+- `permission_template` and `company_permission_template` are filled for 0.
+
+So the dashes are accurate: Procore has almost no title, company or role data for these people.
+
+Also:
+- `welcome_email_sent_at` is 0 and `last_login_at` is 1. So the list **does include people who were never invited and never logged in**, as long as they're active on the project (open question 4).
+- Procore also returned `last_activated_at` (9 of 9), which isn't in the reference schema.
+
+**Better source for responsibility: Project Roles.**
+- `GET /rest/v1.0/project_roles?project_id=` (with `Procore-Company-Id`) returns the project team on the project's Home page.
+- Each entry has `name`, `role` (for example "Project Manager"), `user_id`, `contact_id` and `is_active`.
+- Planned order: Project Roles, then `job_title`, then the permission template, then a PM-set tag.
+- Not yet called against the sandbox.
 
 ## Webhooks (Step 8)
 

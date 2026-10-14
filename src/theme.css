@@ -5,14 +5,14 @@
   color-scheme: light dark;
 
   /* Backgrounds */
-  --bg: #ece4d6; /* warm concrete, the page */
+  --bg: #d3c8b4; /* darker warm concrete, the page */
   --surface: #fbf7f0; /* cards, lists, sheets */
   --surface-2: #faf6ef; /* secondary fill */
   --fill: #efe7da; /* inputs and boxes inside a card */
 
   /* Text */
   --text: #231e19;
-  --text-2: #6f6559; /* secondary, hints */
+  --text-2: #574d42; /* secondary, hints */
   --text-3: #ada293; /* placeholder, disabled */
 
   /* Brand */
@@ -20,7 +20,7 @@
   --brand-press: #db8f00;
   --brand-soft: #fff0c7; /* tinted backgrounds, secondary buttons */
   --on-brand: #1f1a14; /* dark text on amber, readable in sun */
-  --brand-ink: #8a5300; /* amber text and links on light backgrounds */
+  --brand-ink: #704200; /* amber text and links on light backgrounds */
 
   /* Action colors */
   --record: #e5383b; /* Tap to Talk, recording dot, timer */
@@ -39,8 +39,8 @@
   /* Lines and layers */
   --separator: #e6ded2; /* hairline dividers */
   --shade: rgba(0, 0, 0, 0.4); /* behind bottom sheets */
-  --card-shadow: 0 1px 3px rgba(60, 40, 10, 0.08);
-  --bar-bg: rgba(236, 228, 214, 0.85); /* frosted top bar */
+  --card-shadow: 0 1px 3px rgba(60, 40, 10, 0.12);
+  --bar-bg: rgba(211, 200, 180, 0.88); /* frosted top bar */
   --segment-track: rgba(118, 118, 128, 0.12);
 
   /* Older names, kept so every rule maps to the palette above */

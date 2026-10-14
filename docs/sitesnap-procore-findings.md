@@ -2,6 +2,21 @@
 
 For Steps 2, 6 and 8 and the open questions in `docs/sitesnap-changes.md`. Checked on 2026-10-13 against Procore's API reference (the OpenAPI documents behind developers.procore.com/reference) and the source of Procore's docs (github.com/procore/documentation). Every call below needs `Authorization: Bearer <token>` and the `Procore-Company-Id` header. Nothing here has been tried against the sandbox yet.
 
+## Decisions (2026-10-13)
+
+1. **Task, not Observation: approved.** The identity that writes Tasks needs **Admin on the Tasks tool**, so it can close them. Closing must be tested in the sandbox.
+2. **Who writes, for the sandbox prototype only:**
+   - A PM connects Procore once. Their token is stored on the server, encrypted and revocable, and never sent to the browser.
+   - The foreman's name goes in the Task text.
+   - Every Procore write goes through one small module, so it can switch to a Developer Managed Service Account later (see "Moving to a service account" below; not built).
+3. **Step 1:** not merged until the preview is reviewed.
+4. **Firebase:** Ky creates the new SiteSnap project and sends its ID. Don't touch `pictalk-6cbff`, and store no tokens (step 2's PM token included) until the new project exists.
+5. **`?code=` or `#`:** read the Vercel log line after Ky signs in again on the live Step 1, then update this doc.
+6. **Webhooks (Step 8, not yet):**
+   - Treat each delivery as a ping only.
+   - Verify our own secret header.
+   - Re-fetch the item from Procore before acting.
+
 ## Recommendation: Task (Task Items), not Observation
 
 | | Task Items (`/rest/v1.0/task_items`) | Observations (`/rest/v1.0/observations/items`) |
@@ -58,11 +73,45 @@ Invited or not:
 
 ## Service accounts (open question 2)
 
+### The March 2025 change
+
+Source: Procore's announcements page (`announcements/overview.md` in github.com/procore/documentation, section "January 2025 — Sunset of Traditional Service Accounts"; permalink `/overview`). Its timeline:
+- Traditional Service Accounts were deprecated on December 9, 2021.
+- Creating new ones stopped on January 21, 2025.
+- Existing ones stopped working on **March 18, 2025**.
+- Data connection apps had to move to Developer Managed Service Accounts (DMSA). Apps that didn't migrate stopped working, and non-compliant Marketplace apps were removed.
+- Procore's migration guide: support.procore.com/products/online/user-guide/company-level/admin/tutorials/migrating-to-dmsa.
+
+### Moving to a service account (DMSA): what that version needs (not built)
+
+- **Manifest change.** In the Developer Portal's Configuration Builder, add a **Service Account Authentication** data connector component. Then use the **Permissions Builder** to list the company- and project-level tool permissions the app needs; for SiteSnap that's Tasks at Admin, so it can close items.
+  - Source: developers.procore.com/documentation/building-data-connection-apps (`building_applications/building_data_connection_apps.md`, "Service Account Authentication").
+  - Permission levels: Procore's User Permissions Matrix, support.procore.com/references/user-permissions-matrix-web.
+- **New app version.**
+  - Click Create Version or Save Version; it's saved as "Ready for Testing".
+  - Test it in the sandbox, then promote it to Production with release notes.
+  - For a custom (non-Marketplace) app, Procore notifies installed companies automatically, and admins see "Update Available" in App Management.
+  - For a Marketplace app, the update must be approved before notifications go out.
+  - Source: developers.procore.com/documentation/building-apps-promote-manifest (`building_applications/building_apps_promote_manifest.md`).
+- **Customer admin install.**
+  - A company admin installs the app (Marketplace or custom install), or updates it to the new version, and picks the **permitted projects**. These can be changed later.
+  - Procore creates the service-account user in the **Company Directory** automatically. The customer may need to add it to each project and give it a permission template.
+  - The app only reaches data in permitted projects.
+  - Sources: developers.procore.com/documentation/developer-managed-service-accounts (`plan_your_app/developer_managed_service_accounts.md`); developers.procore.com/documentation/building-apps-install-arch (`platform_concepts/building_apps_install_arch.md`, "Service account (client credentials / DMSA)").
+- **Token.**
+  - `POST {PROCORE_LOGIN_URL}/oauth/token` with `grant_type=client_credentials`; the token lasts 5400 seconds.
+  - One `client_id` / `client_secret` works for every company that installs the app.
+  - Source: developers.procore.com/documentation/oauth-client-credentials (`oauth/oauth_client_credentials.md`).
+- **Author.** Writes act as "a generic service account user" (the table on building-data-connection-apps), so the foreman's (and PM's) name must go in the Task text.
+- **Code change when we switch:** only the write module's token source changes, from the stored PM token to a client-credentials token. The module is planned for Step 6 and isn't built yet.
+
+### Summary
+
 - Old-style service accounts stopped working on 2025-03-18.
 - The current option is a **Developer Managed Service Account**: the `client_credentials` grant, added as a "Service Account Authentication" data connector with tool permissions set in the Permissions Builder.
 - A customer admin installs the app and picks projects. Procore adds a service-account user to their Directory, which may need adding to projects.
 - Writes show that generic user as the author. That's why the foreman's name goes in the item text.
-- Our sandbox app currently uses **user-level** authentication. Tasks would be written as the signed-in PM unless we add a service account.
+- Our sandbox app uses **user-level** authentication. For the prototype, Tasks are written with the stored token of a PM who connected once (decision 2), not as the foreman.
 
 ## Permissions and 403s
 
@@ -79,4 +128,5 @@ No public API. None of Procore's 649 API resource groups mention it, so don't bu
 - Minimum permission levels to create or close a Task or Observation.
 - Webhook resource names, and whether comments fire events.
 - Whether `PATCH task_items/{id}` accepts JSON (the reference lists multipart).
-- What the sandbox sends back after sign-in. The callback handles both `?code=` and `#code=`. Look for "Procore callback: code arrived …" in the Vercel logs.
+- What the sandbox sends back after sign-in. The callback handles both `?code=` and `#code=`. Look for "Procore callback: code arrived …" in the Vercel logs (decision 5).
+- That Admin on the Tasks tool is needed to close a Task (decision 1). This needs a sandbox test.

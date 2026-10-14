@@ -70,7 +70,7 @@ test("the help guide's sections are complete and its button names exist in the a
     "Add customer comments", "Approve Summary", "Regenerate summary", "My Jobs", "Recent jobs", "Download PDF", "Share PDF",
     "Open in Piccolo", "Edit customer & location", "Reopen This Job", "Delete This Job", "Install SiteSnap AI on this phone", "Save my work",
     "Try Piccolo", "Try a different sample", "Add Line", "Finalize", "Export", "Add photos or notes in SiteSnap AI", "Engineering Mode",
-    "Evaluation Lab", "Writing it down", "No speech heard", "Waiting to upload", "Saved on this phone",
+    "Writing it down", "No speech heard", "Waiting to upload", "Saved on this phone",
   ];
   const guide = SECTIONS.map((s) => s.text).join("\n");
   for (const b of buttons) {

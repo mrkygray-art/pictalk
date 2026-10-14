@@ -144,8 +144,8 @@ Your saved stops stay saved either way. If a photo or voice note is on screen bu
   },
   {
     id: "engineering",
-    title: "Engineering Mode and the Evaluation Lab",
-    text: `Engineering Mode (a link at the bottom of the main screen; off by default) shows an inside view: the path each stop takes from the phone to the cloud, upload timings, what's waiting to upload, errors, and a Sync now button. It only shows your own data. The Evaluation Lab (also linked at the bottom) shows results of automated tests that simulate losing signal mid-recording and check nothing is lost.`,
+    title: "Engineering Mode",
+    text: `Engineering Mode (a link at the bottom of the main screen; off by default) shows an inside view: the path each stop takes from the phone to the cloud, upload timings, what's waiting to upload, errors, and a Sync now button. It only shows your own data.`,
   },
 ];
 

@@ -789,7 +789,6 @@ export default function App({ onSendToPiccolo, openJob, canDeleteJobs = false, e
             </button>
             <InstallLink />
             <EngineeringToggle />
-            <a className="text-btn lab-link" href="/lab">Evaluation Lab</a>
           </div>
         </>
       )}

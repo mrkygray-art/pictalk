@@ -31,6 +31,14 @@ export default async function handler(req, res) {
     }
     name = name || me.login?.split("@")[0] || `Procore user ${procoreUserId}`;
 
+    // Google errors (Firestore, Auth) name a code and a reason but never a Procore token, so log those
+    let step = "firestore";
+    const fail = (err) => {
+      if (err instanceof HttpError) throw err;
+      console.error(`SiteSnap sign-in failed at ${step}:`, err?.code ?? "", String(err?.message ?? "").replace(/[A-Za-z0-9_-]{40,}/g, "[redacted]").slice(0, 300));
+      throw new HttpError(500, "signin_failed", "Couldn't finish signing in to SiteSnap. Try again in a minute.");
+    };
+    try {
     const db = await firestore();
     const userRef = db.doc(`procoreUsers/${procoreUserId}`);
     const before = (await userRef.get()).data()?.projectKeys ?? [];
@@ -42,8 +50,12 @@ export default async function handler(req, res) {
     batch.set(userRef, { name, projectKeys: keys, updatedAt: now });
     await batch.commit();
 
+    step = "token";
     const token = await (await firebaseAuth()).createCustomToken(uidFor(procoreUserId), { procoreUserId });
     sendJson(res, 200, { token, me: { procoreUserId, name }, projects });
+    } catch (err) {
+      fail(err);
+    }
   } catch (err) {
     sendError(res, err);
   }

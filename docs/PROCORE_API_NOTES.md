@@ -23,6 +23,9 @@ Signed in as Edward Gray (Procore user 481274); his own Procore sign-in wrote ev
 - **Nobody notified** (Notification Date blank), as expected. Decision C (email the assignee) is a separate call.
 - **Created By shows Edward Gray:** the real author (decision A).
 
+- **Attachments work end to end:** in the Observation's view, the photo opens and the WAV downloads and plays. In edit mode, attachments show only as name tags.
+- **Line breaks:** the description is formatted text, so plain line breaks collapse into one line. Send it as HTML paragraphs (`<p>`).
+
 **Answered by the sandbox:**
 - Q2 (create plus photo and audio): yes, for Observations and Punch Items.
 - Q3 (numbers): Procore assigns them for both.

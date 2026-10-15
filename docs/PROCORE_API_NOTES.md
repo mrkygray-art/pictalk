@@ -268,3 +268,14 @@ Only Project Managers have Tasks access, which is why Procore's Create Task pick
 - Tests: `tests/access.test.js`, the rules test in `tests/messaging-rules.test.js`, `e2e/e2e-report.js` (picker, card warning, list).
 - Fix (2026-10-15, Ky's live test on SiteSnap Test Project): **no project template isn't always a no.** Ky is a company admin with no template on that project and still has every tool. No template now counts as "can't" only when Procore's Observation assignee list answered and the person isn't on it; if they're on it (an admin), or the list didn't answer, it's "not known" and nothing is flagged.
 
+
+## Demo staging (2026-10-15, docs/DEMO_STAGING.md)
+
+Endpoints the demo import / reset uses beyond the ones above. Checked against a mirror of Procore's reference
+(developers.procore.com itself didn't load); the page's **Delete Check** confirms them in the sandbox:
+- `DELETE /rest/v1.0/projects/{p}/observations/items/{id}`: moves the Observation to the project's recycle bin (204). Fallback tried: `DELETE /rest/v1.0/observations/items/{id}?project_id=`.
+- `DELETE /rest/v1.1/punch_items/{id}?project_id=` (fallback v1.0).
+- `POST /rest/v1.0/observations/items/{id}/response_logs` `{project_id, response_log: {comment}, status}`: a response that can also change the status (used to close with the closing comment).
+- `POST /rest/v1.0/punch_items/{id}/comments?project_id=` `{comment: {body}}`.
+- Lists for reset: `GET /rest/v1.0/observations/items?project_id=`, `GET /rest/v1.1/punch_items?project_id=`.
+- Not yet seen in the sandbox: whether delete is allowed for our sign-in, and what stays editable after closing (Delete Check reports both).

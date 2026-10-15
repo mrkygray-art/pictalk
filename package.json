@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "build:demo-photos": "node scripts/build-demo-photos.mjs",
     "setup:emulator": "node scripts/setup-emulator.mjs",
     "dev:emulators": "vite --mode emulators",
     "build:dev": "vite build --mode devcloud && node scripts/check-dev-build.mjs",

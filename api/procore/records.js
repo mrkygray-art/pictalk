@@ -6,10 +6,13 @@
 //     "Reported by … via SiteSnap AI", transcript); if Procore refuses the assignees it creates it
 //     without them and says so; 4. emails the assignees only (decision C).
 // Answers { recordType, id, number, url, warnings[] }. Never logs or returns a token.
+// Demo projects (DEMO_MODE=true and the project in DEMO_PROJECT_IDS): the title starts with [SS-DEMO], so the
+// Demo staging page's reset finds live test captures too.
 import { config, HttpError, procoreGet, procoreId, readBody, requireSameOriginJson, sendError, sendJson } from "../_procore.js";
 import { listProjects } from "../_projects.js";
 import { procoreSend, uploadFile } from "../_procoreWrite.js";
 import { assigneeEmail, cleanCard, observationBody, punchBody, recordUrl } from "../_records.js";
+import { demoCodeOf, demoMode, withTag } from "../_demoScenarios.js";
 
 const MAX_FILES = 6;
 const MAX_FILE_BYTES = 3 * 1024 * 1024;
@@ -31,6 +34,7 @@ export default async function handler(req, res) {
     if (!companyId || !projectId) throw new HttpError(400, "missing_ids", "Pick a project.");
     let card;
     try { card = cleanCard(body.card); } catch (err) { throw new HttpError(400, "bad_card", err.message); }
+    if (demoMode() && demoCodeOf(projectId)) card = { ...card, title: withTag(card.title) };
     const files = (Array.isArray(body.files) ? body.files : []).slice(0, MAX_FILES).map((f) => ({
       name: String(f?.name ?? "file").replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 80),
       type: String(f?.type ?? ""),

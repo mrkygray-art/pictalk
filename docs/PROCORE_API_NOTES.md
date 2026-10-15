@@ -243,3 +243,19 @@ Idea (Ky, 2026-10-14): SiteSnap shows who can't be assigned yet (no access to Pu
 - No such list for Punch List or Tasks (`potential_assignees` 404 in v1.0 and v1.1). SiteSnap would use the person's template levels instead.
 - Show Project User (`/projects/{p}/users/{id}`) 404; the list call already has each person's `permission_template` (`id, name, category, project_specific, type`).
 
+**Second and third runs (2026-10-15):**
+- As Tyler Brandt (Foreman / Superintendent - Internal, not an admin): project people with their template names 200, Observations assignee and distribution lists 200; the template list and template details **403**. Only admins can read what a template allows.
+- As Ky (admin): `user_access_levels` values are numbers: **1 None, 2 Read Only, 3 Standard, 4 Admin** (Architect/Engineer has observations 1 and Test Architect is the one person missing from the Observation assignee list). The tool keys SiteSnap needs: `punch_list`, `observations`, `task_items`, `directory`, `admin`.
+
+| Template | punch_list | observations | task_items | directory |
+|---|---|---|---|---|
+| Project Manager - Internal | 4 | 4 | 4 | 4 |
+| Foreman / Superintendent - Internal | 4 | 4 | 1 | 2 |
+| Subcontractor - External | 3 | 3 | 1 | 1 |
+| Architect/Engineer - External | 3 | 1 | 1 | 1 |
+| Owner/Client - External | 1 | 1 | 1 | 1 |
+
+Only Project Managers have Tasks access, which is why Procore's Create Task picker listed only API Support.
+
+**Step 1 answer:** workable. Everyone can read who has which template and the Observation assignee list; the per-tool levels need an admin, so SiteSnap would read them when an admin signs in and keep a copy server-side (5 templates), for everyone to use.
+

@@ -242,12 +242,27 @@ export function cardFor(s, { observationTypeId = null, assigneeIds = [], now = D
   };
 }
 
-/** The Observation type for a scenario: the first hint the project has (by name), else its first active type */
+// Observation types are a category (quality, safety, environmental, commissioning, warranty, work_to_complete)
+// plus a name; Procore shows them as "Environmental - Air Quality". The sandbox's Quality types: Corrective
+// Action, Deficiency, Non-Conformance, Pre-Punch (docs/PROCORE_API_NOTES.md). Preferred names per category:
+const PREFERRED = { quality: ["deficiency"], safety: ["safety hazard", "hazard"], environmental: ["storm", "water", "erosion"], warranty: ["service call"] };
+
+/** The Observation type for a scenario: the first hint whose category the project has (its preferred name
+ *  first), else a type named like the hint, else the project's first active type */
 export function pickObservationType(types, hints = []) {
   const active = (types ?? []).filter((t) => t && t.active !== false);
+  const norm = (v) => String(v ?? "").trim().toLowerCase().replace(/_/g, " ");
   for (const h of hints) {
-    const hit = active.find((t) => String(t.name ?? "").toLowerCase().includes(h));
-    if (hit) return hit;
+    const inCategory = active.filter((t) => norm(t.category) === h);
+    if (inCategory.length) {
+      for (const want of PREFERRED[h] ?? []) {
+        const hit = inCategory.find((t) => norm(t.name).includes(want));
+        if (hit) return hit;
+      }
+      return inCategory[0];
+    }
+    const named = active.find((t) => norm(t.name) === h);
+    if (named) return named;
   }
   return active[0] ?? null;
 }

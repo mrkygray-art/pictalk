@@ -83,7 +83,7 @@ function baseRoutes() {
   on("GET", /\/companies\/\d+\/permission_templates\/5/, () => (admin ? { body: { id: 5 } } : { status: 403, body: { error: "forbidden" } }));
   on("GET", /\/rest\/v1\.0\/me/, { body: { id: 7, name: "Ky Gray" } });
   on("GET", /\/rest\/v1\.0\/projects\/(\d+)\/users\?/, (u) => ({ body: projectUsers(u.match(/projects\/(\d+)\//)[1]) }));
-  on("GET", /\/observation_types/, { body: [{ id: 1, name: "Safety", active: true }, { id: 2, name: "Quality", active: true }] });
+  on("GET", /\/observation_types/, { body: [{ id: 1, name: "Safety Hazard", category: "safety", active: true }, { id: 2, name: "Deficiency", category: "quality", active: true }] });
   on("POST", /\/rest\/v1\.1\/projects\/\d+\/uploads/, { body: { uuid: "up-1", url: "https://s3.procore.test/up", fields: { key: "k" } } });
   on("POST", /s3\.procore\.test/, { body: {} });
   on("POST", /\/rest\/v1\.0\/observations\/items$/, () => ({ status: 201, body: { id: ++nextId, number: nextId - 500 } }));
@@ -355,4 +355,19 @@ test("the sign-in check is remembered for the same sign-in: a second press doesn
   const before = calls.filter((c) => /permission_templates|\/me|\/companies\?/.test(c.url)).length;
   await demoStaging({ ...r, body: { action: "state" } }, res());
   assert.equal(calls.filter((c) => /permission_templates|\/me|\/companies\?/.test(c.url)).length, before);
+});
+
+test("Observation type: by category, preferred name first; 'Air Quality' is Environmental, not Quality", async () => {
+  const { pickObservationType } = await import("../api/_demoScenarios.js");
+  const types = [
+    { id: 1, name: "Air Quality", category: "environmental" }, { id: 2, name: "Stormwater", category: "environmental" },
+    { id: 3, name: "Corrective Action", category: "quality" }, { id: 4, name: "Deficiency", category: "quality" },
+    { id: 5, name: "Fall Protection", category: "safety" }, { id: 6, name: "Safety Hazard", category: "safety" },
+    { id: 7, name: "Punch", category: "work_to_complete" },
+  ];
+  assert.equal(pickObservationType(types, ["quality"]).id, 4);
+  assert.equal(pickObservationType(types, ["safety"]).id, 6);
+  assert.equal(pickObservationType(types, ["environmental", "quality"]).id, 2);
+  assert.equal(pickObservationType(types, ["work to complete", "quality"]).id, 7);
+  assert.equal(pickObservationType(types, ["coordination", "quality"]).id, 4);
 });

@@ -4,7 +4,7 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import {
-  groupByCompany, pickProject, readCache, readLastProject, readProjectsCache, recipientOf, searchPeople,
+  groupByCompany, groupByTitle, pickProject, readCache, readLastProject, readProjectsCache, recipientOf, searchPeople,
   updatedLabel, writeCache, writeLastProject, writeProjectsCache,
 } from "../src/directorySearch.js";
 
@@ -63,6 +63,17 @@ test("Company grouping: companies A to Z, people without a company last", () => 
   assert.deepEqual(groups.map((g) => [g.company, g.people.length]), [
     ["ABC Mechanical", 1], ["Delta Plumbing", 1], ["Kyco Builders", 2], [null, 1],
   ]);
+});
+
+test("Title grouping: job titles A to Z (Procore role when there's no title), same title in any case is one group", () => {
+  const people = [
+    { id: 1, name: "A One", title: "Foreman" }, { id: 2, name: "B Two", title: "foreman " }, { id: 3, name: "C Three", title: "Project Manager" },
+    { id: 4, name: "D Four", title: null, role: "Superintendent" }, { id: 5, name: "E Five", title: "Foreman" },
+  ];
+  assert.deepEqual(groupByTitle(people).map((g) => [g.title, g.people.map((p) => p.id)]), [
+    ["Foreman", [1, 2, 5]], ["Project Manager", [3]], ["Superintendent", [4]],
+  ]);
+  assert.deepEqual(groupByTitle([{ id: 9, name: "X" }]), [{ title: null, people: [{ id: 9, name: "X" }] }]);
 });
 
 test("a picked person carries id, name, company and title only: no contact details", () => {

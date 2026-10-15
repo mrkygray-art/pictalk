@@ -89,6 +89,23 @@ export function groupByCompany(people) {
     .map(([company, list]) => ({ company: company || null, people: list }));
 }
 
+// Title filter: the same results grouped under each job title (else Procore role), A to Z; same title in any
+// letter case is one group, shown the way most people have it written
+export function groupByTitle(people) {
+  const groups = new Map();
+  for (const p of people) {
+    const label = String(p.title || p.role || "").trim();
+    const k = clean(label);
+    if (!groups.has(k)) groups.set(k, { labels: new Map(), people: [] });
+    const g = groups.get(k);
+    g.labels.set(label, (g.labels.get(label) ?? 0) + 1);
+    g.people.push(p);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => (a ? 0 : 1) - (b ? 0 : 1) || a.localeCompare(b))
+    .map(([k, g]) => ({ title: k ? [...g.labels.entries()].sort((x, y) => y[1] - x[1])[0][0] : null, people: g.people }));
+}
+
 // What a selected person carries into the capture flow (and onto the saved stop): no contact details
 export const recipientOf = (p) => ({
   procoreUserId: String(p.id),

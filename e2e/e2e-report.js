@@ -141,6 +141,11 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   const note = await page.$eval(".dir-person.is-limited", (e) => e.innerText);
   check("permissions: the picker marks Jim Henson (no Punch List access)", note.includes("Jim Henson") && note.includes("Can't get Punch Items in Procore"), note.replace(/\s+/g, " "));
   check("permissions: people Procore takes aren't marked", (await page.$$(".dir-person.is-limited")).length === 1);
+  await click(".dir-filters button::-p-text(Title)");
+  const heads = await page.$$eval(".dir-group-head h3", (h) => h.map((e) => e.textContent));
+  check("Title tab groups people under their job titles", heads.includes("Drywall Foreman") && heads.includes("Superintendent") && heads.length === 3, heads.join(" | "));
+  await shot("2a-title");
+  await click(".dir-filters button::-p-text(Name)");
   await click(".dir-person.is-limited");
   await shot("2b-picker");
   await click("button.dir-done");

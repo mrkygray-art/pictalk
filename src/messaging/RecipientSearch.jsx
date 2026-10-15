@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FILTERS, groupByCompany, recipientOf, searchPeople, updatedLabel } from "../directorySearch";
+import { FILTERS, groupByCompany, groupByTitle, recipientOf, searchPeople, updatedLabel } from "../directorySearch";
 
 // Who is this for? Search the project's Procore directory (loaded once, searched on the phone) by
 // Name / Title / Company / All, tap people to tag them, or tag a whole company or every match at once.
@@ -38,7 +38,7 @@ export default function RecipientSearch({ dir, dirError, loadingDir, onRefresh, 
 
   const row = (p) => {
     const on = picked.has(String(p.id)) || fixed.has(String(p.id));
-    const sub = [p.title || p.role, filter === "company" ? null : p.company].filter(Boolean).join(" · ");
+    const sub = [filter === "title" ? null : p.title || p.role, filter === "company" ? null : p.company].filter(Boolean).join(" · ");
     const note = noteFor?.(p) ?? "";
     return (
       <li key={p.id}>
@@ -87,7 +87,7 @@ export default function RecipientSearch({ dir, dirError, loadingDir, onRefresh, 
 
       {dir && people.length === 0 && <p className="procore-note">No one is on this project's directory yet.</p>}
       {dir && people.length > 0 && results.length === 0 && <p className="procore-note">No matches in {projectName}. Try another filter.</p>}
-      {dir && query.trim() && results.length > 1 && filter !== "company" && !allIn(results) && (
+      {dir && query.trim() && results.length > 1 && filter !== "company" && filter !== "title" && !allIn(results) && (
         <button type="button" className="stop-more dir-group-btn" onClick={() => add(results)}>Tag all {results.length} matches</button>
       )}
       {dir && results.length > 0 && (filter === "company" ? (
@@ -98,6 +98,20 @@ export default function RecipientSearch({ dir, dirError, loadingDir, onRefresh, 
                 <h3>{g.company ?? "No company in Procore"}</h3>
                 {g.company && !allIn(g.people) && (
                   <button type="button" className="stop-more dir-group-btn" onClick={() => add(g.people)}>Tag everyone at {g.company}</button>
+                )}
+              </div>
+              <ul className="dir-list">{g.people.map(row)}</ul>
+            </div>
+          ))}
+        </div>
+      ) : filter === "title" ? (
+        <div className="dir-groups">
+          {groupByTitle(shown).map((g) => (
+            <div key={g.title ?? "none"}>
+              <div className="dir-group-head">
+                <h3>{g.title ?? "No title in Procore"}{g.people.length > 1 ? ` (${g.people.length})` : ""}</h3>
+                {g.title && g.people.length > 1 && !allIn(g.people) && (
+                  <button type="button" className="stop-more dir-group-btn" onClick={() => add(g.people)}>Tag all {g.people.length}</button>
                 )}
               </div>
               <ul className="dir-list">{g.people.map(row)}</ul>

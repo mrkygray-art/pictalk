@@ -39,6 +39,7 @@ select{font:inherit;font-size:17px;width:100%;padding:12px;border-radius:12px;ba
 <body><h1>Permissions check</h1>
 <p>Reads what Procore will tell SiteSnap about permission templates and who each tool (Observations, Punch List, Tasks) will take as an assignee. <b>Read only: nothing changes in Procore.</b> It uses your own Procore sign-in, so run it once as yourself and once signed in as a test person who isn't an admin.</p>
 <p id="who"><small>Checking your Procore sign-in…</small></p>
+<p><small><b>To run it as someone else</b> (a test person who isn't an admin): open this page in a <b>private / incognito window</b>, tap Sign in with Procore, and log in to Procore with that person's email and password. The check always runs as whoever is signed in to Procore in that window.</small></p>
 <label for="p">Project</label> <select id="p"></select>
 <button id="run" disabled>Run Check</button>
 <div id="out"></div>
@@ -49,6 +50,7 @@ fetch('/api/procore/projects').then(async(r)=>{
   if(r.status===401){ $('#who').innerHTML='Not signed in. <a href="/api/procore/login">Sign in with Procore</a>, then come back to this page.'; return; }
   const b=await r.json(); const list=b.projects||[];
   $('#who').innerHTML='<small>Signed in. '+list.length+' project(s).</small>';
+  if(list[0]) fetch('/api/procore/me?companyId='+encodeURIComponent(list[0].companyId)).then(r=>r.json()).then(m=>{ if(m.name) $('#who').innerHTML='Running as <b>'+esc(m.name)+'</b> <small>('+list.length+' project(s))</small>'; }).catch(()=>{});
   for(const p of list){ const o=document.createElement('option'); o.value=p.companyId+'_'+p.projectId; o.textContent=p.name; if(/sandbox test/i.test(p.name)) o.selected=true; $('#p').append(o); }
   $('#run').disabled=!list.length;
 });

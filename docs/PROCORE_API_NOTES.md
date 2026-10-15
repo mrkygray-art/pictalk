@@ -222,3 +222,17 @@ Tests: `tests/record-status.test.js` (mocked Procore), `tests/messaging-rules.te
 - Role names live in the company's roles list: `GET/POST /rest/v2.0/companies/{c}/roles` (`{project_role: {name, type, add_to_project_team, display_on_company_home}}`; GET answers `{data: [...]}`). The sandbox had only Project Manager; the page creates **Superintendent** (type copied from Project Manager) for the site leads, then assigns it with `POST /project_roles`.
 - Two sets (2026-10-14). Set 1 = the first sheet as it ended up in Procore (Ironbridge 4, VoltLine 4, ClearFlow 3, Summit Framing & Drywall with no people; the first run stopped before Lena Kowalski and Summit's people). Set 2 = `sitesnap-seed-directory-expansion.md`: 5 trade companies, 21 people (5 PM, 5 GC, 11 Worker). Its Lena Kowalski (`lkowalski`) and Dominic Ruiz (`druiz`) reuse emails set 1 had planned but never created. Project Role: Project Manager for PMs only; the Superintendent step was dropped per the spec. **Verify** reads the directory back (company, exact email, tag, on the project, roles, duplicate emails, totals).
 - Permission templates (Ky's permission_template_matching.md, 2026-10-14): `GET /rest/v1.0/projects/{p}/permission_templates` lists them (id, name, category); `PATCH /rest/v1.0/projects/{p}/permission_template_assignments {permission_template_assignments: {user_id, permission_template_id}}` sets one. Ironbridge (the GC) = Internal (PM: Project Manager - Internal; the rest: Foreman / Superintendent - Internal); every other company's people = Subcontractor - External. `permissionTemplateFor` in api/_seedDirectory.js; the page's Set Permission Templates button does both sets, and Verify checks them.
+
+## Permission templates in SiteSnap, Step 1: what can be read (desk check 2026-10-14)
+
+Idea (Ky, 2026-10-14): SiteSnap shows who can't be assigned yet (no access to Punch List / Observations / Tasks), gives the PM a "who's missing access" list, and later lets a PM or admin fix it in one tap.
+
+**Already known (from the test people page, verified in the sandbox):**
+- `GET /rest/v1.0/projects/{p}/users` gives each person's `permission_template {id, name}`.
+- `GET /rest/v1.0/projects/{p}/permission_templates` lists the project's templates (id, name, category).
+- `PATCH /rest/v1.0/projects/{p}/permission_template_assignments {permission_template_assignments: {user_id, permission_template_id}}` sets one directly. Procore's older tutorial says to remove the person from the project and add them back; the direct call works, so that's not needed.
+- Procore's tutorial says changing permissions needs **Admin on the company Directory**, so the one-tap fix is for admins only; Procore refuses everyone else.
+
+**Not in Procore's public docs:** reading what a template allows per tool, and who each tool will accept as an assignee. Only one such list is documented: `GET /rest/v1.0/observations/potential_distribution_members?project_id=`.
+
+**Sandbox check:** `/api/procore/test-permissions` (sandbox only, hidden, read only: GET calls only). It tries the documented calls and the likely ones (template details, Punch List / Observations / Tasks assignee lists, Show Project User), and reports each call's status, field names, and which project people are missing from each list. It never shows emails, phones or tokens. Run it as Ky (admin), then signed in as a non-admin test person. Tests: `tests/test-permissions.test.js`.

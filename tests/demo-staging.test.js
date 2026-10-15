@@ -336,3 +336,10 @@ test("setup: Create Demo Projects makes the missing ones, reuses one by name, an
   admin = false;
   assert.equal((await post({ action: "createprojects" })).statusCode, 403);
 });
+
+test("admin check: a new demo project with no templates yet doesn't lock the admin out", async () => {
+  onFirst("GET", /\/projects\/1001\/permission_templates$/, { body: [] });
+  const out = await post({ action: "state" });
+  assert.equal(out.statusCode, 200);
+  assert.ok(calls.some((c) => /\/projects\/1002\/permission_templates$/.test(c.url)));
+});

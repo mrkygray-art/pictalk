@@ -33,12 +33,16 @@ import { recordUrl } from "../_records.js";
 
 // ---------- who may use it ----------
 
-async function isAdmin(req, res, cfg, companyId, projectId) {
-  const list = await api(req, res, cfg, "GET", `/rest/v1.0/projects/${projectId}/permission_templates`, { companyId });
-  const first = Array.isArray(list.json) ? list.json[0] : null;
-  if (!list.ok || !first?.id) return false;
-  const one = await api(req, res, cfg, "GET", `/rest/v1.0/companies/${companyId}/permission_templates/${first.id}`, { companyId });
-  return one.ok;
+// A brand-new project has no permission templates yet, so try the company's projects until one lists some
+async function isAdmin(req, res, cfg, companyId, projectIds) {
+  for (const projectId of projectIds.slice(0, 6)) {
+    const list = await api(req, res, cfg, "GET", `/rest/v1.0/projects/${projectId}/permission_templates`, { companyId });
+    const first = Array.isArray(list.json) ? list.json[0] : null;
+    if (!list.ok || !first?.id) continue;
+    const one = await api(req, res, cfg, "GET", `/rest/v1.0/companies/${companyId}/permission_templates/${first.id}`, { companyId });
+    return one.ok;
+  }
+  return false;
 }
 
 async function guard(req, res, cfg) {
@@ -50,7 +54,8 @@ async function guard(req, res, cfg) {
   })) : null;
   const anchor = (demo && Object.values(demo).find((p) => !p.missing)) ?? projects[0];
   if (!anchor) throw new HttpError(403, "no_projects", "Your Procore account has no projects here.");
-  if (!(await isAdmin(req, res, cfg, anchor.companyId, anchor.projectId))) throw new HttpError(403, "not_admin", "Only Procore admins can use this page.");
+  const tryIds = [anchor.projectId, ...projects.filter((p) => p.companyId === anchor.companyId && p.projectId !== anchor.projectId).map((p) => p.projectId)];
+  if (!(await isAdmin(req, res, cfg, anchor.companyId, tryIds))) throw new HttpError(403, "not_admin", "Only Procore admins can use this page.");
   const me = await procoreGet(req, res, cfg, "/rest/v1.0/me", { companyId: anchor.companyId, query: { company_id: anchor.companyId } });
   return { projects, demo, ids, me: { id: me?.id, name: me?.name || "Ky" } };
 }

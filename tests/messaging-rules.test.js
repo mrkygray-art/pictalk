@@ -178,3 +178,14 @@ test("the saved permission template levels are server only: no one reads or writ
   await assertFails(getDoc(doc(fs("101"), path)));
   await assertFails(setDoc(doc(fs("101"), path), { templates: {}, at: 1 }));
 });
+
+test("phone alerts: each person adds or removes only their own push addresses; nobody reads them", async () => {
+  const mine = `procoreUsers/101/pushTokens/tok-abc`;
+  await assertSucceeds(setDoc(doc(fs("101"), mine), { token: "tok-abc", at: 1, ua: "Chrome" }));
+  await assertFails(getDoc(doc(fs("101"), mine)), "only the server reads them");
+  await assertFails(setDoc(doc(fs("102"), `procoreUsers/101/pushTokens/tok-x`), { token: "tok-x", at: 1, ua: "x" }), "not someone else's");
+  await assertFails(setDoc(doc(fs("101"), `procoreUsers/101/pushTokens/tok-y`), { token: "tok-z", at: 1, ua: "x" }), "the id is the token");
+  await assertFails(setDoc(doc(fs("101"), `procoreUsers/101/pushTokens/tok-q`), { token: "tok-q", at: 1, ua: "x", projectKey: "a" }), "only known fields");
+  await assertFails(deleteDoc(doc(fs("102"), mine)));
+  await assertSucceeds(deleteDoc(doc(fs("101"), mine)));
+});

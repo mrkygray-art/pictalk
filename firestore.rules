@@ -85,6 +85,15 @@ service cloud.firestore {
     function okPeople(list) {
       return list is list && list.size() <= 50;
     }
+    // Phone alerts: each person adds or removes their own phones' push addresses (src/messaging/pushStore.js);
+    // only the server reads them (functions/messaging.js sends the alerts)
+    match /procoreUsers/{procoreUserId}/pushTokens/{token} {
+      allow create, update: if procoreMe() is string && procoreUserId == procoreMe()
+        && request.resource.data.keys().hasOnly(['token', 'at', 'ua'])
+        && request.resource.data.token == token && token.size() < 600
+        && request.resource.data.at is number && request.resource.data.ua is string && request.resource.data.ua.size() <= 120;
+      allow delete: if procoreMe() is string && procoreUserId == procoreMe();
+    }
     match /procoreProjects/{key}/members/{memberId} {
       allow read: if memberId == procoreMe() && memberOf(key);
       // What this person has read, for For Me unread dots (theirs only)

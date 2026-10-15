@@ -26,6 +26,37 @@ const appPage = async (req) => {
   }
 };
 
+// Phone alerts (SiteSnap messaging): Firebase Cloud Messaging delivers a data message
+// { title, body, url, tag } from functions/messaging.js; show it, and open the thread when tapped.
+self.addEventListener('push', (event) => {
+  let p;
+  try { p = event.data ? event.data.json() : {}; } catch { p = {}; }
+  const d = p.data || p;
+  const n = p.notification || {};
+  const title = d.title || n.title || 'SiteSnap AI';
+  event.waitUntil(self.registration.showNotification(title, {
+    body: d.body || n.body || '',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    tag: d.tag || undefined,
+    data: { url: d.url || '/' },
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href;
+  event.waitUntil((async () => {
+    const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const same = open.find((c) => new URL(c.url).origin === self.location.origin);
+    if (same) {
+      await same.focus();
+      return same.navigate(url).catch(() => self.clients.openWindow(url));
+    }
+    return self.clients.openWindow(url);
+  })());
+});
+
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);

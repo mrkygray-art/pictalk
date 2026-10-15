@@ -6,6 +6,7 @@ import ConversationView from "./ConversationView";
 import Composer from "./Composer";
 import ReportFlow from "./ReportFlow";
 import AccessList from "./AccessList";
+import PushToggle from "./PushToggle";
 import { readBeta } from "./beta";
 import { onQueueChange, pendingMessages, startMessageSync, watchReads } from "./messagingStore";
 
@@ -19,7 +20,11 @@ export default function MessagingApp() {
   const [beta] = useState(readBeta); // Report an Issue (voice + photo -> Procore record) while it is tested
   const session = useProcoreSession({ linkCompanyId: embed.companyId, linkProjectId: embed.projectId });
   const { state, me, projects, project, choose, signedIn } = session;
-  const [view, setView] = useState({ name: "feed" }); // feed | conversation {cid} | compose
+  // An alert opens its thread: /?companyId=&projectId=&cid=
+  const [view, setView] = useState(() => {
+    const cid = new URLSearchParams(window.location.search).get("cid");
+    return cid && /^[A-Za-z0-9_-]{1,64}$/.test(cid) ? { name: "conversation", cid } : { name: "feed" };
+  }); // feed | conversation {cid} | compose | report | access
   const [choosing, setChoosing] = useState(false);
   const [reads, setReads] = useState(new Map());
   const [pending, setPending] = useState([]);
@@ -132,6 +137,7 @@ export default function MessagingApp() {
           {beta && <p className="msg-new-hint">Stays in SiteSnap. Nothing goes to Procore.</p>}
           <Feed projectKey={key} me={me.procoreUserId} reads={reads} pending={pending} onOpen={(cid) => setView({ name: "conversation", cid })} />
           <p className="msg-footnote">Only people on this Procore project can see its messages. Everyone on a message can see when it was sent, seen and answered.</p>
+          <PushToggle myId={me.procoreUserId} />
           {beta && <button type="button" className="text-btn" onClick={() => setView({ name: "access" })}>Who can't get Punch Items or Observations?</button>}
         </>
       )}

@@ -54,6 +54,7 @@ const appCheckKey = import.meta.env.VITE_APPCHECK_SITE_KEY;
 if (!useEmulators && appCheckKey) {
   initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(appCheckKey), isTokenAutoRefreshEnabled: true });
 }
+export const firebaseApp = app;
 export const auth = getAuth(app);
 export const db = initializeFirestore(app, { localCache: persistentLocalCache() });
 export const storage = getStorage(app);

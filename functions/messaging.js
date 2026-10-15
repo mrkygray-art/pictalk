@@ -17,6 +17,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
+const { getMessaging } = require("firebase-admin/messaging");
 const Anthropic = require("@anthropic-ai/sdk");
 const { DEEPGRAM_API_KEY, transcribeAudio } = require("./deepgram");
 const { reserveGlobalAi, piccoloCallable } = require("./budget");
@@ -213,6 +214,8 @@ async function processMessage(key, cid, mid, message) {
       await changeTask(key, cid, t.messageId, t.id, "done", m.authorId).catch((err) => logger.warn("Done reply: task not changed", { key, cid, task: t.id, error: err.message }));
     }
   }
+  // Phone alerts to everyone else on the thread (never blocks the message)
+  await sendAlerts(key, cid, m).catch((err) => logger.warn("Alerts not sent", { key, cid, mid, error: err.message }));
   if (m.event) return; // a "Closed" / "Reopened" line has nothing to transcribe or flag
   if (photos[0]?.path) {
     await db().runTransaction(async (tx) => {
@@ -240,6 +243,49 @@ async function processMessage(key, cid, mid, message) {
     await msgRef.update({ tasksStatus: "failed" });
   }
 }
+
+// ---------- phone alerts (web push via Firebase Cloud Messaging; tokens from src/messaging/pushStore.js) ----------
+
+/** Who hears about a new message: the thread's starter and everyone tagged, never the person who wrote it */
+function alertTargets(conv, m) {
+  const ids = new Set([conv.createdBy?.procoreUserId, ...(conv.taggedIds ?? [])].filter(Boolean).map(String));
+  ids.delete(String(m.authorId ?? ""));
+  return [...ids];
+}
+
+/** What the alert says and where it opens */
+function alertFor(key, cid, m) {
+  const [companyId, projectId] = String(key).split("_");
+  const photos = Array.isArray(m.photos) ? m.photos.length : 0;
+  const body = cardLine(m) || (photos ? `Sent ${photos === 1 ? "a photo" : `${photos} photos`}` : m.voicePath ? "Sent a voice note" : "New message");
+  return {
+    title: String(m.authorName || "SiteSnap AI").slice(0, 80),
+    body: body.slice(0, 160),
+    url: `/?${new URLSearchParams({ companyId, projectId, cid })}`,
+    tag: cid,
+  };
+}
+
+async function sendAlerts(key, cid, m) {
+  const conv = (await db().doc(`procoreProjects/${key}/conversations/${cid}`).get()).data() ?? {};
+  const people = alertTargets(conv, m);
+  if (!people.length) return;
+  const snaps = await Promise.all(people.map((id) => db().collection(`procoreUsers/${id}/pushTokens`).get()));
+  const refs = snaps.flatMap((snap) => snap.docs);
+  if (!refs.length) return;
+  const data = alertFor(key, cid, m);
+  const r = await getMessaging().sendEachForMulticast({
+    tokens: refs.map((d) => d.id),
+    data,
+    webpush: { headers: { Urgency: "high", TTL: String(24 * 60 * 60) } },
+  });
+  // Phones that turned alerts off or were reset: forget their address
+  const gone = r.responses.map((x, i) => (!x.success && /registration-token-not-registered|invalid-registration-token|invalid-argument/.test(x.error?.code ?? "") ? refs[i] : null)).filter(Boolean);
+  await Promise.all(gone.map((d) => d.ref.delete()));
+  logger.info("Alerts sent", { key, cid, people: people.length, phones: refs.length, ok: r.successCount, removed: gone.length });
+}
+exports.alertTargets = alertTargets;
+exports.alertFor = alertFor;
 
 exports.processMessage = processMessage;
 exports.requireMember = requireMember;

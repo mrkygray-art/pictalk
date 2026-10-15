@@ -103,3 +103,13 @@ firebase deploy --only firestore:rules,functions:onConversationMessage,functions
    - Storage, in Cloud Shell: `gcloud storage rm -r gs://sitesnap-procore.firebasestorage.app/photos gs://sitesnap-procore.firebasestorage.app/voice gs://sitesnap-procore.firebasestorage.app/exports` (and `/finals` if it exists).
    - Optional: turn off Anonymous, Google and Email-link sign-in in Firebase Auth. Messaging signs in only through Procore.
 4. Sandbox test with a sender, a tagged person and an untagged project member.
+
+## Phone alerts (web push), 2026-10-15
+
+- **How:** Firebase Cloud Messaging (already in the `firebase` / `firebase-admin` packages; nothing new installed). The Messages screen has an Alerts line (`src/messaging/PushToggle.jsx`, `pushStore.js`): Turn on asks the browser's permission, gets this phone's push address from FCM through our own service worker, and saves it at `procoreUsers/{procoreUserId}/pushTokens/{token}` (rules: each person adds or removes only their own; nobody reads them but the server).
+- **Who's alerted:** on every new message (including quick replies and Closed / Reopened lines), the thread's starter and everyone tagged, except the person who wrote it (`alertTargets` / `sendAlerts` in `functions/messaging.js`). The alert: the author's name, the feed card's line, and a link that opens the thread (`/?companyId=&projectId=&cid=`). Addresses Procore/FCM says are gone are deleted.
+- **Service worker** (`public/sw.js`): shows the notification (`push`) and opens or focuses the app on tap (`notificationclick`).
+- **iPhone:** web push only works for the Home Screen app (iOS 16.4+); the Alerts line says so in Safari.
+- **Setup:** `VITE_FCM_VAPID_KEY` in Vercel = the public Web Push key from Firebase (Project settings → Cloud Messaging → Web Push certificates → Generate key pair). It's a public key, safe in a `VITE_` variable. Without it the Alerts line doesn't show.
+- **Deploy:** `firebase deploy --only firestore:rules,functions:onConversationMessage --project sitesnap-procore`.
+- Tests: `tests/alerts.test.js`, the push-address rules in `tests/messaging-rules.test.js`.

@@ -173,6 +173,7 @@ function personRoutes({ roles = ["Project Manager", "Superintendent", "Architect
   on("POST", /\/projects\/373235\/users\/301\/actions\/add$/, { body: {} });
   on("GET", /\/rest\/v1\.0\/project_roles\?/, { body: roles.map((role, i) => ({ id: i, role, user_id: null })) });
   on("POST", /\/rest\/v1\.0\/project_roles$/, { status: 201, body: {} });
+  on("GET", /\/rest\/v2\.0\/companies\/4291776\/roles\?/, { body: { data: [{ name: "Project Manager" }, { name: "Superintendent" }] } });
 }
 const writes = () => calls.filter((c) => c.method !== "GET").map((c) => `${c.method} ${c.url.replace(ENV.PROCORE_API_URL, "")}`);
 
@@ -183,6 +184,13 @@ test("person: creates them in the right company, adds them to the project, Gener
   assert.deepEqual(writes(), ["POST /rest/v1.3/companies/4291776/users", "POST /rest/v1.0/projects/373235/users/301/actions/add", "POST /rest/v1.0/project_roles"]);
   const created = calls.find((c) => c.method === "POST" && /\/users$/.test(c.url)).body.user;
   assert.deepEqual([created.email_address, created.vendor_id], ["mrkygray+dokafor@gmail.com", 94]);
+  assert.equal(calls.at(-1).body.project_role.role, "Superintendent");
+  assert.ok(out.json().steps.every((s) => s.ok), out.body);
+});
+
+test("person: a site lead gets Superintendent from the company's roles when the project doesn't list it yet", async () => {
+  personRoutes({ roles: ["Project Manager"] });
+  const out = await run(req("POST", { action: "person", index: 0, person: 1, ...ids }));
   assert.equal(calls.at(-1).body.project_role.role, "Superintendent");
   assert.ok(out.json().steps.every((s) => s.ok), out.body);
 });
@@ -213,6 +221,20 @@ test("person: a company too new for Procore's search is found by the id the comp
   assert.equal(out.statusCode, 200, out.body);
   assert.equal(calls.find((c) => c.method === "POST" && /\/users$/.test(c.url)).body.user.vendor_id, 3798033);
   assert.ok(out.json().steps.every((s) => s.ok), out.body);
+});
+
+test("role: creates Superintendent shaped like the Project Manager role, once", async () => {
+  sandbox();
+  let roles = [{ id: "1", name: "Project Manager", type: "user", display_on_company_home: true }];
+  on("GET", /\/rest\/v2\.0\/companies\/4291776\/roles\?/, () => ({ body: { data: roles } }));
+  on("POST", /\/rest\/v2\.0\/companies\/4291776\/roles$/, (u, init) => { roles = [...roles, JSON.parse(init.body).project_role]; return { status: 201, body: { data: {} } }; });
+  const first = await run(req("POST", { action: "role", ...ids }));
+  assert.equal(first.statusCode, 200, first.body);
+  assert.deepEqual(calls.find((c) => c.method === "POST").body, { project_role: { name: "Superintendent", type: "user", add_to_project_team: true, display_on_company_home: true } });
+  assert.ok(first.json().steps[0].ok);
+  const again = await run(req("POST", { action: "role", ...ids }));
+  assert.equal(again.json().steps[0].detail, "already there");
+  assert.equal(calls.filter((c) => c.method === "POST").length, 1);
 });
 
 test("role names: exact first (any case), then the closest for General Contractor, else none", () => {

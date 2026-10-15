@@ -4,6 +4,7 @@
 // POST { action: "cleanup" }   : makes the ticked earlier test people and companies inactive (Procore has no delete
 //                                for either). The plan is worked out again here, so only "remove" / "ask" rows can
 //                                change: never the signed-in person, @procore.com users or Architect TEST Company.
+// POST { action: "role" }                    : creates the Superintendent role for site leads if the company lacks it.
 // POST { action: "company", index }         : one test company: create it (or update it), add it to the project.
 // POST { action: "person", index, person }  : one of its people: create (or update and reactivate), add to the
 //                                project, and give a Project Role the project has (see projectRoleFor).
@@ -90,7 +91,7 @@ button:disabled{opacity:.5}select{font:inherit;font-size:17px;width:100%;padding
 .row{display:flex;gap:10px;align-items:flex-start;background:#221d18;border-radius:12px;padding:10px 14px;margin:6px 0}.row input{width:22px;height:22px;margin-top:2px;flex:none}
 .ok{color:#30d158}.bad{color:#ff5f57}.tag{font-size:13px;color:#ffc24d}a{color:#ffc24d}small{color:#b8ac9c}h2{margin-top:28px}</style></head>
 <body><h1>Test companies and people</h1>
-<p>Adds 4 test companies (Ironbridge, VoltLine, ClearFlow, Summit) and 16 people to the project you pick: job title, phones, company, and a Project Role for each. Permission templates are left for later. Everything is made up; emails go to your Gmail with +addresses. It goes slowly on purpose (Procore allows about 25 calls per 10 seconds): give it about 5 minutes and keep this page open.</p>
+<p>Adds 4 test companies (Ironbridge, VoltLine, ClearFlow, Summit) and 16 people to the project you pick: job title, phones, company, and a Project Role for each. Site leads get a Superintendent role (created if Procore doesn't have one). Permission templates are left for later. Everything is made up; emails go to your Gmail with +addresses. It goes slowly on purpose (Procore allows about 25 calls per 10 seconds): give it about 5 minutes and keep this page open.</p>
 <p>First it makes your <b>earlier test people and companies inactive</b> (Procore has no delete). You see the list and choose before anything changes. Procore's own test records, Architect TEST Company, and you are never touched.</p>
 <p id="who"><small>Checking your Procore sign-in…</small></p>
 <label for="p">Project</label> <select id="p"></select>
@@ -128,6 +129,7 @@ $('#run').onclick=async()=>{
     // A step that fails (Procore's rate limit, a timeout): wait a minute and try it once more
     const call=async(body)=>{ try{ return await post(body); }catch(e){ $('#out').innerHTML+='<p><small>'+esc(e.message)+' Waiting a minute, then trying that step again…</small></p>'; await new Promise(r=>setTimeout(r,60000)); return post(body); } };
     show((await call({action:'cleanup',userIds:picked('user'),vendorIds:picked('vendor')})).steps);
+    show((await call({action:'role'})).steps);
     for(let i=0;i<4;i++){ $('#out').innerHTML+='<p><small>Company '+(i+1)+' of 4…</small></p>'; const co=await call({action:'company',index:i}); show(co.steps); for(let p=0;p<4;p++) show((await call({action:'person',index:i,person:p,vendorId:co.vendorId})).steps); }
     $('#out').innerHTML+='<p><b>Done.</b> <small>Take a screenshot of anything with a ✗ and send it to Claude. Then open SiteSnap and refresh the directory.</small></p>';
   }catch(e){ $('#out').innerHTML+='<p class="bad">'+esc(e.message)+'</p>'; }
@@ -161,6 +163,22 @@ async function cleanup(req, res, cfg, companyId, body) {
   }
   if (!steps.length) steps.push({ name: "Cleanup", ok: true, detail: "Nothing ticked, nothing changed." });
   return steps;
+}
+
+// The Superintendent role for the site leads (Ky, 2026-10-14). POST /project_roles only takes a role name the
+// company already has, so create it in the company's roles (POST /rest/v2.0/companies/{c}/roles, the same list as
+// Company Admin > Project Roles), shaped like the company's Project Manager role.
+export const SITE_LEAD_ROLE = "Superintendent";
+async function ensureRole(req, res, cfg, companyId) {
+  const list = await api(req, res, cfg, "GET", `/rest/v2.0/companies/${companyId}/roles`, { companyId, query: { per_page: 100 } });
+  if (!list.ok) return [{ name: `Role ${SITE_LEAD_ROLE}`, ok: false, detail: `Couldn't read the company's roles. ${brief(list)}` }];
+  const roles = Array.isArray(list.json?.data) ? list.json.data : Array.isArray(list.json) ? list.json : [];
+  if (roles.some((r) => lower(r.name) === lower(SITE_LEAD_ROLE))) return [{ name: `Role ${SITE_LEAD_ROLE}`, ok: true, detail: "already there" }];
+  const pm = roles.find((r) => lower(r.name) === "project manager");
+  const r = await api(req, res, cfg, "POST", `/rest/v2.0/companies/${companyId}/roles`, {
+    companyId, body: { project_role: { name: SITE_LEAD_ROLE, type: pm?.type ?? "user", add_to_project_team: true, display_on_company_home: pm?.display_on_company_home ?? true } },
+  });
+  return [{ name: `Created role ${SITE_LEAD_ROLE}`, ok: r.ok, detail: `${brief(r)}${pm ? "" : " (no Project Manager role to copy, so type user)"}` }];
 }
 
 // The test company's vendor record, by name (active, else inactive). The company step hands its id on, because
@@ -224,9 +242,13 @@ async function addPerson(req, res, cfg, companyId, projectId, seed, u, vendorId)
   if (onProject.some((x) => String(x.id) === String(userId))) steps.push({ name: `${name} on the project`, ok: true, detail: "already there" });
   else step(`Added ${name} to the project`, await api(req, res, cfg, "POST", `/rest/v1.0/projects/${projectId}/users/${userId}/actions/add`, { companyId, body: { user: {} } }));
 
-  // Project Role: only a role name the project already has (Procore answers 404 for any other)
+  // Project Role: only a role name the company has (Procore answers 404 for any other)
   const roles = (await pages(req, res, cfg, "/rest/v1.0/project_roles", { companyId, query: { project_id: projectId } })) ?? [];
-  const names = [...new Set(roles.map((r) => r.role).filter(Boolean))];
+  // Plus the company's role names: a role just created (Superintendent) may not be listed on the project yet
+  const company = projectRoleFor(u.projectRole, roles.map((r) => r.role).filter(Boolean)) ? null
+    : await api(req, res, cfg, "GET", `/rest/v2.0/companies/${companyId}/roles`, { companyId, query: { per_page: 100 } });
+  const companyNames = company?.ok ? (company.json?.data ?? []).map((r) => r.name) : [];
+  const names = [...new Set([...roles.map((r) => r.role), ...companyNames].filter(Boolean))];
   const role = projectRoleFor(u.projectRole, names);
   if (!role) {
     steps.push({ name: `${name}: Project Role`, ok: true, detail: `None set: this project has no "${u.projectRole}" role (it has ${names.join(", ") || "none"}). Job title shows instead.` });
@@ -267,6 +289,7 @@ export default async function handler(req, res) {
     const who = seed?.users[Number(body.person)];
     let out;
     if (body.action === "cleanup") out = { steps: await cleanup(req, res, cfg, companyId, body) };
+    else if (body.action === "role") out = { steps: await ensureRole(req, res, cfg, companyId) };
     else if (body.action === "company" && seed) out = await addCompany(req, res, cfg, companyId, projectId, seed);
     else if (body.action === "person" && who) out = { steps: await addPerson(req, res, cfg, companyId, projectId, seed, who, body.vendorId) };
     else throw new HttpError(400, "bad_request", "Unknown step.");

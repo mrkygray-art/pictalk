@@ -1,6 +1,6 @@
 // SiteSnap messaging end to end at phone width, against the emulators (PICTALK_FAKE_AI=1, PICTALK_FAKE_STT=1),
 // with /api/procore/* mocked in the browser (the dev server has no /api). Four people, each in their own browser:
-//   Sam (sender), Tia (tagged, ABC Drywall), Uma (on the project, not tagged), Vic (not on the project).
+//   Sam (sender), Tia (tagged, ABC Drywall), Uma (on the project, CC'd, not tagged), Vic (not on the project).
 // Needs: npm run emulators, and npx vite --port 5176. Screenshots: e2e/messaging-shots/.
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
@@ -85,7 +85,8 @@ const USERS = { sam: ["201", "Sam Sender"], tia: ["202", "Tia Tagged"], uma: ["2
   check("sign-in leads straight to the project feed (one project, chosen for you)", t.includes("001 - SiteSnap Test Project") && t.includes("Messages"));
   check("header shows who's signed in: name · company · title", t.includes("Sam Sender · Kyco Builders · Superintendent"));
   check("no job / stop language on the home screen", !/My Jobs|Start New Job|Save This Stop|End Job|stops? per job|No job open/i.test(t), t.match(/My Jobs|Start New Job|Save This Stop|End Job|No job open/i)?.[0] ?? "");
-  check("For Me | All Project | Mine tabs", ["For Me", "All Project", "Mine"].every((x) => t.includes(x)));
+  const tabs = await sam.page.$$eval(".feed-tabs button", (b) => b.map((x) => x.textContent.trim()));
+  check("For Me | CC | All Project | Sent tabs, in that order", tabs.join("|") === "For Me|CC|All Project|Sent", tabs.join("|"));
   await sam.shot("1-feed");
 
   await sam.click("button::-p-text(New Message)");
@@ -97,9 +98,21 @@ const USERS = { sam: ["201", "Sam Sender"], tia: ["202", "Tia Tagged"], uma: ["2
   await sam.click("button::-p-text(Tag everyone at ABC Drywall)");
   t = await sam.text();
   check("Tag everyone at a company tags its people, with a count", t.includes("1 person tagged"), (t.match(/\d+ (person|people) tagged/) ?? [""])[0]);
+  // CC Uma: pick her, then switch her row to CC
+  await sam.click(".dir-filters button::-p-text(Name)");
+  await sam.page.focus(".dir-input");
+  await sam.page.keyboard.down("Control"); await sam.page.keyboard.press("a"); await sam.page.keyboard.up("Control");
+  await sam.page.keyboard.press("Backspace");
+  await sam.page.type(".dir-input", "uma");
+  await sleep(300);
+  await sam.click(".dir-person::-p-text(Uma Untagged)");
+  await sam.click(".dir-picked-row:nth-child(2) .to-cc button::-p-text(CC)");
+  t = await sam.text();
+  check("the To / CC switch: Uma becomes CC, the count says so", t.includes("1 To, 1 CC"), (t.match(/\d+ To[^\n]*/) ?? [""])[0]);
+  await sam.shot("2b-to-cc");
   await sam.click(".dir-done");
   t = await sam.text();
-  check("To: shows who's tagged", t.includes("To: Tia Tagged"));
+  check("To: shows who's tagged, and CC: who's CC'd", t.includes("To: Tia Tagged") && t.includes("CC: Uma Untagged"));
 
   // Photo + voice + words
   const photo = path.join(OUT, "photo.jpg");
@@ -165,10 +178,19 @@ const USERS = { sam: ["201", "Sam Sender"], tia: ["202", "Tia Tagged"], uma: ["2
   const tiaAfter = await tia.page.$eval(".conv-card", (e) => e.className);
   check("after reading (and replying), it's no longer unread for her", !tiaAfter.includes("is-unread"), tiaAfter);
 
-  // ---- Uma (on the project, not tagged): not in For Me, visible and calm in All Project ----
+  // ---- Uma (CC'd, not tagged): not in For Me, no count; calm in CC and All Project; no to-do, no quick replies ----
   const uma = await open("uma");
   await uma.waitText("Nothing for you right now", 30000);
-  check("untagged member: nothing in For Me, no unread count", !(await uma.page.$(".conv-card")) && !(await uma.page.$(".tab-badge")));
+  check("CC'd member: nothing in For Me, no unread count", !(await uma.page.$(".conv-card")) && !(await uma.page.$(".tab-badge")));
+  await uma.click(".feed-tabs button::-p-text(CC)");
+  await uma.page.waitForFunction(() => document.querySelector(".conv-card"), { timeout: 30000 });
+  const umaCc = await uma.page.$eval(".conv-card", (e) => ({ cls: e.className, dot: !!e.querySelector(".unread-dot"), text: e.innerText }));
+  check("CC tab: the message is there, calm (no unread dot, no to-do), and says who's CC'd", umaCc.cls.includes("is-muted") && !umaCc.dot && !umaCc.text.includes("to do for you") && umaCc.text.includes("CC Uma Untagged"), umaCc.text.replace(/\n/g, " | "));
+  await uma.shot("0-cc-tab");
+  await uma.click(".conv-card");
+  await uma.waitText("CC: Uma Untagged", 20000);
+  check("CC'd person opens it: CC line shown, no quick replies, can still Reply", !(await uma.page.$(".qr-btn")) && !!(await uma.page.$(".msg-reply-btn")));
+  await uma.click("button::-p-text(Messages)");
   await uma.click(".feed-tabs button::-p-text(All Project)");
   await uma.page.waitForFunction(() => document.querySelector(".conv-card"), { timeout: 30000 });
   const umaCard = await uma.page.$eval(".conv-card", (e) => ({ cls: e.className, dot: !!e.querySelector(".unread-dot") }));
@@ -193,9 +215,9 @@ const USERS = { sam: ["201", "Sam Sender"], tia: ["202", "Tia Tagged"], uma: ["2
   await sam.click("button::-p-text(Send)");
   check("Send is blocked with a clear message when no one is tagged", (await sam.text()).includes("Tag at least one person first"));
   await sam.click("button::-p-text(Cancel)");
-  await sam.click(".feed-tabs button::-p-text(Mine)");
+  await sam.click(".feed-tabs button::-p-text(Sent)");
   await sam.page.waitForFunction(() => document.querySelector(".conv-card"), { timeout: 20000 });
-  check("Mine shows the conversations I started", (await sam.page.$$(".conv-card")).length === 1);
+  check("Sent shows the conversations I started", (await sam.page.$$(".conv-card")).length === 1);
   await sam.click(".conv-card");
   await sam.click(".conv-header button::-p-text(Close)");
   await sam.waitText("This message is closed");

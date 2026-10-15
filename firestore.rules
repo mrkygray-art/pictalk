@@ -107,18 +107,21 @@ service cloud.firestore {
       allow read: if memberOf(key);
       // Started by a member, as themselves; the summary fields (last message, counts, tasks) are server-only
       allow create: if memberOf(key)
-        && request.resource.data.keys().hasOnly(['createdBy', 'tagged', 'taggedIds', 'status', 'createdAt', 'lastActivityAt', 'procore'])
+        && request.resource.data.keys().hasOnly(['createdBy', 'tagged', 'taggedIds', 'cc', 'ccIds', 'status', 'createdAt', 'lastActivityAt', 'procore'])
         && request.resource.data.createdBy.procoreUserId == procoreMe()
         && request.resource.data.status == 'open'
         && okPeople(request.resource.data.tagged) && okPeople(request.resource.data.taggedIds)
-        // a message needs someone tagged; a thread that follows a Procore record may have no one yet
+        && okPeople(request.resource.data.get('cc', [])) && okPeople(request.resource.data.get('ccIds', []))
+        // a message needs someone tagged (To; CC alone isn't enough); a thread that follows a Procore record may have no one yet
         && (request.resource.data.taggedIds.size() > 0 || okProcoreLink(request.resource.data.get('procore', null)));
-      // Any member can tag more people; only the sender or someone tagged closes or reopens it
+      // Any member can tag (To) or CC more people; only the sender or someone tagged closes or reopens it
       allow update: if memberOf(key)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tagged', 'taggedIds', 'status', 'statusBy', 'statusAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tagged', 'taggedIds', 'cc', 'ccIds', 'status', 'statusBy', 'statusAt'])
         && request.resource.data.status in ['open', 'closed']
         && okPeople(request.resource.data.tagged) && okPeople(request.resource.data.taggedIds)
+        && okPeople(request.resource.data.get('cc', [])) && okPeople(request.resource.data.get('ccIds', []))
         && request.resource.data.taggedIds.size() >= resource.data.taggedIds.size()
+        && request.resource.data.get('ccIds', []).size() >= resource.data.get('ccIds', []).size()
         && (request.resource.data.status == resource.data.status
             || (onIt(resource.data) && request.resource.data.statusBy == procoreMe()));
       match /messages/{messageId} {

@@ -8,7 +8,7 @@ import { namesLine, timeAgo } from "./format";
 import { SHOW_AI_PHOTO_DESCRIPTION } from "../features";
 import { recordAction, syncRecord } from "./recordStore";
 import {
-  addPeople, fileUrl, markRead, pendingLine, queueMessage, setStatus, setTask, watchConversation, watchMessages,
+  addPeople, ccOf, fileUrl, markRead, pendingLine, queueMessage, setStatus, setTask, watchConversation, watchMessages,
 } from "./messagingStore";
 
 // One thread: who it's for (with what's been seen and answered, in plain words), every message in
@@ -208,8 +208,8 @@ export default function ConversationView({ session, projectKey, cid, pending, on
       <section className="conversation">
         <RecipientSearch
           dir={session.dir} dirError={session.dirError} loadingDir={session.loadingDir} onRefresh={session.refreshDirectory}
-          projectName={session.project.name} selected={more} onChange={setMore} alreadyTagged={conv.taggedIds ?? []}
-          doneLabel="Add to Message"
+          projectName={session.project.name} selected={more} onChange={setMore} alreadyTagged={[...(conv.taggedIds ?? []), ...(conv.ccIds ?? [])]}
+          doneLabel="Add to Message" allowCc
           onDone={async () => {
             try { await addPeople(projectKey, conv, more); } catch { setError("Couldn't add them. Check your signal."); }
             setMore([]);
@@ -242,6 +242,7 @@ export default function ConversationView({ session, projectKey, cid, pending, on
           </p>
         )}
         <p>To: <strong>{tagged.length ? namesLine(tagged, 6) : "no one yet"}</strong></p>
+        {ccOf(conv).length > 0 && <p>CC: <strong>{namesLine(ccOf(conv), 6)}</strong></p>}
         {conv && <Tracking conv={conv} />}
         {conv && !closed && <button type="button" className="stop-more" onClick={() => setAdding(true)}>Add People</button>}
       </div>

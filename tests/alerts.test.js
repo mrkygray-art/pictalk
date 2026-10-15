@@ -12,6 +12,12 @@ test("everyone on the thread hears about it except the person who wrote it", () 
   assert.deepEqual(alertTargets({ createdBy: { procoreUserId: "1" } }, { authorId: "1" }), []);
 });
 
+test("CC'd people are never alerted (they follow along in their CC tab)", () => {
+  const conv = { createdBy: { procoreUserId: "1" }, taggedIds: ["2"], ccIds: ["3", "4"] };
+  assert.deepEqual(alertTargets(conv, { authorId: "1" }), ["2"]);
+  assert.deepEqual(alertTargets(conv, { authorId: "3" }).sort(), ["1", "2"]);
+});
+
 test("the alert: who wrote it, the card's line (words once), and a link that opens the thread", () => {
   const a = alertFor("4291776_373235", "c1", { authorName: "Edward Gray", text: "Ceiling tile and light need to be replaced.", transcript: "Ceiling tile and light need to be replaced", photos: [{ path: "x" }] });
   assert.deepEqual(a, { title: "Edward Gray", body: "Ceiling tile and light need to be replaced", url: "/?companyId=4291776&projectId=373235&cid=c1", tag: "c1" });

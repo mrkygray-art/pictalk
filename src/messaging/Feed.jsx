@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
-import { discardPending, fileUrl, isUnread, myTasks, pendingLine, pendingReason, watchFeed } from "./messagingStore";
+import { ccOf, discardPending, fileUrl, isUnread, myTasks, pendingLine, pendingReason, watchFeed } from "./messagingStore";
 import { namesLine, summaryLine, timeAgo } from "./format";
 
 // The project feed: conversations, newest activity first. For Me = I'm tagged and it's open (these
-// are highlighted, with an unread dot); All Project = everything on the project (others' look calmer
-// and never alert); Mine = ones I started.
-const TABS = [["forMe", "For Me"], ["all", "All Project"], ["mine", "Mine"]];
+// are highlighted, with an unread dot); CC = I'm CC'd (kept in the loop: calm cards, no count, no alerts);
+// All Project = everything on the project (others' look calmer and never alert); Sent = ones I started.
+const TABS = [["forMe", "For Me"], ["cc", "CC"], ["all", "All Project"], ["mine", "Sent"]];
+const EMPTY = {
+  forMe: "Nothing for you right now. When someone tags you, it shows up here.",
+  cc: "Nothing you're CC'd on. When someone CCs you, it shows up here.",
+  all: "No messages on this project yet.",
+  mine: "You haven't sent a message yet.",
+};
 
 function Thumb({ path }) {
   const [url, setUrl] = useState(null);
@@ -57,7 +63,7 @@ export default function Feed({ projectKey, me, reads, pending, onOpen }) {
               <div className="conv-card is-sending">
                 <span className="conv-thumb is-empty" aria-hidden="true" />
                 <div className="conv-body">
-                  <strong>To {namesLine(p.newConversation.tagged)}</strong>
+                  <strong>To {namesLine(p.newConversation.tagged)}{p.newConversation.cc?.length ? ` · CC ${namesLine(p.newConversation.cc)}` : ""}</strong>
                   <span className="conv-text">{(p.text || p.transcript || "Photo").slice(0, 120)}</span>
                   <small>{pendingLine(p, me)}</small>
                   {["refused", "other"].includes(pendingReason(p, me)) && (
@@ -73,7 +79,7 @@ export default function Feed({ projectKey, me, reads, pending, onOpen }) {
       {!list && !error && <p className="procore-note">Loading messages…</p>}
       {list && list.length === 0 && (
         <p className="empty">
-          {tab === "forMe" ? "Nothing for you right now. When someone tags you, it shows up here." : tab === "mine" ? "You haven't sent a message yet." : "No messages on this project yet."}
+          {EMPTY[tab]}
         </p>
       )}
       {list && list.length > 0 && (
@@ -82,6 +88,7 @@ export default function Feed({ projectKey, me, reads, pending, onOpen }) {
             const forMe = (c.taggedIds ?? []).includes(me);
             const unread = isUnread(c, me, reads);
             const tasks = myTasks(c, me);
+            const cc = ccOf(c);
             return (
               <li key={c.id}>
                 <button type="button" className={`conv-card${forMe ? " is-for-me" : " is-muted"}${unread ? " is-unread" : ""}${c.status === "closed" ? " is-closed" : ""}`} onClick={() => onOpen(c.id)}>
@@ -91,7 +98,7 @@ export default function Feed({ projectKey, me, reads, pending, onOpen }) {
                       <strong>{c.createdBy?.name ?? "Someone"}</strong>
                       <small>{timeAgo(c.lastActivityAt)}</small>
                     </span>
-                    <span className="conv-to">To {namesLine(c.tagged)}</span>
+                    <span className="conv-to">To {namesLine(c.tagged)}{cc.length > 0 && ` · CC ${namesLine(cc)}`}</span>
                     <span className="conv-text">{c.lastMessage?.text || (c.lastMessage ? "Photo" : "Sending…")}</span>
                     <span className="conv-meta">
                       {summaryLine(c)}

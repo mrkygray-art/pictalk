@@ -6,7 +6,7 @@ import { DelaySheet, QuickReplyBar } from "./QuickReplyBar";
 import { statusOf } from "./quickReplies";
 import { SHOW_AI_PHOTO_DESCRIPTION } from "../features";
 import {
-  describePhoto, newId, photoPathFor, queueMessage, transcribeVoice, uploadFile, voicePathFor,
+  describePhoto, newId, photoPathFor, queueMessage, splitRecipients, transcribeVoice, uploadFile, voicePathFor,
 } from "./messagingStore";
 
 const MAX_PHOTOS = 10;
@@ -19,7 +19,8 @@ export default function Composer({ mode = "new", session, conversation = null, o
   const { project, me, dir, dirError, loadingDir, refreshDirectory } = session;
   const key = `${project.companyId}_${project.projectId}`;
   const ids = useRef({ cid: conversation?.id ?? newId(), mid: newId() });
-  const [tagged, setTagged] = useState([]);
+  const [picked, setPicked] = useState([]); // To and CC (cc: true), split when sent
+  const { tagged, cc } = splitRecipients(picked);
   const [searching, setSearching] = useState(mode === "new");
   const [photos, setPhotos] = useState([]); // [{ blob, url, path? }]
   const [voice, setVoice] = useState(null); // { blob, url, path? }
@@ -94,7 +95,7 @@ export default function Composer({ mode = "new", session, conversation = null, o
   const hasContent = photos.length > 0 || !!voice || text.trim() || transcript.trim() || !!status;
   const send = async () => {
     setError("");
-    if (mode === "new" && !tagged.length) return setError("Tag at least one person first. Tap To: to pick who it's for.");
+    if (mode === "new" && !tagged.length) return setError(cc.length ? "Pick at least one person as To (CC alone isn't enough). Tap To: to change it." : "Tag at least one person first. Tap To: to pick who it's for.");
     if (!hasContent) return setError(quickReplies ? "Tap a quick reply, or add a photo, a voice note, or a few words." : "Add a photo, a voice note, or a few words.");
     if (recorder.recording) return setError("Stop the recording first.");
     setSending(true);
@@ -104,7 +105,7 @@ export default function Composer({ mode = "new", session, conversation = null, o
         cid: ids.current.cid,
         mid: ids.current.mid,
         me,
-        newConversation: mode === "new" ? { tagged } : null,
+        newConversation: mode === "new" ? { tagged, cc } : null,
         text,
         transcript,
         transcriptDone: words === "done",
@@ -125,9 +126,9 @@ export default function Composer({ mode = "new", session, conversation = null, o
       <section className="composer" aria-label="Who is this for?">
         <RecipientSearch
           dir={dir} dirError={dirError} loadingDir={loadingDir} onRefresh={refreshDirectory}
-          projectName={project.name} selected={tagged} onChange={setTagged} onDone={() => setSearching(false)}
+          projectName={project.name} selected={picked} onChange={setPicked} onDone={() => setSearching(false)} allowCc
         />
-        {!tagged.length && onCancel && <button type="button" className="text-btn" onClick={onCancel}>Cancel</button>}
+        {!picked.length && onCancel && <button type="button" className="text-btn" onClick={onCancel}>Cancel</button>}
       </section>
     );
   }
@@ -136,12 +137,15 @@ export default function Composer({ mode = "new", session, conversation = null, o
     <section className={`composer is-${mode}`} aria-label={mode === "new" ? "New message" : "Reply"}>
       {mode === "new" && (
         <button type="button" className="to-line to-btn" onClick={() => setSearching(true)}>
-          <p>To: <strong>{tagged.length ? tagged.map((r) => r.name).join(", ") : "pick people"}</strong></p>
-          <span className="stop-more">{tagged.length ? "Change" : "Pick"}</span>
+          <p>
+            To: <strong>{tagged.length ? tagged.map((r) => r.name).join(", ") : "pick people"}</strong>
+            {cc.length > 0 && <><br />CC: <strong>{cc.map((r) => r.name).join(", ")}</strong></>}
+          </p>
+          <span className="stop-more">{picked.length ? "Change" : "Pick"}</span>
         </button>
       )}
-      {mode === "new" && tagged.length > 0 && (
-        <p className="dir-meta">{tagged.length} {tagged.length === 1 ? "person" : "people"} tagged · <button type="button" className="text-btn inline" onClick={() => setTagged([])}>Clear</button></p>
+      {mode === "new" && picked.length > 0 && (
+        <p className="dir-meta">{tagged.length} To{cc.length ? `, ${cc.length} CC` : ""} · <button type="button" className="text-btn inline" onClick={() => setPicked([])}>Clear</button></p>
       )}
 
       {quickReplies && (

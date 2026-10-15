@@ -44,6 +44,7 @@ before(async () => {
   for (const id of ["201", "202", "203"]) await db().doc(`procoreProjects/${KEY}/members/${id}`).set({ procoreUserId: id, name: `User ${id}`, at: 1 });
   await conv("").set({
     createdBy: P("201", "Sam Sender"), tagged: [P("202", "Tia Tagged", "ABC Drywall")], taggedIds: ["202"],
+    cc: [P("203", "Cody CC", "ABC Drywall")], ccIds: ["203"], // CC'd: never gets a task
     status: "open", createdAt: 1, lastActivityAt: 1,
   });
 });
@@ -54,7 +55,7 @@ const message = (mid, extra) => conv(`/messages/${mid}`).set({
   voicePath: null, voiceType: null, aiDescription: null, clientCreatedAt: Date.now(), createdAt: Date.now(), ...extra,
 });
 
-test("a request becomes a task for the tagged person, and the feed card shows the latest message", async () => {
+test("a request becomes a task for the tagged person (not the CC'd one), and the feed card shows the latest message", async () => {
   await message("m1", { text: "Please send the revised drawings for level 2", photos: [{ path: `messages/${KEY}/${CID}/m1/photo-1.jpg` }] });
   const m = await until(async () => { const d = (await conv("/messages/m1").get()).data(); return d?.tasksStatus && d; });
   assert.equal(m.tasksStatus, "done");

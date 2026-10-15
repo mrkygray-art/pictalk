@@ -75,6 +75,19 @@ test("any member tags more people; the people on it open / close; nobody untags 
   await assertFails(updateDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/c2`), { status: "closed", statusBy: "103", statusAt: 7 }), "statusBy must be me");
 });
 
+test("CC: a conversation can CC people (never CC alone); any member CCs more; nobody un-CCs; CC'd people read it but can't close it", async () => {
+  const withCc = (id, tagged, cc) => conv(id, tagged, { cc: cc.map((c) => P(c, `User ${c}`)), ccIds: cc });
+  await assertSucceeds(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/cc1`), withCc("102", ["101"], ["103"])));
+  await assertFails(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/cc2`), withCc("102", [], ["103"])), "CC alone isn't enough");
+  await assertFails(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/cc3`), conv("102", ["101"], { ccIds: Array.from({ length: 51 }, (_, i) => String(i)) })), "too many");
+  await assertSucceeds(getDocs(query(collection(fs("103"), `procoreProjects/${KEY}/conversations`), where("ccIds", "array-contains", "103"))));
+  const ref = (id) => doc(fs(id), `procoreProjects/${KEY}/conversations/cc1`);
+  await assertSucceeds(updateDoc(ref("101"), { cc: arrayUnion(P("102", "User 102")), ccIds: arrayUnion("102") }));
+  await assertFails(updateDoc(ref("101"), { ccIds: ["103"] }), "removing CC'd people");
+  await assertFails(updateDoc(ref("103"), { status: "closed", statusBy: "103", statusAt: 9 }), "CC'd only: can't close");
+  await assertSucceeds(setDoc(doc(fs("103"), `procoreProjects/${KEY}/conversations/cc1/messages/r1`), msg("103", { photos: [] })), "but can reply");
+});
+
 test("messages: written once by their author; tasks and other server fields can't be faked", async () => {
   const m = (id, mid) => doc(fs(id), `procoreProjects/${KEY}/conversations/c1/messages/${mid}`);
   await assertSucceeds(setDoc(m("102", "m2"), msg("102")));

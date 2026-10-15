@@ -2,7 +2,8 @@
 // addressed to tagged Procore people. Data (Firestore, written by the app under the rules, plus the
 // fields only these functions write):
 //   procoreProjects/{key}/conversations/{cid}   key = {companyId}_{projectId}
-//     app:    createdBy {procoreUserId, name, company, title}, tagged[], taggedIds[], status, createdAt, lastActivityAt
+//     app:    createdBy {procoreUserId, name, company, title}, tagged[], taggedIds[], cc[], ccIds[] (CC: in the loop,
+//             never to-dos or alerts; tasks and alerts use tagged only), status, createdAt, lastActivityAt
 //     server: lastMessage {authorId, authorName, text, photoCount, hasVoice, status}, messageCount, firstPhotoPath,
 //             statuses.{pid} (latest quick reply), seen.{pid} / answered.{pid} (first times), firstResponseAt/By,
 //             openTasks[{messageId, id, text, assigneeIds, assigneeNames}], taskAssigneeIds[]

@@ -3,12 +3,14 @@ import { FILTERS, groupByCompany, groupByTitle, recipientOf, searchPeople, updat
 
 // Who is this for? Search the project's Procore directory (loaded once, searched on the phone) by
 // Name / Title / Company / All, tap people to tag them, or tag a whole company or every match at once.
-// Typing and tapping only: no microphone (Procore's frame blocks it).
+// Typing and tapping only: no microphone (Procore's frame blocks it). With allowCc, each picked person has
+// a To / CC switch: To = responsible (to-dos, alerts, For Me), CC = kept in the loop (their CC tab only).
+// A person switched to CC carries cc: true in the selected list.
 export const MAX_TAGGED = 50;
 const PLACEHOLDER = { name: "Search by name", title: "Search by title, like foreman", company: "Search by company", all: "Search name, title or company" };
 const SHOW_MAX = 60;
 
-export default function RecipientSearch({ dir, dirError, loadingDir, onRefresh, projectName, selected, onChange, onDone, doneLabel = "Done", alreadyTagged = [], noteFor = null }) {
+export default function RecipientSearch({ dir, dirError, loadingDir, onRefresh, projectName, selected, onChange, onDone, doneLabel = "Done", alreadyTagged = [], noteFor = null, allowCc = false }) {
   const [filter, setFilter] = useState("name");
   const [query, setQuery] = useState("");
   const input = useRef(null);
@@ -34,6 +36,12 @@ export default function RecipientSearch({ dir, dirError, loadingDir, onRefresh, 
     if (picked.has(id)) onChange(selected.filter((r) => r.procoreUserId !== id));
     else add([p]);
   };
+  const setCc = (id, cc) => onChange(selected.map((r) => (r.procoreUserId === id ? { ...r, cc } : r)));
+  const ccCount = selected.filter((r) => r.cc).length;
+  const toCount = selected.length - ccCount;
+  const doneCount = allowCc && ccCount
+    ? `${toCount} To, ${ccCount} CC`
+    : `${selected.length} ${selected.length === 1 ? "person" : "people"} tagged`;
   const allIn = (list) => list.every((p) => picked.has(String(p.id)) || fixed.has(String(p.id)));
 
   const row = (p) => {
@@ -123,7 +131,22 @@ export default function RecipientSearch({ dir, dirError, loadingDir, onRefresh, 
       ))}
       {results.length > SHOW_MAX && <p className="procore-note">Showing {SHOW_MAX} of {results.length}. Keep typing to narrow it down.</p>}
 
-      {selected.length > 0 && (
+      {selected.length > 0 && allowCc && (
+        <ul className="dir-picked-list" aria-label="Picked">
+          {selected.map((r) => (
+            <li key={r.procoreUserId} className="dir-picked-row">
+              <strong>{r.name}</strong>
+              <div className="dir-filters to-cc" role="group" aria-label={`${r.name}: To or CC`}>
+                <button type="button" className={r.cc ? "" : "is-on"} aria-pressed={!r.cc} onClick={() => setCc(r.procoreUserId, false)}>To</button>
+                <button type="button" className={r.cc ? "is-on" : ""} aria-pressed={!!r.cc} onClick={() => setCc(r.procoreUserId, true)}>CC</button>
+              </div>
+              <button type="button" className="text-btn inline" onClick={() => onChange(selected.filter((x) => x.procoreUserId !== r.procoreUserId))} aria-label={`Remove ${r.name}`}>×</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {selected.length > 0 && allowCc && <p className="dir-meta">To: responsible, gets the to-do and alerts. CC: sees it in their CC tab, no alerts.</p>}
+      {selected.length > 0 && !allowCc && (
         <div className="dir-picked" aria-label="Tagged">
           {selected.map((r) => (
             <button key={r.procoreUserId} type="button" className="place-chip is-on" onClick={() => onChange(selected.filter((x) => x.procoreUserId !== r.procoreUserId))} aria-label={`Remove ${r.name}`}>
@@ -133,7 +156,7 @@ export default function RecipientSearch({ dir, dirError, loadingDir, onRefresh, 
         </div>
       )}
       <button type="button" className="save-btn dir-done" onClick={onDone}>
-        {selected.length ? `${doneLabel} · ${selected.length} ${selected.length === 1 ? "person" : "people"} tagged` : doneLabel}
+        {selected.length ? `${doneLabel} · ${doneCount}` : doneLabel}
       </button>
     </div>
   );

@@ -57,6 +57,8 @@ Tagged people are stored as `procoreUserId`, name, company and title only. Email
 
 Hidden, not deleted (`VITE_FEATURE_JOBS=1` brings them back): My Jobs, Start New Job, Save This Stop, End Job, Recent jobs, the ? help and its guide, Reset Example Jobs, and the "No job open" banner.
 
+**CC (2026-10-15, Ky):** the picker's To / CC switch (`allowCc` in `RecipientSearch.jsx`, on in New Message, Report an Issue and Add People). To = `tagged` / `taggedIds` (responsible: to-dos, phone alerts, For Me, quick replies). CC = `cc` / `ccIds` on the conversation (kept in the loop: the CC tab, calm cards, no unread count, no to-dos, no alerts; they can open and Reply, not close). A message needs at least one To. Report an Issue: CC'd people are on the SiteSnap thread only, never the Procore record's assignees or Distribution list (Procore emails the Distribution list on every status change; Ky: later). Tabs: For Me · CC · All Project · Sent (was Mine). Index: `ccIds` CONTAINS + `lastActivityAt` DESC.
+
 **Tests:** `tests/messaging-session.test.js`, `tests/messaging-rules.test.js`, `tests/messaging-functions.test.js`, and `e2e/e2e-messaging.js` (sender, tagged person, untagged member and non-member, in four browsers).
 
 ## Round 2, Phase 1 (`SITESNAP-MESSAGING-NEXT.md`, 2026-10-14)

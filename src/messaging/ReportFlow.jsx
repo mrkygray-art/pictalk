@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { CameraIcon, MicIcon, StopIcon } from "./icons";
 import { formatTime, useRecorder } from "./useRecorder";
 import RecipientSearch from "./RecipientSearch";
-import { newId, queueMessage, transcribeVoice, uploadFile, voicePathFor } from "./messagingStore";
+import { newId, queueMessage, splitRecipients, transcribeVoice, uploadFile, voicePathFor } from "./messagingStore";
 import { recipientOf } from "../directorySearch";
 import { cantGet, draftRecord, managersFor, MAX_PHOTOS, projectAccess, RECORD_HINT, RECORD_LABEL, RECORD_TOOL, recordOptions, sendRecord } from "./recordStore";
 
@@ -92,6 +92,7 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
       priority: d?.priority ?? null,
       assignees: (d?.assignees ?? []).map(toRecipient),
       alsoTag: [], // on the SiteSnap thread only: someone Procore wouldn't take, replaced by a PM
+      cc: [], // CC: on the SiteSnap thread (their CC tab) only; never the Procore record's assignees or distribution
       dueDate: d?.due_date ?? "",
       impactMentioned: !!d?.impact_mentioned,
     });
@@ -136,6 +137,7 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
         me,
         newConversation: {
           tagged: [...card.assignees, ...card.alsoTag.filter((t) => !card.assignees.some((a) => a.procoreUserId === t.procoreUserId))],
+          cc: card.cc.filter((t) => ![...card.assignees, ...card.alsoTag].some((a) => a.procoreUserId === t.procoreUserId)),
           procore: { recordType: made.recordType, id: Number(made.id), number: made.number == null ? "" : String(made.number), url: made.url, projectId: project.projectId, title: card.title.slice(0, 120), due: card.dueDate || "" },
         },
         text: card.description,
@@ -157,8 +159,9 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
       <section className="composer">
         <RecipientSearch
           dir={session.dir} dirError={session.dirError} loadingDir={session.loadingDir} onRefresh={session.refreshDirectory}
-          projectName={project.name} selected={card.assignees} onChange={(a) => set({ assignees: a })}
-          onDone={() => setPicking(false)} doneLabel="Done"
+          projectName={project.name} selected={[...card.assignees, ...card.cc.map((c) => ({ ...c, cc: true }))]}
+          onChange={(list) => { const { tagged, cc } = splitRecipients(list); set({ assignees: tagged, cc }); }}
+          onDone={() => setPicking(false)} doneLabel="Done" allowCc
           noteFor={(p) => { const why = cantGet(access, p.id, card.recordType); return why ? `Can't get ${RECORD_LABEL[card.recordType]}s in Procore: ${why}` : ""; }}
         />
       </section>
@@ -252,6 +255,7 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
             );
           })}
           {card.alsoTag.length > 0 && <small className="msg-status">Also tagged on the thread: {card.alsoTag.map((a) => a.name).join(", ")}</small>}
+          {card.cc.length > 0 && <small className="msg-status">CC (SiteSnap only, not in Procore): {card.cc.map((a) => a.name).join(", ")}</small>}
           {draftNote.unmatched.length > 0 && <small className="msg-status">Heard "{draftNote.unmatched.join(", ")}" but couldn't find them on this project. Pick them above.</small>}
         </div>
         <div className="msg-field"><span>Priority</span>

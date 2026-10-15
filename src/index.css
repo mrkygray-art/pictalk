@@ -1781,6 +1781,16 @@ button:focus-visible {
 .dir-groups { display: grid; gap: 12px; }
 .dir-groups h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 6px 4px; }
 .dir-picked { display: flex; flex-wrap: wrap; gap: 8px; }
+/* With CC: each picked person on a row with a To / CC switch */
+.dir-picked-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.dir-picked-row {
+  display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px;
+  background: var(--surface); border-radius: 12px; padding: 6px 6px 6px 14px;
+}
+.dir-picked-row strong { overflow-wrap: anywhere; }
+.dir-picked-row .text-btn { font-size: 22px; padding: 4px 10px; }
+.dir-filters.to-cc { grid-template-columns: repeat(2, 56px); }
+.dir-filters.to-cc button { min-height: 38px; font-size: 15px; }
 .dir-done { width: 100%; }
 /* App.jsx: who the stop is for, above Take Photo, and on saved stop cards */
 .to-line {
@@ -2819,7 +2829,8 @@ div.adm-stat {
 .msg-who { color: var(--muted); font-size: 14px; }
 .msg-title-row { display: flex; align-items: center; justify-content: space-between; }
 .msg-footnote { color: var(--muted); font-size: 13px; text-align: center; margin-top: 8px; }
-.feed-tabs { grid-template-columns: repeat(3, 1fr); }
+.feed-tabs { grid-template-columns: repeat(4, auto); }
+.feed-tabs button { font-size: 15px; padding: 0 6px; line-height: 1.15; }
 .tab-badge {
   display: inline-grid; place-items: center; min-width: 22px; height: 22px; margin-left: 6px; padding: 0 6px;
   border-radius: 999px; background: var(--record); color: #ffffff; font-size: 13px; font-weight: 800; vertical-align: 1px;

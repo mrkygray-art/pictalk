@@ -25,12 +25,14 @@ const msgCol = (key, cid) => collection(db, "procoreProjects", key, "conversatio
 
 // ---------- reading ----------
 
-/** tab: "forMe" (tagged, open) | "all" | "mine". callback(list, error) */
+/** tab: "forMe" (tagged, open) | "cc" (CC'd, open or closed) | "all" | "mine" (Sent). callback(list, error) */
 export function watchFeed(key, tab, me, callback) {
   const base = convCol(key);
   const q = tab === "forMe"
     ? query(base, where("taggedIds", "array-contains", me), where("status", "==", "open"), orderBy("lastActivityAt", "desc"), limit(FEED_SIZE))
-    : tab === "mine"
+    : tab === "cc"
+      ? query(base, where("ccIds", "array-contains", me), orderBy("lastActivityAt", "desc"), limit(FEED_SIZE))
+      : tab === "mine"
       ? query(base, where("createdBy.procoreUserId", "==", me), orderBy("lastActivityAt", "desc"), limit(FEED_SIZE))
       : query(base, orderBy("lastActivityAt", "desc"), limit(FEED_SIZE));
   return onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })), null), (err) => callback(null, err));
@@ -56,6 +58,18 @@ export const isUnread = (c, me, reads) =>
   (c.taggedIds ?? []).includes(me) && c.status !== "closed"
   && (c.lastMessage?.authorId ?? c.createdBy?.procoreUserId) !== me
   && (c.lastActivityAt ?? 0) > (reads.get(c.id) ?? 0);
+
+/**
+ * The picker's list split into To (tagged: responsible, get to-dos and alerts) and CC (kept in the loop: a CC
+ * tab, no to-dos, no alerts). Picked people carry cc: true when switched to CC; the flag isn't stored.
+ */
+export function splitRecipients(list) {
+  const plain = (r) => Object.fromEntries(Object.entries(r).filter(([k]) => k !== "cc"));
+  return { tagged: list.filter((r) => !r.cc).map(plain), cc: list.filter((r) => r.cc).map(plain) };
+}
+
+/** CC'd people who aren't also on the To line (someone added as To later stays To) */
+export const ccOf = (c) => (c?.cc ?? []).filter((p) => !(c.taggedIds ?? []).includes(p.procoreUserId));
 
 /** Open tasks in a conversation that are for me */
 export const myTasks = (c, me) => (c.openTasks ?? []).filter((t) => (t.assigneeIds ?? []).includes(me));
@@ -85,14 +99,15 @@ export function setStatus(key, cid, status, me) {
   return batch.commit();
 }
 
+/** Add people to a conversation, To or CC (picked people with cc: true). Someone already on it stays as they are. */
 export function addPeople(key, conversation, people) {
-  const known = new Set(conversation.taggedIds ?? []);
-  const fresh = people.filter((p) => !known.has(p.procoreUserId));
-  if (!fresh.length) return Promise.resolve();
-  return updateDoc(convDoc(key, conversation.id), {
-    tagged: arrayUnion(...fresh),
-    taggedIds: arrayUnion(...fresh.map((p) => p.procoreUserId)),
-  });
+  const known = new Set([...(conversation.taggedIds ?? []), ...(conversation.ccIds ?? [])]);
+  const { tagged, cc } = splitRecipients(people.filter((p) => !known.has(p.procoreUserId)));
+  const update = {};
+  if (tagged.length) Object.assign(update, { tagged: arrayUnion(...tagged), taggedIds: arrayUnion(...tagged.map((p) => p.procoreUserId)) });
+  if (cc.length) Object.assign(update, { cc: arrayUnion(...cc), ccIds: arrayUnion(...cc.map((p) => p.procoreUserId)) });
+  if (!Object.keys(update).length) return Promise.resolve();
+  return updateDoc(convDoc(key, conversation.id), update);
 }
 
 export const setTask = (key, cid, mid, taskId, status) =>
@@ -156,7 +171,7 @@ export async function pendingMessages() {
 }
 
 /**
- * Queue a message. newConversation = { tagged } starts one; otherwise cid is an existing conversation.
+ * Queue a message. newConversation = { tagged, cc? } starts one; otherwise cid is an existing conversation.
  * photos: [{ blob, path? }] (path when already uploaded), voice: { blob, path? } | null,
  * status: a quick reply { code, label, reason?, newDate? } | null (on its own, it's a one-tap answer).
  */
@@ -198,6 +213,8 @@ async function run() {
             createdBy: m.me,
             tagged: m.newConversation.tagged,
             taggedIds: m.newConversation.tagged.map((t) => t.procoreUserId),
+            // CC: kept in the loop (their CC tab), never to-dos or alerts
+            ...(m.newConversation.cc?.length ? { cc: m.newConversation.cc, ccIds: m.newConversation.cc.map((t) => t.procoreUserId) } : {}),
             status: "open",
             createdAt: m.clientCreatedAt,
             lastActivityAt: m.clientCreatedAt,

@@ -1,10 +1,9 @@
 // Test companies and people for the Procore sandbox, and the rules for what the cleanup may touch. All data is
 // fictional; phones use the reserved 555-01XX range.
-//   Set 1: Ky's sitesnap_test_users.md (2026-10-14), as it ended up in Procore: Lena Kowalski (ClearFlow) and
-//          Summit Framing's 4 people were never created, and their emails (lkowalski, druiz) went to set 2.
-//          Summit Framing & Drywall exists with no people; it stays listed so the cleanup never offers to remove it.
-//   Set 2: sitesnap-seed-directory-expansion.md (2026-10-14): 5 trade companies, 21 people.
-// Project Role: "Project Manager" for PMs only; GC and Worker get none (job title shows), per the expansion spec.
+// Ky's sitesnap_test_users.md, in full (re-sent 2026-10-15): 4 companies, 16 people, and nothing else. The earlier
+// expansion set (5 trade companies, 21 people) is gone from here, so the cleanup offers to make it inactive. Its
+// lkowalski and druiz records are reused: updated into Lena Kowalski (ClearFlow) and Daniel Ruiz (Summit Framing).
+// Project Role: "Project Manager" for PMs only; GC and Worker get none (job title shows), as decided 2026-10-14.
 // Used only by api/procore/seed-directory.js, which refuses to run outside Procore's sandbox.
 
 export const TAG = "SiteSnap test data";
@@ -15,16 +14,9 @@ const person = (first, last, handle, initials, title, _role, roleType, cell, ext
   first_name: first, last_name: last, email_address: `mrkygray+${handle}@gmail.com`, initials, job_title: title,
   mobile_phone: cell, ...(ext ? { business_phone_extension: ext } : {}), projectRole: roleType === "PM" ? PM_ROLE : null, roleType,
 });
-// Set 2 rows: first, last, job title, role type, mobile (initials from the name; email from the convention)
-const person2 = (first, last, title, roleType, cell) =>
-  person(first, last, `${first[0]}${last}`.toLowerCase(), `${first[0]}${last[0]}`, title, null, roleType, cell);
-const company2 = (name, trade, email, phone, users) => ({
-  set: 2, vendor: { name, business_phone: phone, email_address: email, notes: trade, labor_union: null }, users,
-});
 
 export const SEED = [
   {
-    set: 1,
     vendor: {
       name: "Ironbridge Construction Group", abbreviated_name: "Ironbridge", trade_name: "Ironbridge Builders",
       business_phone: "(310) 555-0101", fax_number: "(310) 555-0102", address: "4100 Harbor Commerce Way", city: "Torrance", zip: "90501",
@@ -39,7 +31,6 @@ export const SEED = [
     ],
   },
   {
-    set: 1,
     vendor: {
       name: "VoltLine Electric Inc.", abbreviated_name: "VoltLine", trade_name: "VoltLine Electrical Contractors",
       business_phone: "(310) 555-0120", fax_number: "(310) 555-0121", address: "2250 Anchor Industrial Blvd", city: "Hawthorne", zip: "90250",
@@ -54,7 +45,6 @@ export const SEED = [
     ],
   },
   {
-    set: 1,
     vendor: {
       name: "ClearFlow Plumbing & Mechanical", abbreviated_name: "ClearFlow", trade_name: "ClearFlow Mechanical Services",
       business_phone: "(424) 555-0140", fax_number: "(424) 555-0141", address: "890 Sepulveda Service Road", city: "El Segundo", zip: "90245",
@@ -65,49 +55,23 @@ export const SEED = [
       person("Greg", "Sorensen", "gsorensen", "GS", "Project Manager", "Project Manager", "PM", "(424) 555-0151", 301),
       person("Alicia", "Dubois", "adubois", "AD", "Mechanical Superintendent", "General Contractor", "GC", "(424) 555-0152", 302),
       person("Omar", "Haddad", "ohaddad", "OH", "Journeyman Plumber", "Worker", "Worker", "(424) 555-0153", 303),
+      person("Lena", "Kowalski", "lkowalski", "LK", "HVAC Technician", "Worker", "Worker", "(424) 555-0154", 304),
     ],
   },
   {
-    set: 1,
     vendor: {
       name: "Summit Framing & Drywall", abbreviated_name: "Summit", trade_name: "Summit Interiors",
       business_phone: "(323) 555-0160", fax_number: "(323) 555-0161", address: "1575 Crenshaw Trade Center", city: "Gardena", zip: "90248",
       email_address: "mrkygray+SummitCompany@gmail.com", website: "www.summitframing-test.com",
       notes: "framing, drywall, carpentry, finishes, residential, tenant improvement", license_number: "CA-C9-698330", labor_union: "Carpenters Local 721",
     },
-    users: [],
+    users: [
+      person("Daniel", "Ruiz", "druiz", "DR", "Project Manager", "Project Manager", "PM", "(323) 555-0171", 401),
+      person("Hannah", "Lindqvist", "hlindqvist", "HL", "Framing Superintendent", "General Contractor", "GC", "(323) 555-0172", 402),
+      person("Carlos", "Medina", "cmedina", "CM", "Lead Framer", "Worker", "Worker", "(323) 555-0173", 403),
+      person("Brianna", "Foster", "bfoster", "BF", "Drywall Finisher", "Worker", "Worker", "(323) 555-0174", 404),
+    ],
   },
-  company2("Summit Roofing & Waterproofing", "roofing, waterproofing", "mrkygray+SummitRoofingCompany@gmail.com", "(310) 555-0160", [
-    person2("Carla", "Vasquez", "Project Manager", "PM", "(310) 555-0171"),
-    person2("Derek", "Lindqvist", "Roofing Superintendent", "GC", "(310) 555-0172"),
-    person2("Miguel", "Alvarado", "Journeyman Roofer", "Worker", "(310) 555-0173"),
-    person2("Trevor", "Nguyen", "Waterproofing Installer", "Worker", "(310) 555-0174"),
-  ]),
-  company2("Pacific Concrete & Foundations", "concrete", "mrkygray+PacificConcreteCompany@gmail.com", "(424) 555-0180", [
-    person2("Harold", "Beaumont", "Project Manager", "PM", "(424) 555-0191"),
-    person2("Lena", "Kowalski", "Concrete Superintendent", "GC", "(424) 555-0192"),
-    person2("Andre", "Washington", "Concrete Finisher", "Worker", "(424) 555-0193"),
-    person2("Isabel", "Cortez", "Formwork Carpenter", "Worker", "(424) 555-0194"),
-    person2("Raj", "Patel", "Pump Operator", "Worker", "(424) 555-0195"),
-  ]),
-  company2("Apex Fire Protection Systems", "fire sprinkler, fire alarm", "mrkygray+ApexFireProtectionCompany@gmail.com", "(310) 555-0200", [
-    person2("Naomi", "Fischer", "Project Manager", "PM", "(310) 555-0211"),
-    person2("Victor", "Castellanos", "Fire Sprinkler Foreman", "GC", "(310) 555-0212"),
-    person2("Dylan", "Murphy", "Sprinkler Fitter", "Worker", "(310) 555-0213"),
-    person2("Hana", "Yoshida", "Fire Alarm Technician", "Worker", "(310) 555-0214"),
-  ]),
-  company2("Cornerstone Drywall & Framing", "drywall, framing", "mrkygray+CornerstoneDrywallCompany@gmail.com", "(323) 555-0220", [
-    person2("Brian", "Oyelaran", "Project Manager", "PM", "(323) 555-0231"),
-    person2("Tessa", "Ramirez", "Framing Superintendent", "GC", "(323) 555-0232"),
-    person2("Luis", "Ochoa", "Lead Drywall Finisher", "Worker", "(323) 555-0233"),
-    person2("Kareem", "Bishop", "Metal Stud Framer", "Worker", "(323) 555-0234"),
-  ]),
-  company2("Sentinel Low Voltage & Security", "low voltage, security", "mrkygray+SentinelLowVoltageCompany@gmail.com", "(818) 555-0240", [
-    person2("Elena", "Marchetti", "Project Manager", "PM", "(818) 555-0251"),
-    person2("Wesley", "Park", "Low Voltage Foreman", "GC", "(818) 555-0252"),
-    person2("Chloe", "Abara", "Security Systems Technician", "Worker", "(818) 555-0253"),
-    person2("Dominic", "Ruiz", "Cable Puller", "Worker", "(818) 555-0254"),
-  ]),
 ];
 
 // Permission templates (Ky's permission_template_matching.md, 2026-10-14). Ironbridge is the GC (Ky's company),

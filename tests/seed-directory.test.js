@@ -110,26 +110,40 @@ test("request bodies follow Ky's sheet: CA / US, no permission template, not an 
   assert.equal("email_address" in userBody(c.users[2], 55, c.vendor, { update: true }).user, false);
 });
 
-test("set 1 is what's in Procore (11 people); set 2 is the expansion spec (5 companies, 21 people)", () => {
-  const set = (n) => SEED.filter((c) => c.set === n);
-  assert.deepEqual(set(1).map((c) => c.users.length), [4, 4, 3, 0]);
-  const two = set(2);
-  assert.deepEqual(two.map((c) => c.vendor.name), ["Summit Roofing & Waterproofing", "Pacific Concrete & Foundations", "Apex Fire Protection Systems", "Cornerstone Drywall & Framing", "Sentinel Low Voltage & Security"]);
-  const people = two.flatMap((c) => c.users);
-  assert.equal(people.length, 21);
-  assert.deepEqual(["PM", "GC", "Worker"].map((t) => people.filter((u) => u.roleType === t).length), [5, 5, 11]);
-  // Emails follow mrkygray+<first initial><last name>, all lowercase, and are unique across both sets
+test("the seed is Ky's sheet in full: 4 companies, 4 people each, nothing else", () => {
+  assert.deepEqual(SEED.map((c) => c.vendor.name), ["Ironbridge Construction Group", "VoltLine Electric Inc.", "ClearFlow Plumbing & Mechanical", "Summit Framing & Drywall"]);
+  assert.deepEqual(SEED.map((c) => c.users.length), [4, 4, 4, 4]);
+  const people = SEED.flatMap((c) => c.users);
+  assert.deepEqual(["PM", "GC", "Worker"].map((t) => people.filter((u) => u.roleType === t).length), [4, 4, 8]);
+  // Emails follow mrkygray+<first initial><last name>, all lowercase, unique
   for (const u of people) assert.equal(u.email_address, `mrkygray+${u.first_name[0]}${u.last_name}@gmail.com`.toLowerCase());
-  const all = SEED.flatMap((c) => c.users).map((u) => u.email_address);
-  assert.equal(new Set(all).size, all.length);
+  assert.equal(new Set(people.map((u) => u.email_address)).size, 16);
   // Only PMs get a Project Role; the tag says the role type
   assert.ok(people.every((u) => (u.roleType === "PM" ? u.projectRole === "Project Manager" : u.projectRole === null)));
-  const lena = userBody(two[1].users[1], 9, two[1].vendor).user;
-  assert.deepEqual([lena.email_address, lena.job_title, lena.mobile_phone, lena.business_phone, lena.notes, lena.state_code, lena.country_code],
-    ["mrkygray+lkowalski@gmail.com", "Concrete Superintendent", "(424) 555-0192", "(424) 555-0180", "SiteSnap test data. Role type: GC.", "CA", "US"]);
-  assert.equal("business_phone_extension" in lena, false);
-  const v = vendorBody("1", two[0].vendor).vendor;
-  assert.deepEqual([v.name, v.email_address, v.business_phone, v.address], ["Summit Roofing & Waterproofing", "mrkygray+SummitRoofingCompany@gmail.com", "(310) 555-0160", undefined]);
+  const lena = userBody(SEED[2].users[3], 9, SEED[2].vendor).user;
+  assert.deepEqual([lena.email_address, lena.job_title, lena.initials, lena.mobile_phone, lena.business_phone, lena.business_phone_extension, lena.notes],
+    ["mrkygray+lkowalski@gmail.com", "HVAC Technician", "LK", "(424) 555-0154", "(424) 555-0140", 304, "SiteSnap test data. Role type: Worker."]);
+  const v = vendorBody("1", SEED[3].vendor).vendor;
+  assert.deepEqual([v.trade_name, v.email_address, v.labor_union, v.license_number], ["Summit Interiors", "mrkygray+SummitCompany@gmail.com", "Carpenters Local 721", "CA-C9-698330"]);
+});
+
+test("cleanup plan: the earlier expansion set is offered for removal; its lkowalski / druiz records are reused", () => {
+  const users = [ME,
+    { id: 20, name: "Carla Vasquez", email_address: "mrkygray+cvasquez@gmail.com", vendor: { id: 95, name: "Summit Roofing & Waterproofing" } },
+    { id: 21, name: "Lena Kowalski", email_address: "mrkygray+lkowalski@gmail.com", vendor: { id: 96, name: "Pacific Concrete & Foundations" } },
+    { id: 22, name: "Dominic Ruiz", email_address: "mrkygray+druiz@gmail.com", vendor: { id: 97, name: "Sentinel Low Voltage & Security" } },
+  ];
+  const vendors = [{ id: 90, name: "SiteSnap AI" }, { id: 95, name: "Summit Roofing & Waterproofing", email_address: "mrkygray+SummitRoofingCompany@gmail.com" },
+    { id: 96, name: "Pacific Concrete & Foundations", email_address: "mrkygray+PacificConcreteCompany@gmail.com" }, { id: 98, name: "Summit Framing & Drywall" }];
+  const p = cleanupPlan({ users, vendors, meId: 7 });
+  const u = Object.fromEntries(p.users.map((r) => [r.id, r]));
+  const v = Object.fromEntries(p.vendors.map((r) => [r.id, r]));
+  assert.deepEqual([u[20].action, u[20].checked], ["remove", true]);
+  assert.equal(u[21].action, "reuse");
+  assert.equal(u[22].action, "reuse");
+  assert.deepEqual([v[95].action, v[95].checked], ["remove", true]);
+  assert.deepEqual([v[96].action, v[96].checked], ["remove", true]);
+  assert.equal(v[98].action, "reuse");
 });
 
 test("GET shows the page; it only runs against Procore's sandbox", async () => {
@@ -267,14 +281,14 @@ test("role names: matched in any case; none wanted, none given", () => {
 
 test("verify: finds each person, checks company, email, tag, project and roles, and reports problems", async () => {
   sandbox();
-  const two = SEED.filter((c) => c.set === 2);
+  const two = SEED;
   const vend = two.map((c, i) => ({ id: 500 + i, name: c.vendor.name }));
   let id = 600;
   const people = two.flatMap((c, i) => c.users.map((u) => ({
     id: ++id, name: `${u.first_name} ${u.last_name}`, email_address: u.email_address, job_title: u.job_title,
     notes: `SiteSnap test data. Role type: ${u.roleType}.`, vendor: { id: 500 + i, name: c.vendor.name }, roleType: u.roleType,
   })));
-  people[1].vendor = { id: 501, name: "Pacific Concrete & Foundations" }; // Derek in the wrong company
+  people[1].vendor = { id: 501, name: "VoltLine Electric Inc." }; // Diane in the wrong company
   const all = [ME, ...people];
   routes.splice(routes.findIndex((r) => r.test("https://sandbox.procore.test/rest/v1.3/companies/4291776/users?page=1", {})), 1,
     { test: (u, init) => (init.method ?? "GET") === "GET" && /\/rest\/v1\.3\/companies\/4291776\/users\?/.test(u), reply: { body: all } });
@@ -282,33 +296,33 @@ test("verify: finds each person, checks company, email, tag, project and roles, 
     { test: (u) => /\/people\?/.test(u), reply: { body: all.map((u) => ({ id: u.id + 1000, user_id: u.id, contact: { is_active: true } })) } });
   routes.splice(routes.findIndex((r) => r.test("https://sandbox.procore.test/rest/v1.0/vendors?page=1", {})), 1,
     { test: (u) => /\/rest\/v1\.0\/vendors\?/.test(u), reply: { body: [...VENDORS, ...vend] } });
-  people[4].permission_template = { id: 74, name: "Project Manager - Internal" }; // Harold, a sub PM: should be external
-  for (const u of people) u.permission_template ??= { id: 75, name: "Subcontractor - External" };
+  people[4].permission_template = { id: 74, name: "Project Manager - Internal" }; // Rosa, a sub PM: should be external
+  for (const [i, u] of people.entries()) u.permission_template ??= { id: i < 4 ? (u.roleType === "PM" ? 74 : 72) : 75, name: permissionTemplateFor(i < 4 ? SEED[0] : SEED[1], u) };
   on("GET", /\/projects\/373235\/users\?/, { body: all });
   on("GET", /\/rest\/v1\.0\/project_roles\?/, { body: people.filter((u) => u.roleType === "PM").map((u) => ({ role: "Project Manager", user_id: u.id })) });
-  const out = await run(req("POST", { action: "verify", set: 2, ...ids }));
+  const out = await run(req("POST", { action: "verify", ...ids }));
   assert.equal(out.statusCode, 200, out.body);
   const steps = out.json().steps;
-  assert.equal(steps.length, 7);
-  assert.match(steps[0].detail, /Derek Lindqvist: company is Pacific Concrete/);
-  assert.match(steps[1].detail, /Harold Beaumont: template is Project Manager - Internal, expected Subcontractor - External/);
-  assert.ok(steps.slice(2, 5).every((s) => s.ok), out.body);
-  assert.ok(steps[5].ok);
-  assert.match(steps[6].detail, /5 PM, 5 GC, 11 Worker.*22 people \(21 SiteSnap test people/);
+  assert.equal(steps.length, 6);
+  assert.match(steps[0].detail, /Diane Okafor: company is VoltLine/);
+  assert.match(steps[1].detail, /Rosa Mendez: template is Project Manager - Internal, expected Subcontractor - External/);
+  assert.ok(steps.slice(2, 4).every((s) => s.ok), out.body);
+  assert.ok(steps[4].ok);
+  assert.match(steps[5].detail, /4 PM, 4 GC, 8 Worker.*17 people \(16 SiteSnap test people/);
   assert.equal(calls.filter((c) => c.method !== "GET").length, 0);
 });
 
-test("permission templates follow Ky's matching: 1 PM Internal, 3 Foreman / Superintendent Internal, 28 Subcontractor External", () => {
+test("permission templates follow Ky's matching: 1 PM Internal, 3 Foreman / Superintendent Internal, 12 Subcontractor External", () => {
   const counts = {};
   for (const c of SEED) for (const u of c.users) { const t = permissionTemplateFor(c, u); counts[t] = (counts[t] ?? 0) + 1; }
-  assert.deepEqual(counts, { "Project Manager - Internal": 1, "Foreman / Superintendent - Internal": 3, "Subcontractor - External": 28 });
+  assert.deepEqual(counts, { "Project Manager - Internal": 1, "Foreman / Superintendent - Internal": 3, "Subcontractor - External": 12 });
   // Sub PMs stay external
   assert.equal(permissionTemplateFor(SEED[1], SEED[1].users[0]), "Subcontractor - External");
 });
 
 test("templates: sets each person's template, skips one already right, reports someone missing", async () => {
   sandbox();
-  const c = SEED[2]; // ClearFlow: Greg, Alicia, Omar
+  const c = SEED[2]; // ClearFlow: Greg, Alicia, Omar, Lena
   const listed = [
     { id: 401, email_address: c.users[0].email_address, vendor: { id: 95, name: c.vendor.name } },
     { id: 402, email_address: c.users[1].email_address, vendor: { id: 95, name: c.vendor.name } },

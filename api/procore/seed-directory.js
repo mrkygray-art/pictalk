@@ -1,49 +1,85 @@
 // Test companies and people for the Procore sandbox (Ky's sitesnap_test_users.md, data in api/_seedDirectory.js).
 // GET  /api/procore/seed-directory : a small page (sign in with Procore first): pick the project, Check, then Run.
-// POST { action: "plan" }      : reads the company directory (active and inactive) and says what the cleanup
-//                                would touch. Nothing changes.
+// POST { action: "plan" }      : reads the company directory and says what the cleanup would touch. Nothing changes.
 // POST { action: "cleanup" }   : makes the ticked earlier test people and companies inactive (Procore has no delete
 //                                for either). The plan is worked out again here, so only "remove" / "ask" rows can
 //                                change: never the signed-in person, @procore.com users or Architect TEST Company.
-// POST { action: "company", index } : one test company: create it (or update and reactivate it), add it to the
-//                                project, then its 4 people (same), each added to the project and given a Project Role.
-// One company per call keeps each call short. Uses the signed-in person's own Procore sign-in (a company admin).
+// POST { action: "company", index }         : one test company: create it (or update it), add it to the project.
+// POST { action: "person", index, person }  : one of its people: create (or update and reactivate), add to the
+//                                project, and give a Project Role the project has (see projectRoleFor).
+// Small steps, and every Procore call is paced: Procore allows about 25 calls per 10 seconds ("spike limit",
+// developers.procore.com/documentation/rate-limiting); a 429 waits out the window and tries once more.
 // Endpoints (Procore reference, checked 2026-10-14): GET/POST /rest/v1.3/companies/{c}/users, PATCH .../users/{id},
-// GET /rest/v1.0/companies/{c}/users/inactive, GET/POST /rest/v1.0/vendors, PATCH /rest/v1.0/vendors/{id},
+// GET /rest/v1.0/companies/{c}/users/inactive, GET /rest/v1.0/companies/{c}/people (user_id, contact.is_active),
+// POST /rest/v2.0/companies/{c}/people/bulk_deactivate | bulk_activate {ids} (person ids; editing a user's is_active
+// answers 200 but leaves them in the directory), GET/POST /rest/v1.0/vendors, PATCH /rest/v1.0/vendors/{id},
 // GET /rest/v1.0/companies/{c}/vendors/inactive, POST /rest/v1.0/projects/{p}/vendors/{id}/actions/add,
 // POST /rest/v1.0/projects/{p}/users/{id}/actions/add, GET/POST /rest/v1.0/project_roles.
 // Sandbox only (PROCORE_API_URL must be Procore's sandbox). Same-origin JSON for the POSTs. Never returns a token.
-import { config, HttpError, procoreGet, procoreId, requireSameOriginJson, readBody, sendError, sendJson } from "../_procore.js";
-import { allPages, listProjects } from "../_projects.js";
+import { config, HttpError, procoreId, requireSameOriginJson, readBody, sendError, sendJson } from "../_procore.js";
 import { procoreSend } from "../_procoreWrite.js";
-import { SEED, cleanupPlan, removable, userBody, vendorBody } from "../_seedDirectory.js";
+import { SEED, cleanupPlan, projectRoleFor, removable, userBody, vendorBody } from "../_seedDirectory.js";
 
 const brief = (r) => (r.ok ? `ok (${r.status})` : `Procore answered ${r.status}: ${JSON.stringify(r.json?.errors ?? r.json?.message ?? r.json?.error ?? r.json ?? "").slice(0, 300)}`);
 const lower = (s) => String(s ?? "").trim().toLowerCase();
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// A list Procore may refuse (inactive lists need Directory admin): empty instead of failing the whole run
-async function maybePages(req, res, cfg, path, opts) {
-  try {
-    return await allPages(req, res, cfg, path, opts);
-  } catch (err) {
-    if (err?.status === 403 || err?.status === 404) return [];
-    throw err;
+// ---------- paced Procore calls ----------
+
+export const pace = { gapMs: 500, spikeWaitMs: 10_500 }; // 20 calls per 10 s at most; tests set both to 0
+let lastCall = 0;
+async function api(req, res, cfg, method, path, opts) {
+  for (let attempt = 0; ; attempt++) {
+    const wait = lastCall + pace.gapMs - Date.now();
+    if (wait > 0) await sleep(wait);
+    lastCall = Date.now();
+    const r = await procoreSend(req, res, cfg, method, path, opts);
+    if (r.status !== 429 || attempt >= 1) return r;
+    await sleep(pace.spikeWaitMs);
   }
 }
 
-// Every company user and vendor, active and inactive
+// Every page of a list; null when Procore refuses it (403 / 404), so a missing permission doesn't stop the run
+async function pages(req, res, cfg, path, { companyId, query = {} }) {
+  const out = [];
+  for (let page = 1; page <= 10; page++) {
+    const r = await api(req, res, cfg, "GET", path, { companyId, query: { ...query, page, per_page: 100 } });
+    if (r.status === 403 || r.status === 404) return null;
+    if (r.status === 401) throw new HttpError(401, "not_connected", "Your Procore sign-in ran out. Sign in with Procore again.");
+    if (!r.ok) throw new HttpError(502, "procore_failed", `Procore answered ${r.status} reading ${path.replace(/\d{3,}/g, "…")}. Wait a minute and run it again.`);
+    if (!Array.isArray(r.json)) break;
+    out.push(...r.json);
+    if (r.json.length < 100) break;
+  }
+  return out;
+}
+
+// The signed-in person can open this project (one call instead of listing every project)
+async function checkProject(req, res, cfg, companyId, projectId) {
+  const r = await api(req, res, cfg, "GET", `/rest/v1.0/projects/${projectId}`, { companyId, query: { company_id: companyId } });
+  if (r.status === 401) throw new HttpError(401, "not_connected", "Sign in with Procore again.");
+  if (!r.ok) throw new HttpError(403, "no_access", `You can't open that project in Procore (${r.status}).`);
+}
+
+// Every company user and vendor. Active = active in the company directory (people list, contact.is_active);
+// personId is what (de)activation takes.
 async function directory(req, res, cfg, companyId) {
-  const q = { companyId, query: {} };
-  const active = await allPages(req, res, cfg, `/rest/v1.3/companies/${companyId}/users`, q);
-  const inactive = (await maybePages(req, res, cfg, `/rest/v1.0/companies/${companyId}/users/inactive`, q)).map((u) => ({ ...u, is_active: false }));
-  const vendors = await allPages(req, res, cfg, "/rest/v1.0/vendors", { companyId, query: { company_id: companyId } });
-  const inactiveVendors = (await maybePages(req, res, cfg, `/rest/v1.0/companies/${companyId}/vendors/inactive`, q)).map((v) => ({ ...v, is_active: false }));
-  const seen = new Set(active.map((u) => String(u.id)));
+  const q = { companyId };
+  const listed = (await pages(req, res, cfg, `/rest/v1.3/companies/${companyId}/users`, q)) ?? [];
+  const inactive = (await pages(req, res, cfg, `/rest/v1.0/companies/${companyId}/users/inactive`, q)) ?? [];
+  const people = await pages(req, res, cfg, `/rest/v1.0/companies/${companyId}/people`, q);
+  const personOf = new Map((people ?? []).filter((p) => p.user_id != null).map((p) => [String(p.user_id), p]));
+  const inactiveIds = new Set(inactive.map((u) => String(u.id)));
+  const seen = new Set();
+  const users = [...listed, ...inactive].filter((u) => !seen.has(String(u.id)) && seen.add(String(u.id))).map((u) => {
+    const p = personOf.get(String(u.id));
+    const active = inactiveIds.has(String(u.id)) ? false : p ? p.contact?.is_active !== false : people ? false : u.is_active !== false;
+    return { ...u, is_active: active, personId: p?.id ?? null };
+  });
+  const vendors = (await pages(req, res, cfg, "/rest/v1.0/vendors", { companyId, query: { company_id: companyId } })) ?? [];
+  const inactiveVendors = ((await pages(req, res, cfg, `/rest/v1.0/companies/${companyId}/vendors/inactive`, q)) ?? []).map((v) => ({ ...v, is_active: false }));
   const seenV = new Set(vendors.map((v) => String(v.id)));
-  return {
-    users: [...active, ...inactive.filter((u) => !seen.has(String(u.id)))],
-    vendors: [...vendors, ...inactiveVendors.filter((v) => !seenV.has(String(v.id)))],
-  };
+  return { users, vendors: [...vendors, ...inactiveVendors.filter((v) => !seenV.has(String(v.id)))] };
 }
 
 const PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -54,7 +90,7 @@ button:disabled{opacity:.5}select{font:inherit;font-size:17px;width:100%;padding
 .row{display:flex;gap:10px;align-items:flex-start;background:#221d18;border-radius:12px;padding:10px 14px;margin:6px 0}.row input{width:22px;height:22px;margin-top:2px;flex:none}
 .ok{color:#30d158}.bad{color:#ff5f57}.tag{font-size:13px;color:#ffc24d}a{color:#ffc24d}small{color:#b8ac9c}h2{margin-top:28px}</style></head>
 <body><h1>Test companies and people</h1>
-<p>Adds 4 test companies (Ironbridge, VoltLine, ClearFlow, Summit) and 16 people to the project you pick: job title, phones, company, and a Project Role for each. Permission templates are left for later. Everything is made up; emails go to your Gmail with +addresses.</p>
+<p>Adds 4 test companies (Ironbridge, VoltLine, ClearFlow, Summit) and 16 people to the project you pick: job title, phones, company, and a Project Role for each. Permission templates are left for later. Everything is made up; emails go to your Gmail with +addresses. It goes slowly on purpose (Procore allows about 25 calls per 10 seconds): give it about 5 minutes and keep this page open.</p>
 <p>First it makes your <b>earlier test people and companies inactive</b> (Procore has no delete). You see the list and choose before anything changes. Procore's own test records, Architect TEST Company, and you are never touched.</p>
 <p id="who"><small>Checking your Procore sign-in…</small></p>
 <label for="p">Project</label> <select id="p"></select>
@@ -89,8 +125,10 @@ $('#run').onclick=async()=>{
   const picked=(k)=>[...document.querySelectorAll('input[data-kind='+k+']:checked:not(:disabled)')].map(i=>i.value);
   $('#run').disabled=true; $('#check').disabled=true; $('#out').innerHTML='<h2>Results</h2>';
   try{
-    show((await post({action:'cleanup',userIds:picked('user'),vendorIds:picked('vendor')})).steps);
-    for(let i=0;i<4;i++){ $('#out').innerHTML+='<p><small>Company '+(i+1)+' of 4…</small></p>'; show((await post({action:'company',index:i})).steps); }
+    // A step that fails (Procore's rate limit, a timeout): wait a minute and try it once more
+    const call=async(body)=>{ try{ return await post(body); }catch(e){ $('#out').innerHTML+='<p><small>'+esc(e.message)+' Waiting a minute, then trying that step again…</small></p>'; await new Promise(r=>setTimeout(r,60000)); return post(body); } };
+    show((await call({action:'cleanup',userIds:picked('user'),vendorIds:picked('vendor')})).steps);
+    for(let i=0;i<4;i++){ $('#out').innerHTML+='<p><small>Company '+(i+1)+' of 4…</small></p>'; show((await call({action:'company',index:i})).steps); for(let p=0;p<4;p++) show((await call({action:'person',index:i,person:p})).steps); }
     $('#out').innerHTML+='<p><b>Done.</b> <small>Take a screenshot of anything with a ✗ and send it to Claude. Then open SiteSnap and refresh the directory.</small></p>';
   }catch(e){ $('#out').innerHTML+='<p class="bad">'+esc(e.message)+'</p>'; }
   $('#run').disabled=false; $('#check').disabled=false;
@@ -98,67 +136,100 @@ $('#run').onclick=async()=>{
 </script></body></html>`;
 
 async function plan(req, res, cfg, companyId) {
-  const me = await procoreGet(req, res, cfg, "/rest/v1.0/me", { companyId, query: { company_id: companyId } });
+  const me = await api(req, res, cfg, "GET", "/rest/v1.0/me", { companyId, query: { company_id: companyId } });
+  if (!me.ok) throw new HttpError(401, "not_connected", "Sign in with Procore again.");
   const dir = await directory(req, res, cfg, companyId);
-  return { me, dir, plan: cleanupPlan({ ...dir, meId: me?.id }) };
+  return { dir, plan: cleanupPlan({ ...dir, meId: me.json?.id }) };
 }
 
 async function cleanup(req, res, cfg, companyId, body) {
   const { dir, plan: p } = await plan(req, res, cfg, companyId);
   const pick = removable(p, body.userIds, body.vendorIds);
   const steps = [];
-  for (const row of pick.users) {
-    const u = dir.users.find((x) => String(x.id) === String(row.id));
-    const r = await procoreSend(req, res, cfg, "PATCH", `/rest/v1.3/companies/${companyId}/users/${row.id}`, { companyId, body: { user: { last_name: u?.last_name || row.name, is_active: false } } });
-    steps.push({ name: `Made inactive: ${row.name}`, ok: r.ok, detail: brief(r) });
+  const users = pick.users.map((row) => ({ row, user: dir.users.find((x) => String(x.id) === String(row.id)) }));
+  const withPerson = users.filter((x) => x.user?.personId != null);
+  if (withPerson.length) {
+    const r = await api(req, res, cfg, "POST", `/rest/v2.0/companies/${companyId}/people/bulk_deactivate`, { companyId, body: { ids: withPerson.map((x) => Number(x.user.personId)) } });
+    for (const { row } of withPerson) steps.push({ name: `Made inactive: ${row.name}`, ok: r.ok, detail: brief(r) });
+  }
+  for (const { row } of users.filter((x) => x.user?.personId == null)) {
+    steps.push({ name: `Made inactive: ${row.name}`, ok: false, detail: "Procore's people list doesn't have this person, so they can't be made inactive here. Do it in Procore's Directory." });
   }
   for (const row of pick.vendors) {
-    const r = await procoreSend(req, res, cfg, "PATCH", `/rest/v1.0/vendors/${row.id}`, { companyId, body: { company_id: Number(companyId), vendor: { name: row.name, is_active: false } } });
+    const r = await api(req, res, cfg, "PATCH", `/rest/v1.0/vendors/${row.id}`, { companyId, body: { company_id: Number(companyId), vendor: { name: row.name, is_active: false } } });
     steps.push({ name: `Made inactive: ${row.name}`, ok: r.ok, detail: brief(r) });
   }
   if (!steps.length) steps.push({ name: "Cleanup", ok: true, detail: "Nothing ticked, nothing changed." });
   return steps;
 }
 
+// The test company's vendor record, by name (active, else inactive)
+async function findVendor(req, res, cfg, companyId, name) {
+  const active = (await pages(req, res, cfg, "/rest/v1.0/vendors", { companyId, query: { company_id: companyId, "filters[search]": name } })) ?? [];
+  const hit = active.find((v) => lower(v.name) === lower(name));
+  if (hit) return hit;
+  const inactive = (await pages(req, res, cfg, `/rest/v1.0/companies/${companyId}/vendors/inactive`, { companyId })) ?? [];
+  return inactive.find((v) => lower(v.name) === lower(name)) ?? null;
+}
+
 async function addCompany(req, res, cfg, companyId, projectId, seed) {
   const steps = [];
-  const step = (name, r, extra = "") => { steps.push({ name, ok: r.ok, detail: `${brief(r)}${extra}` }); return r.ok; };
-  const { users, vendors } = await directory(req, res, cfg, companyId);
-
-  // The company: update and reactivate it if it's already there, else create it
-  const found = vendors.find((v) => lower(v.name) === lower(seed.vendor.name));
+  const found = await findVendor(req, res, cfg, companyId, seed.vendor.name);
   const vr = found
-    ? await procoreSend(req, res, cfg, "PATCH", `/rest/v1.0/vendors/${found.id}`, { companyId, body: vendorBody(companyId, seed.vendor) })
-    : await procoreSend(req, res, cfg, "POST", "/rest/v1.0/vendors", { companyId, body: vendorBody(companyId, seed.vendor) });
+    ? await api(req, res, cfg, "PATCH", `/rest/v1.0/vendors/${found.id}`, { companyId, body: vendorBody(companyId, seed.vendor) })
+    : await api(req, res, cfg, "POST", "/rest/v1.0/vendors", { companyId, body: vendorBody(companyId, seed.vendor) });
   const vendorId = vr.ok ? vr.json?.id ?? found?.id : null;
-  if (!step(`${found ? "Updated" : "Created"} company: ${seed.vendor.name}`, vr, vendorId ? `, id ${vendorId}` : "") || !vendorId) return steps;
-
-  const onProject = await allPages(req, res, cfg, `/rest/v1.0/projects/${projectId}/vendors`, { companyId, query: {} }).catch(() => []);
+  steps.push({ name: `${found ? "Updated" : "Created"} company: ${seed.vendor.name}`, ok: vr.ok && !!vendorId, detail: `${brief(vr)}${vendorId ? `, id ${vendorId}` : ""}` });
+  if (!vendorId) return steps;
+  const onProject = (await pages(req, res, cfg, `/rest/v1.0/projects/${projectId}/vendors`, { companyId })) ?? [];
   if (onProject.some((v) => String(v.id) === String(vendorId))) steps.push({ name: "Company on the project", ok: true, detail: "already there" });
-  else step("Added company to the project", await procoreSend(req, res, cfg, "POST", `/rest/v1.0/projects/${projectId}/vendors/${vendorId}/actions/add`, { companyId }));
+  else {
+    const r = await api(req, res, cfg, "POST", `/rest/v1.0/projects/${projectId}/vendors/${vendorId}/actions/add`, { companyId });
+    steps.push({ name: "Added company to the project", ok: r.ok, detail: brief(r) });
+  }
+  return steps;
+}
 
-  const projectUsers = await allPages(req, res, cfg, `/rest/v1.0/projects/${projectId}/users`, { companyId, query: {} }).catch(() => []);
-  const roles = await allPages(req, res, cfg, "/rest/v1.0/project_roles", { companyId, query: { project_id: projectId } }).catch(() => []);
+async function addPerson(req, res, cfg, companyId, projectId, seed, u) {
+  const steps = [];
+  const step = (name, r, extra = "") => { steps.push({ name, ok: r.ok, detail: `${brief(r)}${extra}` }); return r.ok; };
+  const name = `${u.first_name} ${u.last_name}`;
+  const vendor = await findVendor(req, res, cfg, companyId, seed.vendor.name);
+  if (!vendor) return [{ name: `${name}: company`, ok: false, detail: `${seed.vendor.name} isn't in Procore yet, so ${u.first_name} was skipped.` }];
 
-  for (const u of seed.users) {
-    const name = `${u.first_name} ${u.last_name}`;
-    const existing = users.find((x) => lower(x.email_address) === lower(u.email_address));
-    const ur = existing
-      ? await procoreSend(req, res, cfg, "PATCH", `/rest/v1.3/companies/${companyId}/users/${existing.id}`, { companyId, body: userBody(u, vendorId, seed.vendor, { update: true }) })
-      : await procoreSend(req, res, cfg, "POST", `/rest/v1.3/companies/${companyId}/users`, { companyId, body: userBody(u, vendorId, seed.vendor) });
-    const userId = ur.ok ? ur.json?.id ?? existing?.id : null;
-    if (!step(`${existing ? "Updated" : "Created"} ${name} (${u.job_title})`, ur) || !userId) continue;
+  // The person, by email: in the company list, else the inactive list
+  const search = { companyId, query: { "filters[search]": u.email_address } };
+  const byEmail = (list) => (list ?? []).find((x) => lower(x.email_address) === lower(u.email_address));
+  const existing = byEmail(await pages(req, res, cfg, `/rest/v1.3/companies/${companyId}/users`, search))
+    ?? byEmail(await pages(req, res, cfg, `/rest/v1.0/companies/${companyId}/users/inactive`, { companyId }));
+  const ur = existing
+    ? await api(req, res, cfg, "PATCH", `/rest/v1.3/companies/${companyId}/users/${existing.id}`, { companyId, body: userBody(u, vendor.id, seed.vendor, { update: true }) })
+    : await api(req, res, cfg, "POST", `/rest/v1.3/companies/${companyId}/users`, { companyId, body: userBody(u, vendor.id, seed.vendor) });
+  const userId = ur.ok ? ur.json?.id ?? existing?.id : null;
+  if (!step(`${existing ? "Updated" : "Created"} ${name} (${u.job_title})`, ur) || !userId) return steps;
 
-    if (projectUsers.some((x) => String(x.id) === String(userId))) steps.push({ name: `${name} on the project`, ok: true, detail: "already there" });
-    else step(`Added ${name} to the project`, await procoreSend(req, res, cfg, "POST", `/rest/v1.0/projects/${projectId}/users/${userId}/actions/add`, { companyId, body: { user: {} } }));
+  // Active in the directory (someone made inactive earlier comes back)
+  const person = ((await pages(req, res, cfg, `/rest/v1.0/companies/${companyId}/people`, search)) ?? []).find((p) => String(p.user_id) === String(userId));
+  if (person && person.contact?.is_active === false) {
+    step(`${name} active again`, await api(req, res, cfg, "POST", `/rest/v2.0/companies/${companyId}/people/bulk_activate`, { companyId, body: { ids: [Number(person.id)] } }));
+  }
 
-    if (roles.some((r) => String(r.user_id) === String(userId) && lower(r.role) === lower(u.projectRole))) {
-      steps.push({ name: `${name}: Project Role ${u.projectRole}`, ok: true, detail: "already set" });
-    } else {
-      step(`${name}: Project Role ${u.projectRole}`, await procoreSend(req, res, cfg, "POST", "/rest/v1.0/project_roles", {
-        companyId, body: { project_id: Number(projectId), project_role: { role: u.projectRole, user_id: Number(userId) } },
-      }));
-    }
+  const onProject = (await pages(req, res, cfg, `/rest/v1.0/projects/${projectId}/users`, { companyId, query: { "filters[id][]": userId } })) ?? [];
+  if (onProject.some((x) => String(x.id) === String(userId))) steps.push({ name: `${name} on the project`, ok: true, detail: "already there" });
+  else step(`Added ${name} to the project`, await api(req, res, cfg, "POST", `/rest/v1.0/projects/${projectId}/users/${userId}/actions/add`, { companyId, body: { user: {} } }));
+
+  // Project Role: only a role name the project already has (Procore answers 404 for any other)
+  const roles = (await pages(req, res, cfg, "/rest/v1.0/project_roles", { companyId, query: { project_id: projectId } })) ?? [];
+  const names = [...new Set(roles.map((r) => r.role).filter(Boolean))];
+  const role = projectRoleFor(u.projectRole, names);
+  if (!role) {
+    steps.push({ name: `${name}: Project Role`, ok: true, detail: `None set: this project has no "${u.projectRole}" role (it has ${names.join(", ") || "none"}). Job title shows instead.` });
+  } else if (roles.some((r) => String(r.user_id) === String(userId) && lower(r.role) === lower(role))) {
+    steps.push({ name: `${name}: Project Role ${role}`, ok: true, detail: "already set" });
+  } else {
+    step(`${name}: Project Role ${role}`, await api(req, res, cfg, "POST", "/rest/v1.0/project_roles", {
+      companyId, body: { project_id: Number(projectId), project_role: { role, user_id: Number(userId) } },
+    }), role !== u.projectRole ? ` (closest to "${u.projectRole}")` : "");
   }
   return steps;
 }
@@ -179,27 +250,22 @@ export default async function handler(req, res) {
     const companyId = procoreId(String(body.companyId ?? ""));
     const projectId = procoreId(String(body.projectId ?? ""));
     if (!companyId || !projectId) throw new HttpError(400, "missing_ids", "Pick a project.");
-    const { projects } = await listProjects(req, res, cfg);
-    if (!projects.some((p) => p.companyId === companyId && p.projectId === projectId)) throw new HttpError(403, "no_access", "You're not on that project in Procore.");
+    await checkProject(req, res, cfg, companyId, projectId);
 
     if (body.action === "plan") {
       const { plan: p } = await plan(req, res, cfg, companyId);
-      const seed = SEED.map((c) => ({ name: c.vendor.name, vendor: p.vendors.some((v) => v.action === "reuse" && v.name.toLowerCase() === c.vendor.name.toLowerCase()) ? "already there, will be updated" : "new", people: c.users.map((u) => `${u.first_name} ${u.last_name}`) }));
+      const seed = SEED.map((c) => ({ name: c.vendor.name, vendor: p.vendors.some((v) => v.action === "reuse" && lower(v.name) === lower(c.vendor.name)) ? "already there, will be updated" : "new", people: c.users.map((u) => `${u.first_name} ${u.last_name}`) }));
       return sendJson(res, 200, { ...p, seed });
     }
-    if (body.action === "cleanup") {
-      const steps = await cleanup(req, res, cfg, companyId, body);
-      console.log("SiteSnap seed cleanup", JSON.stringify(steps));
-      return sendJson(res, 200, { steps });
-    }
-    if (body.action === "company") {
-      const seed = SEED[Number(body.index)];
-      if (!Number.isInteger(Number(body.index)) || !seed) throw new HttpError(400, "bad_request", "No such test company.");
-      const steps = await addCompany(req, res, cfg, companyId, projectId, seed);
-      console.log("SiteSnap seed company", body.index, JSON.stringify(steps));
-      return sendJson(res, 200, { steps });
-    }
-    throw new HttpError(400, "bad_request", "Unknown action.");
+    const seed = SEED[Number(body.index)];
+    const who = seed?.users[Number(body.person)];
+    let steps;
+    if (body.action === "cleanup") steps = await cleanup(req, res, cfg, companyId, body);
+    else if (body.action === "company" && seed) steps = await addCompany(req, res, cfg, companyId, projectId, seed);
+    else if (body.action === "person" && who) steps = await addPerson(req, res, cfg, companyId, projectId, seed, who);
+    else throw new HttpError(400, "bad_request", "Unknown step.");
+    console.log("SiteSnap seed", body.action, body.index ?? "", body.person ?? "", JSON.stringify(steps));
+    return sendJson(res, 200, { steps });
   } catch (err) {
     // Our own messages only (never a token): so a failed run can be read in the Vercel logs
     if (err instanceof HttpError) console.log("SiteSnap seed stopped", err.status, err.code, err.message);

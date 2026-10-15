@@ -95,6 +95,17 @@ export function userBody(u, vendorId, seedVendor, { update = false } = {}) {
   };
 }
 
+// The sheet's Project Role, as one of the role names the project has (Procore answers 404 for any other).
+// "General Contractor" isn't a role in the sandbox, so the site lead gets the closest one; workers get none.
+const ROLE_FALLBACKS = { "general contractor": ["superintendent", "general superintendent", "project superintendent", "foreman"] };
+export function projectRoleFor(wanted, available) {
+  const byName = new Map(available.map((n) => [String(n).trim().toLowerCase(), n]));
+  for (const n of [String(wanted).trim().toLowerCase(), ...(ROLE_FALLBACKS[String(wanted).trim().toLowerCase()] ?? [])]) {
+    if (byName.has(n)) return byName.get(n);
+  }
+  return null;
+}
+
 // ---------- what the cleanup may touch ----------
 
 const email = (u) => String(u?.email_address ?? "").toLowerCase();

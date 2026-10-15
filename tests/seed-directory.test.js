@@ -3,9 +3,12 @@
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import process from "node:process";
-import seedDirectory from "../api/procore/seed-directory.js";
+import seedDirectory, { pace } from "../api/procore/seed-directory.js";
 import { seal, SESSION_COOKIE } from "../api/_procore.js";
-import { SEED, cleanupPlan, removable, userBody, vendorBody } from "../api/_seedDirectory.js";
+import { SEED, cleanupPlan, projectRoleFor, removable, userBody, vendorBody } from "../api/_seedDirectory.js";
+
+pace.gapMs = 0;
+pace.spikeWaitMs = 0;
 
 const ENV = {
   PROCORE_CLIENT_ID: "test-client-id", PROCORE_CLIENT_SECRET: "test-client-secret-never-leak",
@@ -62,11 +65,12 @@ const VENDORS = [
 ];
 
 function sandbox() {
-  on("GET", /\/rest\/v1\.0\/companies\?/, { body: [{ id: 4291776, name: "SiteSnap AI", is_active: true }] });
-  on("GET", /\/rest\/v1\.1\/projects\?/, { body: [{ id: 373235, name: "Sandbox Test Project" }] });
+  on("GET", /\/rest\/v1\.0\/projects\/373235\?/, { body: { id: 373235, name: "Sandbox Test Project" } });
   on("GET", /\/rest\/v1\.0\/me\?/, { body: ME });
   on("GET", /\/rest\/v1\.3\/companies\/4291776\/users\?/, { body: USERS });
   on("GET", /\/rest\/v1\.0\/companies\/4291776\/users\/inactive\?/, { status: 403, body: {} });
+  // Person ids differ from user ids; David-style records already made inactive show contact.is_active false
+  on("GET", /\/rest\/v1\.0\/companies\/4291776\/people\?/, { body: USERS.map((u) => ({ id: u.id + 1000, user_id: u.id, contact: { is_active: true } })) });
   on("GET", /\/rest\/v1\.0\/vendors\?/, { body: VENDORS });
   on("GET", /\/rest\/v1\.0\/companies\/4291776\/vendors\/inactive\?/, { body: [] });
 }
@@ -126,41 +130,83 @@ test("plan changes nothing", async () => {
   assert.equal(calls.filter((c) => c.method !== "GET").length, 0);
 });
 
-test("cleanup only makes removable rows inactive, never the signed-in person or Procore's records", async () => {
+test("cleanup deactivates people through Procore's people list (person ids), only removable rows", async () => {
   sandbox();
-  on("PATCH", /\/rest\/v1\.3\/companies\/4291776\/users\/\d+$/, { body: { id: 1 } });
+  on("POST", /\/rest\/v2\.0\/companies\/4291776\/people\/bulk_deactivate$/, { body: {} });
   on("PATCH", /\/rest\/v1\.0\/vendors\/\d+$/, { body: { id: 1 } });
   const out = await run(req("POST", { action: "cleanup", ...ids, userIds: [7, 8, 9, 11], vendorIds: [91, 92] }));
   assert.equal(out.statusCode, 200, out.body);
-  const writes = calls.filter((c) => c.method === "PATCH");
-  assert.deepEqual(writes.map((c) => c.url.replace(ENV.PROCORE_API_URL, "")), ["/rest/v1.3/companies/4291776/users/9", "/rest/v1.0/vendors/92"]);
-  assert.equal(writes[0].body.user.is_active, false);
+  const writes = calls.filter((c) => c.method !== "GET");
+  assert.deepEqual(writes.map((c) => `${c.method} ${c.url.replace(ENV.PROCORE_API_URL, "")}`), ["POST /rest/v2.0/companies/4291776/people/bulk_deactivate", "PATCH /rest/v1.0/vendors/92"]);
+  assert.deepEqual(writes[0].body, { ids: [1009] });
   assert.equal(writes[1].body.vendor.is_active, false);
 });
 
-test("company: updates an existing company and person, creates the rest, adds them to the project with a Project Role", async () => {
+test("someone already inactive in the people list isn't offered for removal again", async () => {
+  sandbox();
+  routes.splice(routes.findIndex((r) => r.test("https://sandbox.procore.test/rest/v1.0/companies/4291776/people?page=1", {})), 1,
+    { test: (u) => /\/people\?/.test(u), reply: { body: USERS.map((u) => ({ id: u.id + 1000, user_id: u.id, contact: { is_active: u.id !== 9 } })) } });
+  const b = (await run(req("POST", { action: "plan", ...ids }))).json();
+  assert.equal(b.users.find((u) => u.id === 9).action, "keep");
+});
+
+test("company: updates an existing test company and adds it to the project", async () => {
   sandbox();
   on("PATCH", /\/rest\/v1\.0\/vendors\/94$/, { body: { id: 94 } });
   on("GET", /\/projects\/373235\/vendors\?/, { body: [] });
   on("POST", /\/projects\/373235\/vendors\/94\/actions\/add$/, { body: {} });
-  on("GET", /\/projects\/373235\/users\?/, { body: [{ id: 11 }] });
-  on("GET", /\/rest\/v1\.0\/project_roles\?/, { body: [{ id: 1, role: "Project Manager", user_id: 11 }] });
-  on("PATCH", /\/companies\/4291776\/users\/11$/, { body: { id: 11 } });
-  let n = 200;
-  on("POST", /\/rest\/v1\.3\/companies\/4291776\/users$/, () => ({ status: 201, body: { id: ++n } }));
-  on("POST", /\/projects\/373235\/users\/\d+\/actions\/add$/, { body: {} });
-  on("POST", /\/rest\/v1\.0\/project_roles$/, (u, init) => (JSON.parse(init.body).project_role.role === "Worker" ? { status: 422, body: { errors: "Role is not valid" } } : { status: 201, body: {} }));
-
   const out = await run(req("POST", { action: "company", index: 0, ...ids }));
   assert.equal(out.statusCode, 200, out.body);
-  const steps = out.json().steps;
-  const posts = calls.filter((c) => c.method !== "GET").map((c) => `${c.method} ${c.url.replace(ENV.PROCORE_API_URL, "")}`);
-  assert.equal(posts.filter((p) => p === "POST /rest/v1.3/companies/4291776/users").length, 3);
-  assert.ok(posts.includes("PATCH /rest/v1.3/companies/4291776/users/11"));
-  assert.ok(!posts.includes("POST /rest/v1.0/projects/373235/users/11/actions/add"), "Marcus is already on the project");
-  assert.equal(posts.filter((p) => p === "POST /rest/v1.0/project_roles").length, 3, "Marcus already has his role");
-  // A role Procore refuses is reported, not fatal
-  assert.ok(steps.some((s) => !s.ok && /Project Role Worker/.test(s.name) && /Role is not valid/.test(s.detail)));
-  assert.ok(steps.some((s) => s.ok && /Created Diane Okafor/.test(s.name)));
+  assert.ok(out.json().steps.every((s) => s.ok), out.body);
+});
+
+function personRoutes({ roles = ["Project Manager", "Superintendent", "Architect"], userList = [], inactive = false } = {}) {
+  sandbox();
+  routes.splice(routes.findIndex((r) => r.test("https://sandbox.procore.test/rest/v1.3/companies/4291776/users?page=1", {})), 1,
+    { test: (u, init) => (init.method ?? "GET") === "GET" && /\/rest\/v1\.3\/companies\/4291776\/users\?/.test(u), reply: { body: userList } });
+  routes.splice(routes.findIndex((r) => r.test("https://sandbox.procore.test/rest/v1.0/companies/4291776/people?page=1", {})), 1,
+    { test: (u) => /\/people\?/.test(u), reply: { body: [{ id: 5555, user_id: 301, contact: { is_active: !inactive } }] } });
+  on("POST", /\/rest\/v1\.3\/companies\/4291776\/users$/, { status: 201, body: { id: 301 } });
+  on("PATCH", /\/rest\/v1\.3\/companies\/4291776\/users\/301$/, { body: { id: 301 } });
+  on("POST", /people\/bulk_activate$/, { body: {} });
+  on("GET", /\/projects\/373235\/users\?/, { body: [] });
+  on("POST", /\/projects\/373235\/users\/301\/actions\/add$/, { body: {} });
+  on("GET", /\/rest\/v1\.0\/project_roles\?/, { body: roles.map((role, i) => ({ id: i, role, user_id: null })) });
+  on("POST", /\/rest\/v1\.0\/project_roles$/, { status: 201, body: {} });
+}
+const writes = () => calls.filter((c) => c.method !== "GET").map((c) => `${c.method} ${c.url.replace(ENV.PROCORE_API_URL, "")}`);
+
+test("person: creates them in the right company, adds them to the project, General Contractor becomes Superintendent", async () => {
+  personRoutes();
+  const out = await run(req("POST", { action: "person", index: 0, person: 1, ...ids }));
+  assert.equal(out.statusCode, 200, out.body);
+  assert.deepEqual(writes(), ["POST /rest/v1.3/companies/4291776/users", "POST /rest/v1.0/projects/373235/users/301/actions/add", "POST /rest/v1.0/project_roles"]);
+  const created = calls.find((c) => c.method === "POST" && /\/users$/.test(c.url)).body.user;
+  assert.deepEqual([created.email_address, created.vendor_id], ["mrkygray+dokafor@gmail.com", 94]);
+  assert.equal(calls.at(-1).body.project_role.role, "Superintendent");
+  assert.ok(out.json().steps.every((s) => s.ok), out.body);
+});
+
+test("person: an existing, inactive one is updated and made active again; a Worker gets no role", async () => {
+  personRoutes({ userList: [{ id: 301, email_address: "mrkygray+tbrandt@gmail.com" }], inactive: true });
+  const out = await run(req("POST", { action: "person", index: 0, person: 2, ...ids }));
+  assert.equal(out.statusCode, 200, out.body);
+  assert.deepEqual(writes(), ["PATCH /rest/v1.3/companies/4291776/users/301", "POST /rest/v2.0/companies/4291776/people/bulk_activate", "POST /rest/v1.0/projects/373235/users/301/actions/add"]);
+  assert.match(out.json().steps.at(-1).detail, /no "Worker" role/);
   assert.doesNotMatch(out.body, /access-1|refresh-1|never-leak/);
+});
+
+test("a 429 waits and tries once more", async () => {
+  personRoutes();
+  let n = 0;
+  routes.unshift({ test: (u, init) => (init.method ?? "GET") === "POST" && /\/project_roles$/.test(u), reply: () => (++n === 1 ? { status: 429, body: { message: "rate limit" } } : { status: 201, body: {} }) });
+  const out = await run(req("POST", { action: "person", index: 0, person: 0, ...ids }));
+  assert.equal(n, 2);
+  assert.ok(out.json().steps.every((s) => s.ok), out.body);
+});
+
+test("role names: exact first (any case), then the closest for General Contractor, else none", () => {
+  assert.equal(projectRoleFor("Project Manager", ["project manager", "Architect"]), "project manager");
+  assert.equal(projectRoleFor("General Contractor", ["Foreman", "Superintendent"]), "Superintendent");
+  assert.equal(projectRoleFor("Worker", ["Superintendent"]), null);
 });

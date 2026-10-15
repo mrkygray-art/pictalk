@@ -31,6 +31,7 @@ const PEOPLE = [
   { id: 481274, name: "Edward Gray", firstName: "Edward", lastName: "Gray", title: "Foreman", company: "Son Electric", role: "Foreman", roleSource: "job_title", tag: null },
   { id: 900, name: "Lisa Hubbard", firstName: "Lisa", lastName: "Hubbard", title: "Drywall Foreman", company: "ABC Drywall", role: "Drywall Foreman", roleSource: "job_title", tag: null },
   { id: 902, name: "Jim Henson", firstName: "Jim", lastName: "Henson", title: "Superintendent", company: "Kyco", role: "Superintendent", roleSource: "job_title", tag: null },
+  { id: 903, name: "Pat Manager", firstName: "Pat", lastName: "Manager", title: null, company: "Kyco", role: "Project Manager", roleSource: "project_team", tag: null },
 ];
 const OPTIONS = {
   observationTypes: [{ id: 11036845, name: "Deficiency", category: "Quality" }, { id: 11036851, name: "Safety Hazard", category: "Safety" }],
@@ -143,26 +144,28 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   check("permissions: people Procore takes aren't marked", (await page.$$(".dir-person.is-limited")).length === 1);
   await click(".dir-filters button::-p-text(Title)");
   const heads = await page.$$eval(".dir-group-head h3", (h) => h.map((e) => e.textContent));
-  check("Title tab groups people under their job titles", heads.includes("Drywall Foreman") && heads.includes("Superintendent") && heads.length === 3, heads.join(" | "));
+  check("Title tab groups people under their job titles", heads.includes("Drywall Foreman") && heads.includes("Superintendent") && heads.includes("Project Manager") && heads.length === 4, heads.join(" | "));
   await shot("2a-title");
   await click(".dir-filters button::-p-text(Name)");
   await click(".dir-person.is-limited");
   await shot("2b-picker");
   await click("button.dir-done");
-  await waitText("It will go in unassigned");
+  await waitText("Send it to a project manager instead?");
   check("permissions: the card warns before sending", (await text()).includes("Jim Henson can't get Punch Items in Procore"));
-  await click("button::-p-text(Change)");
-  await click(".dir-person.is-limited");
-  await click("button.dir-done");
-  check("permissions: the warning goes when he's taken off", !(await text()).includes("It will go in unassigned"));
+  check("permissions: it offers the project manager (same company first)", await page.$eval(".report-instead .place-chip", (e) => e.textContent.includes("Pat Manager · Kyco")));
+  await shot("2c-instead");
+  await click(".report-instead .place-chip");
+  const after = await text();
+  check("permissions: the PM takes the record; Jim stays tagged on the thread", after.includes("Pat Manager") && after.includes("Also tagged on the thread: Jim Henson") && !after.includes("Jim Henson can't get"));
 
   await click("button::-p-text(Send to Procore)");
   await waitText("Sent to Procore", 30000);
   const done = await text();
   check("Sent screen: Punch Item #2 with Open in Procore", done.includes("Punch Item #2") && done.includes("Open in Procore"));
   check("Sent screen: says plainly where it went (Punch List, not Observations)", done.includes("Created in Procore") && done.includes("Find it in Procore's Punch List tool, not Observations"));
-  check("Sent screen: says Lisa gets Procore's email", done.includes("Lisa Hubbard will get Procore's email"));
+  check("Sent screen: says Lisa and the PM get Procore's email", done.includes("Lisa Hubbard, Pat Manager will get Procore's email"));
   const sc = sentToServer?.card ?? {};
+  check("Procore gets Lisa and the PM, not Jim", JSON.stringify(sc.assigneeIds) === "[900,903]", JSON.stringify(sc.assigneeIds));
   check("server was sent the confirmed card", sc.recordType === "punch_item" && sc.assigneeIds?.[0] === 900 && sc.dueDate === friday && sc.tradeId === 2, JSON.stringify({ t: sc.recordType, a: sc.assigneeIds, d: sc.dueDate, tr: sc.tradeId }));
   check("server was sent the photo and the voice note", (sentToServer?.files ?? []).map((f) => f.type.split("/")[0]).join(",") === "image,audio", (sentToServer?.files ?? []).map((f) => f.type).join(","));
   check("server was sent the words as said", sentToServer?.card?.transcript === "Tell Lisa the drywall in room 204 needs to be redone by Friday");

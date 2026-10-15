@@ -12,7 +12,7 @@ import {
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { httpsCallable } from "firebase/functions";
 import { del, get, keys, set } from "idb-keyval";
-import { db, storage, functions } from "../firebase";
+import { auth, db, storage, functions } from "../firebase";
 import { baseType, extFor } from "../stopStore";
 
 const QUEUE = "pending-message:";
@@ -128,6 +128,28 @@ export function onQueueChange(fn) {
 }
 const notify = () => listeners.forEach((fn) => fn());
 
+/** Remove a message that can't be sent (the person decides; it never leaves this phone) */
+export async function discardPending(mid) {
+  await del(QUEUE + mid);
+  notify();
+}
+
+/** Why a waiting message hasn't gone: "" (sending), "signal", "refused", or "other" (queued by someone else) */
+export function pendingReason(m, myId) {
+  if (m.me?.procoreUserId && myId && String(m.me.procoreUserId) !== String(myId)) return "other";
+  if (!m.lastError) return "";
+  return /permission-denied/.test(m.lastError) ? "refused" : "signal";
+}
+
+/** The line under a waiting message, in plain words */
+export function pendingLine(m, myId) {
+  const why = pendingReason(m, myId);
+  if (why === "other") return `Waiting for ${m.me?.name ?? "the person who wrote it"} to sign in on this browser to send it.`;
+  if (why === "refused") return "Couldn't send: SiteSnap refused it. Remove it and send it again.";
+  if (why === "signal") return "Not sent yet. It'll try again when there's signal.";
+  return "Sending…";
+}
+
 export async function pendingMessages() {
   const ids = (await keys()).filter((k) => typeof k === "string" && k.startsWith(QUEUE));
   return (await Promise.all(ids.map((k) => get(k)))).filter(Boolean).sort((a, b) => a.clientCreatedAt - b.clientCreatedAt);
@@ -160,7 +182,11 @@ export function syncMessages() {
 
 async function run() {
   if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  // Only the person who wrote a message sends it: one queued before switching accounts waits for them
+  const claims = auth.currentUser ? (await auth.currentUser.getIdTokenResult().catch(() => null))?.claims : null;
+  const myId = claims?.procoreUserId ? String(claims.procoreUserId) : null;
   for (const m of await pendingMessages()) {
+    if (!myId || String(m.me?.procoreUserId) !== myId) continue;
     try {
       for (const p of m.photos) if (!p.uploaded) { await uploadFile(p.path, p.blob); p.uploaded = true; await set(QUEUE + m.mid, m); }
       if (m.voice && !m.voice.uploaded) { await uploadFile(m.voice.path, m.voice.blob); m.voice.uploaded = true; await set(QUEUE + m.mid, m); }

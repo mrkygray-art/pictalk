@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fileUrl, isUnread, myTasks, watchFeed } from "./messagingStore";
+import { discardPending, fileUrl, isUnread, myTasks, pendingLine, pendingReason, watchFeed } from "./messagingStore";
 import { namesLine, summaryLine, timeAgo } from "./format";
 
 // The project feed: conversations, newest activity first. For Me = I'm tagged and it's open (these
@@ -59,7 +59,10 @@ export default function Feed({ projectKey, me, reads, pending, onOpen }) {
                 <div className="conv-body">
                   <strong>To {namesLine(p.newConversation.tagged)}</strong>
                   <span className="conv-text">{(p.text || p.transcript || "Photo").slice(0, 120)}</span>
-                  <small>{p.lastError ? "Not sent yet. It'll try again when there's signal." : "Sending…"}</small>
+                  <small>{pendingLine(p, me)}</small>
+                  {["refused", "other"].includes(pendingReason(p, me)) && (
+                    <button type="button" className="text-btn inline" onClick={() => { if (window.confirm("Remove this message? It hasn't been sent, and it can't be brought back.")) discardPending(p.mid); }}>Remove</button>
+                  )}
                 </div>
               </div>
             </li>

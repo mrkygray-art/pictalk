@@ -1768,6 +1768,7 @@ button:focus-visible {
 .dir-person.is-limited .dir-who strong { opacity: 0.6; }
 .dir-who small.dir-note { color: var(--warning-ink, #ffc24d); opacity: 1; font-size: 13px; }
 .procore-warn { color: var(--warning-ink, #ffc24d); font-size: 14px; }
+.report-instead { display: grid; gap: 6px; margin-top: 6px; }
 .access-list { display: grid; gap: 12px; }
 .access-group { background: var(--surface, #221d18); border-radius: 14px; padding: 12px 16px; }
 .access-group h3 { margin: 0 0 6px; font-size: 16px; }

@@ -98,6 +98,19 @@ export async function projectAccess(project) {
   try { return JSON.parse(store()?.getItem(k) ?? "null"); } catch { return null; }
 }
 
+/**
+ * Project managers who could take this record instead of someone Procore won't accept: people whose Procore
+ * Project Role (else job title) says Project Manager, that Procore will take for this type; the blocked person's
+ * own company first, then the rest A to Z. At most `max`.
+ */
+export function managersFor(people, access, recordType, blocked, max = 3) {
+  const isPm = (p) => /project manager/i.test(`${p.roleSource === "project_team" ? p.role : ""} ${p.title ?? ""}`);
+  return (people ?? [])
+    .filter((p) => isPm(p) && String(p.id) !== String(blocked.procoreUserId) && !cantGet(access, p.id, recordType))
+    .sort((a, b) => (a.company === blocked.company ? 0 : 1) - (b.company === blocked.company ? 0 : 1) || String(a.name).localeCompare(String(b.name)))
+    .slice(0, max);
+}
+
 /** Why Procore won't take this person for this kind of record, or "" */
 export function cantGet(access, procoreUserId, recordType) {
   const a = access?.people?.[String(procoreUserId)]?.[recordType];

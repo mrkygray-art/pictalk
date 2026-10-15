@@ -3,7 +3,8 @@ import { CameraIcon, MicIcon, StopIcon } from "./icons";
 import { formatTime, useRecorder } from "./useRecorder";
 import RecipientSearch from "./RecipientSearch";
 import { newId, queueMessage, transcribeVoice, uploadFile, voicePathFor } from "./messagingStore";
-import { cantGet, draftRecord, MAX_PHOTOS, projectAccess, RECORD_HINT, RECORD_LABEL, RECORD_TOOL, recordOptions, sendRecord } from "./recordStore";
+import { recipientOf } from "../directorySearch";
+import { cantGet, draftRecord, managersFor, MAX_PHOTOS, projectAccess, RECORD_HINT, RECORD_LABEL, RECORD_TOOL, recordOptions, sendRecord } from "./recordStore";
 
 // Report an Issue (voice + photo -> Procore record). The foreman describes it; SiteSnap works out what
 // kind of Procore record it is, fills it in, and one tap on Send creates it in Procore under their own
@@ -90,6 +91,7 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
       locationId: d?.location?.id ?? null,
       priority: d?.priority ?? null,
       assignees: (d?.assignees ?? []).map(toRecipient),
+      alsoTag: [], // on the SiteSnap thread only: someone Procore wouldn't take, replaced by a PM
       dueDate: d?.due_date ?? "",
       impactMentioned: !!d?.impact_mentioned,
     });
@@ -133,7 +135,7 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
         mid: ids.current.mid,
         me,
         newConversation: {
-          tagged: card.assignees,
+          tagged: [...card.assignees, ...card.alsoTag.filter((t) => !card.assignees.some((a) => a.procoreUserId === t.procoreUserId))],
           procore: { recordType: made.recordType, id: Number(made.id), number: made.number == null ? "" : String(made.number), url: made.url, projectId: project.projectId, title: card.title.slice(0, 120), due: card.dueDate || "" },
         },
         text: card.description,
@@ -229,9 +231,27 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
             <p>{card.assignees.length ? <strong>{card.assignees.map((a) => a.name).join(", ")}</strong> : blank}</p>
             <span className="stop-more">{card.assignees.length ? "Change" : "Pick"}</span>
           </button>
-          {card.assignees.map((a) => [a, cantGet(access, a.procoreUserId, card.recordType)]).filter(([, why]) => why).map(([a, why]) => (
-            <small key={a.procoreUserId} className="procore-warn">{a.name} can't get {RECORD_LABEL[card.recordType]}s in Procore ({why}). It will go in unassigned; {a.name.split(" ")[0]} is still tagged on the thread.</small>
-          ))}
+          {card.assignees.map((a) => [a, cantGet(access, a.procoreUserId, card.recordType)]).filter(([, why]) => why).map(([a, why]) => {
+            const pms = managersFor(session.dir?.people, access, card.recordType, a);
+            const instead = (pm) => set({
+              assignees: [...card.assignees.filter((x) => x.procoreUserId !== a.procoreUserId && x.procoreUserId !== String(pm.id)), recipientOf(pm)],
+              alsoTag: [...card.alsoTag.filter((x) => x.procoreUserId !== a.procoreUserId), a],
+            });
+            return (
+              <div key={a.procoreUserId} className="report-instead">
+                <small className="procore-warn">{a.name} can't get {RECORD_LABEL[card.recordType]}s in Procore ({why}).{pms.length ? "" : ` It will go in unassigned; ${a.name.split(" ")[0]} is still tagged on the thread.`}</small>
+                {pms.length > 0 && (
+                  <>
+                    <small className="msg-status">Send it to a project manager instead? {a.name.split(" ")[0]} stays tagged on the thread.</small>
+                    <div className="place-chips">
+                      {pms.map((pm) => <button key={pm.id} type="button" className="place-chip" onClick={() => instead(pm)}>{pm.name}{pm.company ? ` · ${pm.company}` : ""}</button>)}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+          {card.alsoTag.length > 0 && <small className="msg-status">Also tagged on the thread: {card.alsoTag.map((a) => a.name).join(", ")}</small>}
           {draftNote.unmatched.length > 0 && <small className="msg-status">Heard "{draftNote.unmatched.join(", ")}" but couldn't find them on this project. Pick them above.</small>}
         </div>
         <div className="msg-field"><span>Priority</span>

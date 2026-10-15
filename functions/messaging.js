@@ -41,7 +41,12 @@ async function requireMember(request, key) {
   return String(pid);
 }
 
-const words = (m) => [m.text, m.transcript].map((s) => String(s ?? "").trim()).filter(Boolean).join("\n");
+// The typed words and what was said; once only when they say the same thing (a report's description often does)
+const same = (a, b) => a.toLowerCase().replace(/[.!?\s]+$/, "") === b.toLowerCase().replace(/[.!?\s]+$/, "");
+const words = (m) => {
+  const [text, said] = [m.text, m.transcript].map((s) => String(s ?? "").trim());
+  return (text && said && same(text, said) ? [said] : [text, said]).filter(Boolean).join("\n");
+};
 const excerpt = (m) => (words(m) || m.aiDescription || "").replace(/\s+/g, " ").trim().slice(0, 160);
 
 /** The feed card's one line: a quick reply reads "Delayed · Weather · new date Fri", a close "Closed by Tia" */

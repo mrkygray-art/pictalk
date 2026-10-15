@@ -8,7 +8,7 @@ import { namesLine, timeAgo } from "./format";
 import { SHOW_AI_PHOTO_DESCRIPTION } from "../features";
 import { recordAction, syncRecord } from "./recordStore";
 import {
-  addPeople, fileUrl, markRead, queueMessage, setStatus, setTask, watchConversation, watchMessages,
+  addPeople, fileUrl, markRead, pendingLine, queueMessage, setStatus, setTask, watchConversation, watchMessages,
 } from "./messagingStore";
 
 // One thread: who it's for (with what's been seen and answered, in plain words), every message in
@@ -68,7 +68,7 @@ function Message({ m, me, pending, onTask }) {
     <li className={`msg${mine ? " is-mine" : ""}${pending ? " is-pending" : ""}`}>
       <div className="msg-head">
         <strong>{pending ? me.name : m.authorName}</strong>
-        <small>{pending ? (m.lastError ? "Not sent yet · tries again with signal" : "Sending…") : timeAgo(m.clientCreatedAt)}</small>
+        <small>{pending ? pendingLine(m, me.procoreUserId) : timeAgo(m.clientCreatedAt)}</small>
       </div>
       {m.status && <p className={`msg-status-line is-${m.status.code}`}>{statusText(m.status)}</p>}
       {(m.photos?.length ?? 0) > 0 && (
@@ -80,7 +80,8 @@ function Message({ m, me, pending, onTask }) {
       {m.transcript && <p className="msg-words">{m.transcript}</p>}
       {!pending && m.voicePath && !m.transcript && m.transcriptStatus === "pending" && <p className="msg-status">Writing it down…</p>}
       {!pending && m.transcriptStatus === "failed" && !m.transcript && <p className="msg-status">Couldn't write down this voice note. Play it above.</p>}
-      {m.text && <p className="msg-words">{m.text}</p>}
+      {/* the typed words, unless they just repeat what was said (a report's description often does) */}
+      {m.text && m.text.trim().toLowerCase().replace(/[.!?\s]+$/, "") !== String(m.transcript ?? "").trim().toLowerCase().replace(/[.!?\s]+$/, "") && <p className="msg-words">{m.text}</p>}
       {SHOW_AI_PHOTO_DESCRIPTION && m.aiDescription && (
         <div className="stop-box photo-desc">
           <span className="stop-box-label">Photo description (AI)</span>

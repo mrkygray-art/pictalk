@@ -187,7 +187,13 @@ export default function ConversationView({ session, projectKey, cid, pending, on
       </div>
       <div className="conv-people">
         <p><small>From {conv?.createdBy?.name ?? me.name}{conv?.createdAt ? ` · Sent ${clock(conv.createdAt)}` : ""}</small></p>
-        <p>To: <strong>{namesLine(tagged, 6)}</strong></p>
+        {conv?.procore && (
+          <p className="procore-link">
+            <strong>Procore {conv.procore.recordType === "punch_item" ? "Punch Item" : "Observation"}{conv.procore.number ? ` #${conv.procore.number}` : ""}</strong>
+            {" · "}<a href={conv.procore.url} target="_blank" rel="noopener">Open in Procore</a>
+          </p>
+        )}
+        <p>To: <strong>{tagged.length ? namesLine(tagged, 6) : "no one yet"}</strong></p>
         {conv && <Tracking conv={conv} />}
         {conv && !closed && <button type="button" className="stop-more" onClick={() => setAdding(true)}>Add People</button>}
       </div>

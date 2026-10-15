@@ -4,6 +4,8 @@ import { useProcoreSession } from "./useProcoreSession";
 import Feed from "./Feed";
 import ConversationView from "./ConversationView";
 import Composer from "./Composer";
+import ReportFlow from "./ReportFlow";
+import { readBeta } from "./beta";
 import { onQueueChange, pendingMessages, startMessageSync, watchReads } from "./messagingStore";
 
 // SiteSnap AI as project messaging (SPEC-messaging-pivot): sign in with Procore, pick a project, and
@@ -13,6 +15,7 @@ const RESULT = { denied: "Procore sign-in was cancelled.", error: "Procore sign-
 
 export default function MessagingApp() {
   const [embed] = useState(readEmbed);
+  const [beta] = useState(readBeta); // Report an Issue (voice + photo -> Procore record) while it is tested
   const session = useProcoreSession({ linkCompanyId: embed.companyId, linkProjectId: embed.projectId });
   const { state, me, projects, project, choose, signedIn } = session;
   const [view, setView] = useState({ name: "feed" }); // feed | conversation {cid} | compose
@@ -117,10 +120,14 @@ export default function MessagingApp() {
           <div className="msg-title-row">
             <h2 className="page-title">Messages</h2>
           </div>
-          <button type="button" className="big-btn photo-btn msg-new" onClick={() => setView({ name: "compose" })}>New Message</button>
+          {beta && <button type="button" className="big-btn photo-btn msg-new" onClick={() => setView({ name: "report" })}>Report an Issue</button>}
+          <button type="button" className={`big-btn ${beta ? "plain-btn" : "photo-btn"} msg-new`} onClick={() => setView({ name: "compose" })}>New Message</button>
           <Feed projectKey={key} me={me.procoreUserId} reads={reads} pending={pending} onOpen={(cid) => setView({ name: "conversation", cid })} />
           <p className="msg-footnote">Only people on this Procore project can see its messages. Everyone on a message can see when it was sent, seen and answered.</p>
         </>
+      )}
+      {view.name === "report" && (
+        <ReportFlow session={session} onClose={() => setView({ name: "feed" })} onOpenThread={(cid) => setView({ name: "conversation", cid })} />
       )}
       {view.name === "compose" && (
         <Composer mode="new" session={session} onCancel={() => setView({ name: "feed" })} onSent={(cid) => setView({ name: "conversation", cid })} />

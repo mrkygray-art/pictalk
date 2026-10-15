@@ -93,6 +93,7 @@ export default function Feed({ projectKey, me, reads, pending, onOpen }) {
                     <span className="conv-meta">
                       {summaryLine(c)}
                       {c.status === "closed" && <span className="pill">Closed</span>}
+                      {c.procore && <span className="pill is-procore">{c.procore.recordType === "punch_item" ? "Punch Item" : "Observation"}{c.procore.number ? ` #${c.procore.number}` : ""}</span>}
                       {tasks.length > 0 && <span className="pill is-task">{tasks.length} to do for you</span>}
                     </span>
                   </div>

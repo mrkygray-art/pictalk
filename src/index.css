@@ -2899,3 +2899,15 @@ div.adm-stat {
 .conv-track { list-style: none; padding: 0; margin: 4px 0; display: grid; gap: 2px; font-size: 14px; }
 .conv-track span { color: var(--muted); }
 .msg-who strong { color: var(--text); font-weight: 600; }
+/* Report an Issue (voice + photo -> Procore record) */
+.report { display: grid; gap: 12px; }
+.report-wait { min-height: 50vh; align-content: center; text-align: center; }
+.report-type { grid-template-columns: 1fr 1fr; }
+.report-send { width: 100%; }
+.report-sent { display: grid; gap: 8px; background: var(--surface); border-radius: 16px; padding: 14px 16px; }
+.report-sent p { font-size: 17px; }
+.report-sent .big-btn { text-decoration: none; }
+.procore-link { font-size: 15px; }
+.procore-link a { color: var(--brand-ink); }
+.conv-meta .pill.is-procore { background: var(--brand-soft); color: var(--brand-ink); }
+select.dir-input { appearance: auto; }

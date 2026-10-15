@@ -161,3 +161,13 @@ test("closed: no new messages (rules too, not just the screen); only the sender 
   await assertSucceeds(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/k1/messages/n4`), msg("102")), "open again: messages are back");
   await assertFails(setDoc(doc(fs("103"), `procoreProjects/${KEY}/conversations/k1/messages/n5`), line("103", "reopened")), "a reopened line from someone not on it");
 });
+
+test("a thread that follows a Procore record may start with no one tagged; a bad record link is refused", async () => {
+  const link = { recordType: "punch_item", id: 196900, number: "2", url: "https://sandbox.procore.com/373235/project/punch_list/196900", projectId: "373235", title: "Redo drywall" };
+  await assertSucceeds(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/r1`), conv("102", [], { procore: link })));
+  await assertSucceeds(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/r2`), conv("102", ["101"], { procore: link })));
+  await assertFails(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/r3`), conv("102", [])), "a plain message still needs someone tagged");
+  await assertFails(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/r4`), conv("102", [], { procore: { ...link, recordType: "rfi" } })));
+  await assertFails(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/r5`), conv("102", [], { procore: { ...link, token: "x" } })), "only known keys");
+  await assertFails(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/r6`), conv("102", [], { procore: { ...link, id: "196900" } })), "id is a number");
+});

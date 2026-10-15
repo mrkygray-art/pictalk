@@ -167,3 +167,23 @@ The spec's "done when" is a script that creates an Observation and a Punch Item 
 - "Something's off back there": low confidence, mostly blank.
 
 Rules tests: `tests/classifier.test.js`.
+
+## Step 3: the confirmation card and create flow (2026-10-14)
+
+**Off for everyone until tested:** Report an Issue shows only on a phone that opened the app once with `?beta=report` (`src/messaging/beta.js`; `?beta=off` hides it again).
+
+The flow (`src/messaging/ReportFlow.jsx`):
+1. **Capture:** Take Photo (up to 4) and Tap to Talk. The words come back and can be edited, or typed instead.
+2. **Fill It In:** `classifyCapture` drafts the card, using the project's lists from `GET /api/procore/record-options` (Observation types, trades, locations) and the directory.
+3. **The card:** Observation | Punch Item, title, what's going on, kind of observation (grouped, Quality and Safety first), who it's for (Change opens the directory search), priority, where, trade, due, and the photos. Anything not said stays blank.
+4. **Send to Procore:** the phone shrinks the photos (1600 px JPEG) and posts them with the voice file to `POST /api/procore/records`. The server writes with the reporter's own Procore sign-in:
+   - uploads, then the record (not private, HTML description, "Reported by …", the words as said);
+   - if Procore won't let them assign someone, it's created unassigned and the screen says so;
+   - Procore's email goes to the assignee only.
+5. **Sent screen:** the type and number, Open in Procore, Open the Thread. The thread is created automatically: the capture is its first message, it's linked to the record (`procore {recordType, id, number, url}` on the conversation), and the assignees are tagged.
+
+**Deploy needed before it works live:** the rules (threads with a Procore link may start with no one tagged) and the new `classifyCapture` function:
+```
+firebase deploy --only firestore:rules,functions:classifyCapture --project sitesnap-procore
+```
+**Done when** (spec): a real capture from the phone creates a correct record in Procore with photo, transcript and "Reported by".

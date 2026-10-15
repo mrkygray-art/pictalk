@@ -175,6 +175,8 @@ async function run() {
             status: "open",
             createdAt: m.clientCreatedAt,
             lastActivityAt: m.clientCreatedAt,
+            // the Procore record this thread follows (voice + photo -> Procore record)
+            ...(m.newConversation.procore ? { procore: m.newConversation.procore } : {}),
           });
         }
       }

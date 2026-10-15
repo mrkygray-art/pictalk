@@ -16,7 +16,9 @@ const fake = () => process.env.FUNCTIONS_EMULATOR === "true" && process.env.PICT
 
 // The lists, trimmed to what the classifier needs (and capped, so a huge project can't blow up the prompt)
 function cleanContext(c = {}) {
-  const pick = (list, keys, max) => (Array.isArray(list) ? list : []).slice(0, max).map((x) => Object.fromEntries(keys.map((k) => [k, x?.[k] == null ? null : String(x[k]).slice(0, 120)])));
+  // ids stay numbers (Procore's), everything else short text
+  const val = (k, v) => (v == null ? null : k === "id" && Number.isFinite(Number(v)) ? Number(v) : String(v).slice(0, 120));
+  const pick = (list, keys, max) => (Array.isArray(list) ? list : []).slice(0, max).map((x) => Object.fromEntries(keys.map((k) => [k, val(k, x?.[k])])));
   return {
     projectName: String(c.projectName ?? "").slice(0, 120),
     timeZone: typeof c.timeZone === "string" ? c.timeZone.slice(0, 60) : undefined,

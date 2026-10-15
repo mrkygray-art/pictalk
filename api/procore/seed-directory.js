@@ -4,10 +4,11 @@
 // POST { action: "cleanup" }   : makes the ticked earlier test people and companies inactive (Procore has no delete
 //                                for either). The plan is worked out again here, so only "remove" / "ask" rows can
 //                                change: never the signed-in person, @procore.com users or Architect TEST Company.
-// POST { action: "role" }                    : creates the Superintendent role for site leads if the company lacks it.
 // POST { action: "company", index }         : one test company: create it (or update it), add it to the project.
 // POST { action: "person", index, person }  : one of its people: create (or update and reactivate), add to the
-//                                project, and give a Project Role the project has (see projectRoleFor).
+//                                project, and (PMs only) give the Project Manager Project Role.
+// POST { action: "verify", set }            : reads the directory back and checks each test person: company, email,
+//                                tag, on the project, Project Role; duplicates; totals. Nothing changes.
 // Small steps, and every Procore call is paced: Procore allows about 25 calls per 10 seconds ("spike limit",
 // developers.procore.com/documentation/rate-limiting); a 429 waits out the window and tries once more.
 // Endpoints (Procore reference, checked 2026-10-14): GET/POST /rest/v1.3/companies/{c}/users, PATCH .../users/{id},
@@ -19,7 +20,7 @@
 // Sandbox only (PROCORE_API_URL must be Procore's sandbox). Same-origin JSON for the POSTs. Never returns a token.
 import { config, HttpError, procoreId, requireSameOriginJson, readBody, sendError, sendJson } from "../_procore.js";
 import { procoreSend } from "../_procoreWrite.js";
-import { SEED, cleanupPlan, projectRoleFor, removable, userBody, vendorBody } from "../_seedDirectory.js";
+import { SEED, TAG, cleanupPlan, isSeedEmail, projectRoleFor, removable, userBody, vendorBody } from "../_seedDirectory.js";
 
 const brief = (r) => (r.ok ? `ok (${r.status})` : `Procore answered ${r.status}: ${JSON.stringify(r.json?.errors ?? r.json?.message ?? r.json?.error ?? r.json ?? "").slice(0, 300)}`);
 const lower = (s) => String(s ?? "").trim().toLowerCase();
@@ -91,13 +92,15 @@ button:disabled{opacity:.5}select{font:inherit;font-size:17px;width:100%;padding
 .row{display:flex;gap:10px;align-items:flex-start;background:#221d18;border-radius:12px;padding:10px 14px;margin:6px 0}.row input{width:22px;height:22px;margin-top:2px;flex:none}
 .ok{color:#30d158}.bad{color:#ff5f57}.tag{font-size:13px;color:#ffc24d}a{color:#ffc24d}small{color:#b8ac9c}h2{margin-top:28px}</style></head>
 <body><h1>Test companies and people</h1>
-<p>Adds 4 test companies (Ironbridge, VoltLine, ClearFlow, Summit) and 16 people to the project you pick: job title, phones, company, and a Project Role for each. Site leads get a Superintendent role (created if Procore doesn't have one). Permission templates are left for later. Everything is made up; emails go to your Gmail with +addresses. It goes slowly on purpose (Procore allows about 25 calls per 10 seconds): give it about 5 minutes and keep this page open.</p>
+<p>Adds test companies and people to the project you pick: job title, phones, company, and tag. Project Managers get the Project Manager role; supervisors and workers get none (their job title shows). Permission templates are left for later. Running it again updates the same records, never duplicates. Everything is made up; emails go to your Gmail with +addresses. It goes slowly on purpose (Procore allows about 25 calls per 10 seconds): give it about 5 minutes and keep this page open.</p>
 <p>First it makes your <b>earlier test people and companies inactive</b> (Procore has no delete). You see the list and choose before anything changes. Procore's own test records, Architect TEST Company, and you are never touched.</p>
 <p id="who"><small>Checking your Procore sign-in…</small></p>
 <label for="p">Project</label> <select id="p"></select>
+<label for="set">Which companies</label> <select id="set"><option value="2" selected>Set 2: Summit Roofing, Pacific Concrete, Apex Fire, Cornerstone, Sentinel (21 people)</option><option value="1">Set 1: Ironbridge, VoltLine, ClearFlow, Summit Framing (11 people)</option></select>
 <button id="check" disabled>Check What's There</button>
 <div id="plan"></div>
 <button id="run" hidden>Make Ticked Ones Inactive and Add Test People</button>
+<button id="verify" hidden>Verify</button>
 <div id="out"></div>
 <script>
 const $=(s)=>document.querySelector(s); let ids=null;
@@ -116,12 +119,17 @@ $('#check').onclick=async()=>{
   $('#check').disabled=true; $('#plan').innerHTML='<p>Reading the directory…</p>'; $('#out').innerHTML='';
   try{
     const b=await post({action:'plan'});
-    $('#plan').innerHTML='<h2>Companies</h2><p><small>Ticked = made inactive. Greyed = stays.</small></p>'+rows(b.vendors,'vendor')+'<h2>People</h2>'+rows(b.users,'user')+'<h2>Will add</h2><p>'+b.seed.map(c=>'<b>'+esc(c.name)+'</b> ('+c.vendor+'), '+c.people.length+' people').join('<br>')+'</p>';
-    $('#run').hidden=false;
+    $('#plan').innerHTML='<h2>Companies</h2><p><small>Ticked = made inactive. Greyed = stays.</small></p>'+rows(b.vendors,'vendor')+'<h2>People</h2>'+rows(b.users,'user')+'<h2>Will add</h2><p>'+b.seed.filter(c=>String(c.set)===$('#set').value).map(c=>'<b>'+esc(c.name)+'</b> ('+c.vendor+'), '+c.people.length+' people').join('<br>')+'</p>';
+    $('#run').hidden=false; $('#verify').hidden=false; window.seedList=b.seed;
   }catch(e){ $('#plan').innerHTML='<p class="bad">'+esc(e.message)+'</p>'; }
   $('#check').disabled=false;
 };
 const show=(steps)=>{ $('#out').innerHTML+=steps.map(s=>'<div class="row"><span><b class="'+(s.ok?'ok':'bad')+'">'+(s.ok?'✓':'✗')+' '+esc(s.name)+'</b><br><small>'+esc(s.detail)+'</small></span></div>').join(''); };
+$('#verify').onclick=async()=>{
+  $('#verify').disabled=true; $('#out').innerHTML='<h2>Verify</h2><p><small>Reading the directory…</small></p>';
+  try{ show((await post({action:'verify',set:$('#set').value})).steps); }catch(e){ $('#out').innerHTML+='<p class="bad">'+esc(e.message)+'</p>'; }
+  $('#verify').disabled=false;
+};
 $('#run').onclick=async()=>{
   const picked=(k)=>[...document.querySelectorAll('input[data-kind='+k+']:checked:not(:disabled)')].map(i=>i.value);
   $('#run').disabled=true; $('#check').disabled=true; $('#out').innerHTML='<h2>Results</h2>';
@@ -129,8 +137,9 @@ $('#run').onclick=async()=>{
     // A step that fails (Procore's rate limit, a timeout): wait a minute and try it once more
     const call=async(body)=>{ try{ return await post(body); }catch(e){ $('#out').innerHTML+='<p><small>'+esc(e.message)+' Waiting a minute, then trying that step again…</small></p>'; await new Promise(r=>setTimeout(r,60000)); return post(body); } };
     show((await call({action:'cleanup',userIds:picked('user'),vendorIds:picked('vendor')})).steps);
-    show((await call({action:'role'})).steps);
-    for(let i=0;i<4;i++){ $('#out').innerHTML+='<p><small>Company '+(i+1)+' of 4…</small></p>'; const co=await call({action:'company',index:i}); show(co.steps); for(let p=0;p<4;p++) show((await call({action:'person',index:i,person:p,vendorId:co.vendorId})).steps); }
+    const list=(window.seedList||[]).filter(c=>String(c.set)===$('#set').value);
+    for(const [n,c] of list.entries()){ $('#out').innerHTML+='<p><small>Company '+(n+1)+' of '+list.length+': '+esc(c.name)+'…</small></p>'; const co=await call({action:'company',index:c.index}); show(co.steps); for(let p=0;p<c.size;p++) show((await call({action:'person',index:c.index,person:p,vendorId:co.vendorId})).steps); }
+    $('#out').innerHTML+='<h2>Verify</h2>'; show((await call({action:'verify',set:$('#set').value})).steps);
     $('#out').innerHTML+='<p><b>Done.</b> <small>Take a screenshot of anything with a ✗ and send it to Claude. Then open SiteSnap and refresh the directory.</small></p>';
   }catch(e){ $('#out').innerHTML+='<p class="bad">'+esc(e.message)+'</p>'; }
   $('#run').disabled=false; $('#check').disabled=false;
@@ -163,22 +172,6 @@ async function cleanup(req, res, cfg, companyId, body) {
   }
   if (!steps.length) steps.push({ name: "Cleanup", ok: true, detail: "Nothing ticked, nothing changed." });
   return steps;
-}
-
-// The Superintendent role for the site leads (Ky, 2026-10-14). POST /project_roles only takes a role name the
-// company already has, so create it in the company's roles (POST /rest/v2.0/companies/{c}/roles, the same list as
-// Company Admin > Project Roles), shaped like the company's Project Manager role.
-export const SITE_LEAD_ROLE = "Superintendent";
-async function ensureRole(req, res, cfg, companyId) {
-  const list = await api(req, res, cfg, "GET", `/rest/v2.0/companies/${companyId}/roles`, { companyId, query: { per_page: 100 } });
-  if (!list.ok) return [{ name: `Role ${SITE_LEAD_ROLE}`, ok: false, detail: `Couldn't read the company's roles. ${brief(list)}` }];
-  const roles = Array.isArray(list.json?.data) ? list.json.data : Array.isArray(list.json) ? list.json : [];
-  if (roles.some((r) => lower(r.name) === lower(SITE_LEAD_ROLE))) return [{ name: `Role ${SITE_LEAD_ROLE}`, ok: true, detail: "already there" }];
-  const pm = roles.find((r) => lower(r.name) === "project manager");
-  const r = await api(req, res, cfg, "POST", `/rest/v2.0/companies/${companyId}/roles`, {
-    companyId, body: { project_role: { name: SITE_LEAD_ROLE, type: pm?.type ?? "user", add_to_project_team: true, display_on_company_home: pm?.display_on_company_home ?? true } },
-  });
-  return [{ name: `Created role ${SITE_LEAD_ROLE}`, ok: r.ok, detail: `${brief(r)}${pm ? "" : " (no Project Manager role to copy, so type user)"}` }];
 }
 
 // The test company's vendor record, by name (active, else inactive). The company step hands its id on, because
@@ -242,23 +235,65 @@ async function addPerson(req, res, cfg, companyId, projectId, seed, u, vendorId)
   if (onProject.some((x) => String(x.id) === String(userId))) steps.push({ name: `${name} on the project`, ok: true, detail: "already there" });
   else step(`Added ${name} to the project`, await api(req, res, cfg, "POST", `/rest/v1.0/projects/${projectId}/users/${userId}/actions/add`, { companyId, body: { user: {} } }));
 
-  // Project Role: only a role name the company has (Procore answers 404 for any other)
+  // Project Role: PMs get Project Manager; GC and Worker get none (their job title shows)
+  if (!u.projectRole) {
+    steps.push({ name: `${name}: Project Role`, ok: true, detail: `none (role type ${u.roleType}); job title shows` });
+    return steps;
+  }
   const roles = (await pages(req, res, cfg, "/rest/v1.0/project_roles", { companyId, query: { project_id: projectId } })) ?? [];
-  // Plus the company's role names: a role just created (Superintendent) may not be listed on the project yet
-  const company = projectRoleFor(u.projectRole, roles.map((r) => r.role).filter(Boolean)) ? null
-    : await api(req, res, cfg, "GET", `/rest/v2.0/companies/${companyId}/roles`, { companyId, query: { per_page: 100 } });
-  const companyNames = company?.ok ? (company.json?.data ?? []).map((r) => r.name) : [];
-  const names = [...new Set([...roles.map((r) => r.role), ...companyNames].filter(Boolean))];
-  const role = projectRoleFor(u.projectRole, names);
+  const role = projectRoleFor(u.projectRole, roles.map((r) => r.role).filter(Boolean));
   if (!role) {
-    steps.push({ name: `${name}: Project Role`, ok: true, detail: `None set: this project has no "${u.projectRole}" role (it has ${names.join(", ") || "none"}). Job title shows instead.` });
+    steps.push({ name: `${name}: Project Role ${u.projectRole}`, ok: false, detail: `This project has no "${u.projectRole}" role. Add it in Procore and run again.` });
   } else if (roles.some((r) => String(r.user_id) === String(userId) && lower(r.role) === lower(role))) {
     steps.push({ name: `${name}: Project Role ${role}`, ok: true, detail: "already set" });
   } else {
     step(`${name}: Project Role ${role}`, await api(req, res, cfg, "POST", "/rest/v1.0/project_roles", {
       companyId, body: { project_id: Number(projectId), project_role: { role, user_id: Number(userId) } },
-    }), role !== u.projectRole ? ` (closest to "${u.projectRole}")` : "");
+    }));
   }
+  return steps;
+}
+
+// Read everything back for one set: each person once, in the right company, exact email, tag, on the project,
+// Project Role only for PMs; no duplicate emails; totals for the whole directory.
+async function verify(req, res, cfg, companyId, projectId, set) {
+  const steps = [];
+  const { users, vendors } = await directory(req, res, cfg, companyId);
+  const active = users.filter((u) => u.is_active);
+  const onProject = new Set(((await pages(req, res, cfg, `/rest/v1.0/projects/${projectId}/users`, { companyId })) ?? []).map((u) => String(u.id)));
+  const roles = (await pages(req, res, cfg, "/rest/v1.0/project_roles", { companyId, query: { project_id: projectId } })) ?? [];
+  const rolesOf = (id) => roles.filter((r) => String(r.user_id) === String(id)).map((r) => r.role);
+  for (const c of SEED.filter((x) => x.set === set)) {
+    const vendor = vendors.find((v) => lower(v.name) === lower(c.vendor.name));
+    const problems = [];
+    if (!vendor) problems.push("company not found");
+    else if (vendor.is_active === false) problems.push("company is inactive");
+    for (const u of c.users) {
+      const name = `${u.first_name} ${u.last_name}`;
+      const hits = users.filter((x) => lower(x.email_address) === lower(u.email_address));
+      const x = hits[0];
+      if (!x) { problems.push(`${name}: not found`); continue; }
+      if (hits.length > 1) problems.push(`${name}: ${hits.length} records with this email`);
+      if (x.email_address !== u.email_address) problems.push(`${name}: email is ${x.email_address}`);
+      if (!x.is_active) problems.push(`${name}: inactive`);
+      if (vendor && String(x.vendor?.id) !== String(vendor.id)) problems.push(`${name}: company is ${x.vendor?.name ?? "none"}`);
+      if (x.job_title !== undefined && x.job_title !== u.job_title) problems.push(`${name}: job title is ${x.job_title || "blank"}`);
+      if (x.notes !== undefined && x.notes !== `${TAG}. Role type: ${u.roleType}.`) problems.push(`${name}: tag is "${x.notes ?? ""}"`);
+      if (!onProject.has(String(x.id))) problems.push(`${name}: not on the project`);
+      const has = rolesOf(x.id);
+      if (u.projectRole && !has.some((r) => lower(r) === lower(u.projectRole))) problems.push(`${name}: no ${u.projectRole} role`);
+      if (!u.projectRole && has.length) problems.push(`${name}: has role ${has.join(", ")}`);
+    }
+    steps.push({ name: `${c.vendor.name}: ${c.users.length} people`, ok: !problems.length, detail: problems.length ? problems.join("; ") : "all found: right company, email, tag, on the project, roles as expected" });
+  }
+  const emails = active.map((u) => lower(u.email_address)).filter(Boolean);
+  const dupes = [...new Set(emails.filter((e, i) => emails.indexOf(e) !== i))];
+  steps.push({ name: "No duplicate emails", ok: !dupes.length, detail: dupes.length ? dupes.join(", ") : "none" });
+  const mine = SEED.filter((c) => c.set === set).flatMap((c) => c.users);
+  const count = (t) => mine.filter((u) => u.roleType === t).length;
+  const test = active.filter((u) => isSeedEmail(u.email_address)).length;
+  const procore = active.filter((u) => lower(u.email_address).endsWith("@procore.com")).length;
+  steps.push({ name: "Totals", ok: true, detail: `This set: ${count("PM")} PM, ${count("GC")} GC, ${count("Worker")} Worker. Active in the company directory: ${active.length} people (${test} SiteSnap test people, ${procore} Procore test accounts, ${active.length - test - procore} others).` });
   return steps;
 }
 
@@ -282,14 +317,14 @@ export default async function handler(req, res) {
 
     if (body.action === "plan") {
       const { plan: p } = await plan(req, res, cfg, companyId);
-      const seed = SEED.map((c) => ({ name: c.vendor.name, vendor: p.vendors.some((v) => v.action === "reuse" && lower(v.name) === lower(c.vendor.name)) ? "already there, will be updated" : "new", people: c.users.map((u) => `${u.first_name} ${u.last_name}`) }));
+      const seed = SEED.map((c, index) => ({ index, set: c.set, size: c.users.length, name: c.vendor.name, vendor: p.vendors.some((v) => v.action === "reuse" && lower(v.name) === lower(c.vendor.name)) ? "already there, will be updated" : "new", people: c.users.map((u) => `${u.first_name} ${u.last_name}`) }));
       return sendJson(res, 200, { ...p, seed });
     }
     const seed = SEED[Number(body.index)];
     const who = seed?.users[Number(body.person)];
     let out;
     if (body.action === "cleanup") out = { steps: await cleanup(req, res, cfg, companyId, body) };
-    else if (body.action === "role") out = { steps: await ensureRole(req, res, cfg, companyId) };
+    else if (body.action === "verify") out = { steps: await verify(req, res, cfg, companyId, projectId, Number(body.set) === 1 ? 1 : 2) };
     else if (body.action === "company" && seed) out = await addCompany(req, res, cfg, companyId, projectId, seed);
     else if (body.action === "person" && who) out = { steps: await addPerson(req, res, cfg, companyId, projectId, seed, who, body.vendorId) };
     else throw new HttpError(400, "bad_request", "Unknown step.");

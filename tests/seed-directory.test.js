@@ -96,8 +96,6 @@ test("cleanup plan keeps the signed-in person, Procore's test records and their 
 });
 
 test("request bodies follow Ky's sheet: CA / US, no permission template, not an employee, phone extension", () => {
-  assert.equal(SEED.length, 4);
-  assert.equal(SEED.flatMap((c) => c.users).length, 16);
   const c = SEED[1];
   const vb = vendorBody("4291776", c.vendor);
   assert.equal(vb.company_id, 4291776);
@@ -110,6 +108,28 @@ test("request bodies follow Ky's sheet: CA / US, no permission template, not an 
   assert.equal("default_permission_template_id" in ub, false);
   assert.equal("projectRole" in ub, false);
   assert.equal("email_address" in userBody(c.users[2], 55, c.vendor, { update: true }).user, false);
+});
+
+test("set 1 is what's in Procore (11 people); set 2 is the expansion spec (5 companies, 21 people)", () => {
+  const set = (n) => SEED.filter((c) => c.set === n);
+  assert.deepEqual(set(1).map((c) => c.users.length), [4, 4, 3, 0]);
+  const two = set(2);
+  assert.deepEqual(two.map((c) => c.vendor.name), ["Summit Roofing & Waterproofing", "Pacific Concrete & Foundations", "Apex Fire Protection Systems", "Cornerstone Drywall & Framing", "Sentinel Low Voltage & Security"]);
+  const people = two.flatMap((c) => c.users);
+  assert.equal(people.length, 21);
+  assert.deepEqual(["PM", "GC", "Worker"].map((t) => people.filter((u) => u.roleType === t).length), [5, 5, 11]);
+  // Emails follow mrkygray+<first initial><last name>, all lowercase, and are unique across both sets
+  for (const u of people) assert.equal(u.email_address, `mrkygray+${u.first_name[0]}${u.last_name}@gmail.com`.toLowerCase());
+  const all = SEED.flatMap((c) => c.users).map((u) => u.email_address);
+  assert.equal(new Set(all).size, all.length);
+  // Only PMs get a Project Role; the tag says the role type
+  assert.ok(people.every((u) => (u.roleType === "PM" ? u.projectRole === "Project Manager" : u.projectRole === null)));
+  const lena = userBody(two[1].users[1], 9, two[1].vendor).user;
+  assert.deepEqual([lena.email_address, lena.job_title, lena.mobile_phone, lena.business_phone, lena.notes, lena.state_code, lena.country_code],
+    ["mrkygray+lkowalski@gmail.com", "Concrete Superintendent", "(424) 555-0192", "(424) 555-0180", "SiteSnap test data. Role type: GC.", "CA", "US"]);
+  assert.equal("business_phone_extension" in lena, false);
+  const v = vendorBody("1", two[0].vendor).vendor;
+  assert.deepEqual([v.name, v.email_address, v.business_phone, v.address], ["Summit Roofing & Waterproofing", "mrkygray+SummitRoofingCompany@gmail.com", "(310) 555-0160", undefined]);
 });
 
 test("GET shows the page; it only runs against Procore's sandbox", async () => {
@@ -177,31 +197,40 @@ function personRoutes({ roles = ["Project Manager", "Superintendent", "Architect
 }
 const writes = () => calls.filter((c) => c.method !== "GET").map((c) => `${c.method} ${c.url.replace(ENV.PROCORE_API_URL, "")}`);
 
-test("person: creates them in the right company, adds them to the project, General Contractor becomes Superintendent", async () => {
+test("person: a PM is created in the right company, added to the project, and given Project Manager", async () => {
   personRoutes();
-  const out = await run(req("POST", { action: "person", index: 0, person: 1, ...ids }));
+  const out = await run(req("POST", { action: "person", index: 0, person: 0, ...ids }));
   assert.equal(out.statusCode, 200, out.body);
   assert.deepEqual(writes(), ["POST /rest/v1.3/companies/4291776/users", "POST /rest/v1.0/projects/373235/users/301/actions/add", "POST /rest/v1.0/project_roles"]);
   const created = calls.find((c) => c.method === "POST" && /\/users$/.test(c.url)).body.user;
-  assert.deepEqual([created.email_address, created.vendor_id], ["mrkygray+dokafor@gmail.com", 94]);
-  assert.equal(calls.at(-1).body.project_role.role, "Superintendent");
+  assert.deepEqual([created.email_address, created.vendor_id], ["mrkygray+mhale@gmail.com", 94]);
+  assert.equal(calls.at(-1).body.project_role.role, "Project Manager");
   assert.ok(out.json().steps.every((s) => s.ok), out.body);
 });
 
-test("person: a site lead gets Superintendent from the company's roles when the project doesn't list it yet", async () => {
-  personRoutes({ roles: ["Project Manager"] });
+test("person: a supervisor (GC) gets no Project Role and no role calls", async () => {
+  personRoutes();
   const out = await run(req("POST", { action: "person", index: 0, person: 1, ...ids }));
-  assert.equal(calls.at(-1).body.project_role.role, "Superintendent");
-  assert.ok(out.json().steps.every((s) => s.ok), out.body);
+  assert.equal(out.statusCode, 200, out.body);
+  assert.deepEqual(writes(), ["POST /rest/v1.3/companies/4291776/users", "POST /rest/v1.0/projects/373235/users/301/actions/add"]);
+  assert.ok(!calls.some((c) => /project_roles|\/roles/.test(c.url)));
+  assert.match(out.json().steps.at(-1).detail, /none \(role type GC\)/);
 });
 
-test("person: an existing, inactive one is updated and made active again; a Worker gets no role", async () => {
+test("person: an existing, inactive one is updated and made active again", async () => {
   personRoutes({ userList: [{ id: 301, email_address: "mrkygray+tbrandt@gmail.com" }], inactive: true });
   const out = await run(req("POST", { action: "person", index: 0, person: 2, ...ids }));
   assert.equal(out.statusCode, 200, out.body);
   assert.deepEqual(writes(), ["PATCH /rest/v1.3/companies/4291776/users/301", "POST /rest/v2.0/companies/4291776/people/bulk_activate", "POST /rest/v1.0/projects/373235/users/301/actions/add"]);
-  assert.match(out.json().steps.at(-1).detail, /no "Worker" role/);
   assert.doesNotMatch(out.body, /access-1|refresh-1|never-leak/);
+});
+
+test("person: a PM on a project without the Project Manager role is reported, not guessed", async () => {
+  personRoutes({ roles: ["Architect"] });
+  const out = await run(req("POST", { action: "person", index: 0, person: 0, ...ids }));
+  const last = out.json().steps.at(-1);
+  assert.equal(last.ok, false);
+  assert.match(last.detail, /no "Project Manager" role/);
 });
 
 test("a 429 waits and tries once more", async () => {
@@ -223,22 +252,38 @@ test("person: a company too new for Procore's search is found by the id the comp
   assert.ok(out.json().steps.every((s) => s.ok), out.body);
 });
 
-test("role: creates Superintendent shaped like the Project Manager role, once", async () => {
-  sandbox();
-  let roles = [{ id: "1", name: "Project Manager", type: "user", display_on_company_home: true }];
-  on("GET", /\/rest\/v2\.0\/companies\/4291776\/roles\?/, () => ({ body: { data: roles } }));
-  on("POST", /\/rest\/v2\.0\/companies\/4291776\/roles$/, (u, init) => { roles = [...roles, JSON.parse(init.body).project_role]; return { status: 201, body: { data: {} } }; });
-  const first = await run(req("POST", { action: "role", ...ids }));
-  assert.equal(first.statusCode, 200, first.body);
-  assert.deepEqual(calls.find((c) => c.method === "POST").body, { project_role: { name: "Superintendent", type: "user", add_to_project_team: true, display_on_company_home: true } });
-  assert.ok(first.json().steps[0].ok);
-  const again = await run(req("POST", { action: "role", ...ids }));
-  assert.equal(again.json().steps[0].detail, "already there");
-  assert.equal(calls.filter((c) => c.method === "POST").length, 1);
+test("role names: matched in any case; none wanted, none given", () => {
+  assert.equal(projectRoleFor("Project Manager", ["project manager", "Architect"]), "project manager");
+  assert.equal(projectRoleFor("Project Manager", ["Architect"]), null);
+  assert.equal(projectRoleFor(null, ["Project Manager"]), null);
 });
 
-test("role names: exact first (any case), then the closest for General Contractor, else none", () => {
-  assert.equal(projectRoleFor("Project Manager", ["project manager", "Architect"]), "project manager");
-  assert.equal(projectRoleFor("General Contractor", ["Foreman", "Superintendent"]), "Superintendent");
-  assert.equal(projectRoleFor("Worker", ["Superintendent"]), null);
+test("verify: finds each person, checks company, email, tag, project and roles, and reports problems", async () => {
+  sandbox();
+  const two = SEED.filter((c) => c.set === 2);
+  const vend = two.map((c, i) => ({ id: 500 + i, name: c.vendor.name }));
+  let id = 600;
+  const people = two.flatMap((c, i) => c.users.map((u) => ({
+    id: ++id, name: `${u.first_name} ${u.last_name}`, email_address: u.email_address, job_title: u.job_title,
+    notes: `SiteSnap test data. Role type: ${u.roleType}.`, vendor: { id: 500 + i, name: c.vendor.name }, roleType: u.roleType,
+  })));
+  people[1].vendor = { id: 501, name: "Pacific Concrete & Foundations" }; // Derek in the wrong company
+  const all = [ME, ...people];
+  routes.splice(routes.findIndex((r) => r.test("https://sandbox.procore.test/rest/v1.3/companies/4291776/users?page=1", {})), 1,
+    { test: (u, init) => (init.method ?? "GET") === "GET" && /\/rest\/v1\.3\/companies\/4291776\/users\?/.test(u), reply: { body: all } });
+  routes.splice(routes.findIndex((r) => r.test("https://sandbox.procore.test/rest/v1.0/companies/4291776/people?page=1", {})), 1,
+    { test: (u) => /\/people\?/.test(u), reply: { body: all.map((u) => ({ id: u.id + 1000, user_id: u.id, contact: { is_active: true } })) } });
+  routes.splice(routes.findIndex((r) => r.test("https://sandbox.procore.test/rest/v1.0/vendors?page=1", {})), 1,
+    { test: (u) => /\/rest\/v1\.0\/vendors\?/.test(u), reply: { body: [...VENDORS, ...vend] } });
+  on("GET", /\/projects\/373235\/users\?/, { body: all });
+  on("GET", /\/rest\/v1\.0\/project_roles\?/, { body: people.filter((u) => u.roleType === "PM").map((u) => ({ role: "Project Manager", user_id: u.id })) });
+  const out = await run(req("POST", { action: "verify", set: 2, ...ids }));
+  assert.equal(out.statusCode, 200, out.body);
+  const steps = out.json().steps;
+  assert.equal(steps.length, 7);
+  assert.match(steps[0].detail, /Derek Lindqvist: company is Pacific Concrete/);
+  assert.ok(steps.slice(1, 5).every((s) => s.ok), out.body);
+  assert.ok(steps[5].ok);
+  assert.match(steps[6].detail, /5 PM, 5 GC, 11 Worker.*22 people \(21 SiteSnap test people/);
+  assert.equal(calls.filter((c) => c.method !== "GET").length, 0);
 });

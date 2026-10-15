@@ -130,6 +130,15 @@ test("Procore leaves the name out without a company: it asks again with one, els
   assert.equal(calls[3].headers["Procore-Company-Id"], "1");
 });
 
+test("a blank name (just a space) is never used: first and last name, then the login", async () => {
+  replies.push({ body: { id: 8, login: "tb@example.com", name: " " } });
+  replies.push({ body: [{ id: 1, name: "Co", is_active: true }] });
+  replies.push({ body: [{ id: 2, name: "P" }] });
+  replies.push({ body: { id: 8, name: "  ", first_name: "Tyler", last_name: "Brandt" } });
+  const out = await run(post());
+  assert.equal(out.json().me.name, "Tyler Brandt");
+});
+
 test("refuses without a Procore sign-in, a GET, a form post, or another site; nothing written", async () => {
   const noCookie = await run({ ...post(), headers: { ...post().headers, cookie: "" } });
   assert.equal(noCookie.statusCode, 401);

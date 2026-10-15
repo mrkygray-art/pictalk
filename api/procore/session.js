@@ -24,12 +24,17 @@ export default async function handler(req, res) {
     const procoreUserId = String(me.id);
     const { projects } = await listProjects(req, res, cfg);
     // Procore only fills in the name when a company is given
-    let name = me.name || null;
+    const clean = (u) => String(u?.name ?? "").trim() || [u?.first_name, u?.last_name].map((x) => String(x ?? "").trim()).filter(Boolean).join(" ");
+    let name = clean(me);
+    let from = "me";
     if (!name && projects[0]) {
       const named = await procoreGet(req, res, cfg, "/rest/v1.0/me", { companyId: projects[0].companyId, query: { company_id: projects[0].companyId } }).catch(() => null);
-      name = named?.name || null;
+      name = clean(named);
+      from = "me with company";
     }
-    name = name || me.login?.split("@")[0] || `Procore user ${procoreUserId}`;
+    if (!name) [name, from] = [String(me.login ?? "").split("@")[0].trim(), "login"];
+    if (!name) [name, from] = [`Procore user ${procoreUserId}`, "id"];
+    console.log("SiteSnap sign-in: name from", from, "· projects", projects.length);
 
     // Google errors (Firestore, Auth) name a code and a reason but never a Procore token, so log those
     let step = "firestore";

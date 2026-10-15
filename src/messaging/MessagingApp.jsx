@@ -73,7 +73,7 @@ export default function MessagingApp() {
   const multiCompany = new Set(projects.map((p) => p.companyId)).size > 1;
   // Who's signed in, from their Procore project directory entry: name · company · title (only what exists)
   const mine = session.dir?.people?.find((p) => String(p.id) === String(me.procoreUserId));
-  const whoLine = [me.name, mine?.company, mine?.title || mine?.role].filter(Boolean).join(" · ");
+  const whoLine = [String(me.name ?? "").trim() || mine?.name || "Signed in", mine?.company, mine?.title || mine?.role].filter(Boolean).join(" · ");
   if (!project || choosing) {
     return (
       <main className="app msg-app">

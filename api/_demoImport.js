@@ -106,6 +106,7 @@ export async function projectContext(req, res, cfg, { companyId, projectId, me }
     req, res, cfg, companyId, projectId, me, key: `${companyId}_${projectId}`,
     usersByEmail: new Map(users.map((u) => [lower(u.email_address), u])),
     observationTypes: types.ok && Array.isArray(types.json) ? types.json : [],
+    observationTypesStatus: types.status,
     personOf(key) {
       const p = personByKey(key);
       const u = p && this.usersByEmail.get(lower(p.email_address));
@@ -162,7 +163,9 @@ export async function importScenario(ctx, s, row) {
     // 1. Create (with the photo and the assignee when they work)
     if (!procoreIdNow) {
       const type = isObs ? pickObservationType(ctx.observationTypes, s.typeHints) : null;
-      if (isObs && !type) throw new StepFailed("create", "this project has no Observation types in Procore");
+      if (isObs && !type) throw new StepFailed("create", ctx.observationTypesStatus === 200
+        ? "this project has no Observation types in Procore"
+        : `Procore answered ${ctx.observationTypesStatus} for Observation types: the Observations tool is probably off in this project (Procore: the project's Admin tool, Active Tools, turn on Observations and Punch List)`);
       const pic = await photo();
       const a = assignee();
       const speaker = personByKey(s.speaker);

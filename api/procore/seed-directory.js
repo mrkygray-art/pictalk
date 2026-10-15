@@ -128,7 +128,7 @@ $('#run').onclick=async()=>{
     // A step that fails (Procore's rate limit, a timeout): wait a minute and try it once more
     const call=async(body)=>{ try{ return await post(body); }catch(e){ $('#out').innerHTML+='<p><small>'+esc(e.message)+' Waiting a minute, then trying that step again…</small></p>'; await new Promise(r=>setTimeout(r,60000)); return post(body); } };
     show((await call({action:'cleanup',userIds:picked('user'),vendorIds:picked('vendor')})).steps);
-    for(let i=0;i<4;i++){ $('#out').innerHTML+='<p><small>Company '+(i+1)+' of 4…</small></p>'; show((await call({action:'company',index:i})).steps); for(let p=0;p<4;p++) show((await call({action:'person',index:i,person:p})).steps); }
+    for(let i=0;i<4;i++){ $('#out').innerHTML+='<p><small>Company '+(i+1)+' of 4…</small></p>'; const co=await call({action:'company',index:i}); show(co.steps); for(let p=0;p<4;p++) show((await call({action:'person',index:i,person:p,vendorId:co.vendorId})).steps); }
     $('#out').innerHTML+='<p><b>Done.</b> <small>Take a screenshot of anything with a ✗ and send it to Claude. Then open SiteSnap and refresh the directory.</small></p>';
   }catch(e){ $('#out').innerHTML+='<p class="bad">'+esc(e.message)+'</p>'; }
   $('#run').disabled=false; $('#check').disabled=false;
@@ -163,10 +163,16 @@ async function cleanup(req, res, cfg, companyId, body) {
   return steps;
 }
 
-// The test company's vendor record, by name (active, else inactive)
-async function findVendor(req, res, cfg, companyId, name) {
-  const active = (await pages(req, res, cfg, "/rest/v1.0/vendors", { companyId, query: { company_id: companyId, "filters[search]": name } })) ?? [];
-  const hit = active.find((v) => lower(v.name) === lower(name));
+// The test company's vendor record, by name (active, else inactive). The company step hands its id on, because
+// Procore's search doesn't find a company created seconds ago; else search, then the whole list.
+async function findVendor(req, res, cfg, companyId, name, knownId) {
+  if (procoreId(String(knownId ?? ""))) {
+    const r = await api(req, res, cfg, "GET", `/rest/v1.0/vendors/${knownId}`, { companyId, query: { company_id: companyId } });
+    if (r.ok && lower(r.json?.name) === lower(name)) return r.json;
+  }
+  const searched = (await pages(req, res, cfg, "/rest/v1.0/vendors", { companyId, query: { company_id: companyId, "filters[search]": name } })) ?? [];
+  const hit = searched.find((v) => lower(v.name) === lower(name))
+    ?? ((await pages(req, res, cfg, "/rest/v1.0/vendors", { companyId, query: { company_id: companyId } })) ?? []).find((v) => lower(v.name) === lower(name));
   if (hit) return hit;
   const inactive = (await pages(req, res, cfg, `/rest/v1.0/companies/${companyId}/vendors/inactive`, { companyId })) ?? [];
   return inactive.find((v) => lower(v.name) === lower(name)) ?? null;
@@ -180,21 +186,21 @@ async function addCompany(req, res, cfg, companyId, projectId, seed) {
     : await api(req, res, cfg, "POST", "/rest/v1.0/vendors", { companyId, body: vendorBody(companyId, seed.vendor) });
   const vendorId = vr.ok ? vr.json?.id ?? found?.id : null;
   steps.push({ name: `${found ? "Updated" : "Created"} company: ${seed.vendor.name}`, ok: vr.ok && !!vendorId, detail: `${brief(vr)}${vendorId ? `, id ${vendorId}` : ""}` });
-  if (!vendorId) return steps;
+  if (!vendorId) return { steps };
   const onProject = (await pages(req, res, cfg, `/rest/v1.0/projects/${projectId}/vendors`, { companyId })) ?? [];
   if (onProject.some((v) => String(v.id) === String(vendorId))) steps.push({ name: "Company on the project", ok: true, detail: "already there" });
   else {
     const r = await api(req, res, cfg, "POST", `/rest/v1.0/projects/${projectId}/vendors/${vendorId}/actions/add`, { companyId });
     steps.push({ name: "Added company to the project", ok: r.ok, detail: brief(r) });
   }
-  return steps;
+  return { steps, vendorId: String(vendorId) };
 }
 
-async function addPerson(req, res, cfg, companyId, projectId, seed, u) {
+async function addPerson(req, res, cfg, companyId, projectId, seed, u, vendorId) {
   const steps = [];
   const step = (name, r, extra = "") => { steps.push({ name, ok: r.ok, detail: `${brief(r)}${extra}` }); return r.ok; };
   const name = `${u.first_name} ${u.last_name}`;
-  const vendor = await findVendor(req, res, cfg, companyId, seed.vendor.name);
+  const vendor = await findVendor(req, res, cfg, companyId, seed.vendor.name, vendorId);
   if (!vendor) return [{ name: `${name}: company`, ok: false, detail: `${seed.vendor.name} isn't in Procore yet, so ${u.first_name} was skipped.` }];
 
   // The person, by email: in the company list, else the inactive list
@@ -259,13 +265,13 @@ export default async function handler(req, res) {
     }
     const seed = SEED[Number(body.index)];
     const who = seed?.users[Number(body.person)];
-    let steps;
-    if (body.action === "cleanup") steps = await cleanup(req, res, cfg, companyId, body);
-    else if (body.action === "company" && seed) steps = await addCompany(req, res, cfg, companyId, projectId, seed);
-    else if (body.action === "person" && who) steps = await addPerson(req, res, cfg, companyId, projectId, seed, who);
+    let out;
+    if (body.action === "cleanup") out = { steps: await cleanup(req, res, cfg, companyId, body) };
+    else if (body.action === "company" && seed) out = await addCompany(req, res, cfg, companyId, projectId, seed);
+    else if (body.action === "person" && who) out = { steps: await addPerson(req, res, cfg, companyId, projectId, seed, who, body.vendorId) };
     else throw new HttpError(400, "bad_request", "Unknown step.");
-    console.log("SiteSnap seed", body.action, body.index ?? "", body.person ?? "", JSON.stringify(steps));
-    return sendJson(res, 200, { steps });
+    console.log("SiteSnap seed", body.action, body.index ?? "", body.person ?? "", JSON.stringify(out.steps));
+    return sendJson(res, 200, out);
   } catch (err) {
     // Our own messages only (never a token): so a failed run can be read in the Vercel logs
     if (err instanceof HttpError) console.log("SiteSnap seed stopped", err.status, err.code, err.message);

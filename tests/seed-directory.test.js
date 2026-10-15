@@ -205,6 +205,16 @@ test("a 429 waits and tries once more", async () => {
   assert.ok(out.json().steps.every((s) => s.ok), out.body);
 });
 
+test("person: a company too new for Procore's search is found by the id the company step handed on", async () => {
+  personRoutes();
+  routes.unshift({ test: (u) => /\/rest\/v1\.0\/vendors\?.*filters/.test(u), reply: { body: [] } });
+  on("GET", /\/rest\/v1\.0\/vendors\/3798033\?/, { body: { id: 3798033, name: "VoltLine Electric Inc." } });
+  const out = await run(req("POST", { action: "person", index: 1, person: 0, vendorId: "3798033", ...ids }));
+  assert.equal(out.statusCode, 200, out.body);
+  assert.equal(calls.find((c) => c.method === "POST" && /\/users$/.test(c.url)).body.user.vendor_id, 3798033);
+  assert.ok(out.json().steps.every((s) => s.ok), out.body);
+});
+
 test("role names: exact first (any case), then the closest for General Contractor, else none", () => {
   assert.equal(projectRoleFor("Project Manager", ["project manager", "Architect"]), "project manager");
   assert.equal(projectRoleFor("General Contractor", ["Foreman", "Superintendent"]), "Superintendent");

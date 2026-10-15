@@ -189,18 +189,20 @@ export default async function handler(req, res) {
     }
     if (body.action === "cleanup") {
       const steps = await cleanup(req, res, cfg, companyId, body);
-      console.log("SiteSnap seed cleanup", JSON.stringify(steps.map((s) => s.ok)));
+      console.log("SiteSnap seed cleanup", JSON.stringify(steps));
       return sendJson(res, 200, { steps });
     }
     if (body.action === "company") {
       const seed = SEED[Number(body.index)];
       if (!Number.isInteger(Number(body.index)) || !seed) throw new HttpError(400, "bad_request", "No such test company.");
       const steps = await addCompany(req, res, cfg, companyId, projectId, seed);
-      console.log("SiteSnap seed company", body.index, JSON.stringify(steps.map((s) => s.ok)));
+      console.log("SiteSnap seed company", body.index, JSON.stringify(steps));
       return sendJson(res, 200, { steps });
     }
     throw new HttpError(400, "bad_request", "Unknown action.");
   } catch (err) {
+    // Our own messages only (never a token): so a failed run can be read in the Vercel logs
+    if (err instanceof HttpError) console.log("SiteSnap seed stopped", err.status, err.code, err.message);
     sendError(res, err);
   }
 }

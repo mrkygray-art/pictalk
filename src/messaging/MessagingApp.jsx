@@ -71,7 +71,7 @@ export default function MessagingApp() {
           </>
         )}
         {state.step === "ready" && <p className="procore-note">Signing in…</p>}
-        {state.step === "switching" && <p className="procore-note">Signing you out of Procore… (a Procore window opened; it closes by itself, then Procore asks who you are)</p>}
+        {state.step === "switching" && <p className="procore-note">Signing you out of Procore… A small Procore window opened: don't log in there. It closes by itself in a few seconds, then Procore's login opens here.</p>}
       </main>
     );
   }

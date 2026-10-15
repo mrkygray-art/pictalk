@@ -103,4 +103,10 @@ export async function recordAction(project, cid, action) {
 }
 
 export const RECORD_LABEL = { observation: "Observation", punch_item: "Punch Item" };
+/** Where each kind lands in Procore, in the words of Procore's own menu */
+export const RECORD_TOOL = { observation: "Observations", punch_item: "Punch List" };
+export const RECORD_HINT = {
+  observation: "An issue to track: quality, safety, a problem someone needs to look at.",
+  punch_item: "One specific thing to fix or finish, usually before closeout.",
+};
 export { MAX_PHOTOS };

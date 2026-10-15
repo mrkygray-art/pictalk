@@ -1693,6 +1693,8 @@ button:focus-visible {
 }
 .procore-panel h2 { font-size: 16px; }
 .procore-note { color: var(--muted); font-size: 14px; }
+.msg-new-hint { color: var(--muted); font-size: 14px; margin: -4px 0 6px; text-align: center; }
+.report-where { font-size: 18px; }
 .procore-connected { color: var(--success-ink); font-weight: 600; }
 .procore-btn {
   justify-self: start;

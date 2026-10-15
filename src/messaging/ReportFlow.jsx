@@ -3,7 +3,7 @@ import { CameraIcon, MicIcon, StopIcon } from "./icons";
 import { formatTime, useRecorder } from "./useRecorder";
 import RecipientSearch from "./RecipientSearch";
 import { newId, queueMessage, transcribeVoice, uploadFile, voicePathFor } from "./messagingStore";
-import { draftRecord, MAX_PHOTOS, RECORD_LABEL, recordOptions, sendRecord } from "./recordStore";
+import { draftRecord, MAX_PHOTOS, RECORD_HINT, RECORD_LABEL, RECORD_TOOL, recordOptions, sendRecord } from "./recordStore";
 
 // Report an Issue (voice + photo -> Procore record). The foreman describes it; SiteSnap works out what
 // kind of Procore record it is, fills it in, and one tap on Send creates it in Procore under their own
@@ -158,12 +158,16 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
 
   if (step === "done") {
     const label = RECORD_LABEL[sent.recordType];
+    const tool = RECORD_TOOL[sent.recordType];
+    const other = RECORD_TOOL[sent.recordType === "punch_item" ? "observation" : "punch_item"];
+    const kind = sent.recordType === "observation" ? (options?.observationTypes ?? []).find((t) => t.id === card.observationTypeId)?.name : "";
     return (
       <section className="report">
         <h2 className="page-title">Sent to Procore</h2>
         <div className="report-sent">
-          <p><strong>{label}{sent.number ? ` #${sent.number}` : ""}</strong></p>
-          <p>{card.title}</p>
+          <p className="report-where">Created in Procore <span aria-hidden="true">→</span> <strong>{tool}</strong></p>
+          <p><strong>{kind ? `${kind} ` : ""}{label}{sent.number ? ` #${sent.number}` : ""}</strong>: {card.title}</p>
+          <p className="msg-status">Find it in Procore's {tool} tool, not {other === "Punch List" ? "the Punch List" : other}. It's there now.</p>
           {card.assignees.length > 0 && <p className="msg-status">{card.assignees.map((a) => a.name).join(", ")} will get Procore's email.</p>}
           {(sent.warnings ?? []).map((w) => <p key={w} className="msg-status">{w}</p>)}
           <a className="big-btn plain-btn" href={sent.url} target="_blank" rel="noopener">Open in Procore</a>
@@ -193,6 +197,7 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
             <button key={t} type="button" className={card.recordType === t ? "is-on" : ""} aria-pressed={card.recordType === t} onClick={() => set({ recordType: t })}>{RECORD_LABEL[t]}</button>
           ))}
         </div>
+        <p className="procore-note">Goes to Procore's <strong>{RECORD_TOOL[card.recordType]}</strong>. {RECORD_HINT[card.recordType]}</p>
         {draftNote.lowConfidence && <p className="procore-note">{draftNote.offline ? "Couldn't fill it in automatically. Check each field." : "Not sure what kind of record this is. Check the type above."}</p>}
         {draftNote.suggested === "change_event" && <p className="procore-note">This sounds like extra work. It goes in as an Observation with the impact noted; Change Events come later.</p>}
 

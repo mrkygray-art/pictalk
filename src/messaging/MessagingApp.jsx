@@ -121,7 +121,9 @@ export default function MessagingApp() {
             <h2 className="page-title">Messages</h2>
           </div>
           {beta && <button type="button" className="big-btn photo-btn msg-new" onClick={() => setView({ name: "report" })}>Report an Issue</button>}
+          {beta && <p className="msg-new-hint">Creates a Procore Observation or Punch Item.</p>}
           <button type="button" className={`big-btn ${beta ? "plain-btn" : "photo-btn"} msg-new`} onClick={() => setView({ name: "compose" })}>New Message</button>
+          {beta && <p className="msg-new-hint">Stays in SiteSnap. Nothing goes to Procore.</p>}
           <Feed projectKey={key} me={me.procoreUserId} reads={reads} pending={pending} onOpen={(cid) => setView({ name: "conversation", cid })} />
           <p className="msg-footnote">Only people on this Procore project can see its messages. Everyone on a message can see when it was sent, seen and answered.</p>
         </>

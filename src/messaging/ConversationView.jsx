@@ -235,7 +235,7 @@ export default function ConversationView({ session, projectKey, cid, pending, on
         <p><small>From {conv?.createdBy?.name ?? me.name}{conv?.createdAt ? ` · Sent ${clock(conv.createdAt)}` : ""}</small></p>
         {conv?.procore && (
           <p className="procore-link">
-            <strong>Procore {conv.procore.recordType === "punch_item" ? "Punch Item" : "Observation"}{conv.procore.number ? ` #${conv.procore.number}` : ""}</strong>
+            <strong>Procore {conv.procore.recordType === "punch_item" ? "Punch List" : "Observations"}{conv.procore.number ? ` #${conv.procore.number}` : ""}</strong>
             {conv.procoreStatus?.label && <> · {conv.procoreStatus.label}</>}
             {" · "}<a href={conv.procore.url} target="_blank" rel="noopener">Open in Procore</a>
           </p>

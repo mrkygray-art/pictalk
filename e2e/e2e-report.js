@@ -95,6 +95,7 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   await page.goto(`${APP}?beta=report`, { waitUntil: "domcontentloaded" });
   await waitText("Report an Issue");
   check("?beta=report shows Report an Issue on this phone", true);
+  check("the two buttons say what they do", (await text()).includes("Creates a Procore Observation or Punch Item") && (await text()).includes("Stays in SiteSnap. Nothing goes to Procore."));
   await click("button::-p-text(Report an Issue)");
   await waitText("Take a photo and say what you see");
 
@@ -125,6 +126,7 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   const trade = await page.$eval("select.dir-input", (e) => e.options[e.selectedIndex]?.textContent);
   check("the card: trade Drywall from the project's list", trade === "Drywall", trade);
   check("the card: where it is, as said", await page.$eval(".report-card input.dir-input:not([type])", () => true) && (await page.evaluate(() => [...document.querySelectorAll(".report-card input")].some((i) => i.value === "room 204"))));
+  check("the card says where it goes", t.includes("Goes to Procore's Punch List"));
   check("no technical words on the card", !/record_type|json|confidence|undefined|null/i.test(t));
   await shot("2-card");
 
@@ -132,6 +134,7 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   await waitText("Sent to Procore", 30000);
   const done = await text();
   check("Sent screen: Punch Item #2 with Open in Procore", done.includes("Punch Item #2") && done.includes("Open in Procore"));
+  check("Sent screen: says plainly where it went (Punch List, not Observations)", done.includes("Created in Procore") && done.includes("Find it in Procore's Punch List tool, not Observations"));
   check("Sent screen: says Lisa gets Procore's email", done.includes("Lisa Hubbard will get Procore's email"));
   const sc = sentToServer?.card ?? {};
   check("server was sent the confirmed card", sc.recordType === "punch_item" && sc.assigneeIds?.[0] === 900 && sc.dueDate === friday && sc.tradeId === 2, JSON.stringify({ t: sc.recordType, a: sc.assigneeIds, d: sc.dueDate, tr: sc.tradeId }));
@@ -140,10 +143,10 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   await shot("3-sent");
 
   await click("button::-p-text(Open the Thread)");
-  await page.waitForFunction(() => document.body.innerText.includes("Procore Punch Item #2"), { timeout: 30000 });
+  await page.waitForFunction(() => document.body.innerText.includes("Procore Punch List #2"), { timeout: 30000 });
   await page.waitForFunction(() => document.querySelector(".msg .msg-photo-grid img"), { timeout: 30000 });
   const th = await text();
-  check("the thread follows the record: Procore Punch Item #2 link, To Lisa Hubbard", th.includes("Open in Procore") && th.includes("To: Lisa Hubbard"));
+  check("the thread follows the record: Procore Punch List #2 link, To Lisa Hubbard", th.includes("Open in Procore") && th.includes("To: Lisa Hubbard"));
   check("the thread's first message is the capture (photo + words)", th.includes("needs to be redone"));
   await page.waitForFunction(() => document.querySelector(".msg-task"), { timeout: 30000 });
   const task = await page.$eval(".msg-task", (e) => e.innerText);

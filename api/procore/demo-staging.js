@@ -7,6 +7,9 @@
 // outside these projects is ever touched), optional IMPORT_BATCH_SIZE (3) and IMPORT_DELAY_MS (500).
 // GET  /api/procore/demo-staging : the page.
 // POST { action: "state" }                          : every scenario's row (saved to SiteSnap's copy first).
+// POST { action: "createprojects" }                 : setup: makes the three demo projects in Procore (POST
+//                                                    /rest/v1.0/projects {company_id, project: {name}}); one that
+//                                                    already exists by name is reused. Answers the DEMO_PROJECT_IDS line.
 // POST { action: "people", code, company[, person, vendorId] } : one demo company / person on that project.
 // POST { action: "import", mode: next | selected | failed, ids? } : at most IMPORT_BATCH_SIZE, one at a time;
 //                                                    a 429 stops the batch. Each scenario resumes where it stopped.
@@ -85,6 +88,23 @@ async function state(g) {
     deleteCheck: meta.deleteCheck ? { observationDelete: meta.deleteCheck.observationDelete, punchDelete: meta.deleteCheck.punchDelete, at: meta.deleteCheck.at } : null,
     copyText: copyForClaude(rows, { lastRun: meta.lastImportAt ?? null }),
   };
+}
+
+// Setup: the three demo projects, by name, in the signed-in admin's company (made only when missing)
+async function createProjects(req, res, cfg, g) {
+  const companyId = (g.demo && Object.values(g.demo).find((p) => !p.missing)?.companyId) ?? g.projects[0]?.companyId;
+  const steps = [];
+  const ids = {};
+  for (const [code, p] of Object.entries(PROJECTS)) {
+    const found = g.projects.find((x) => x.companyId === companyId && x.name.trim().toLowerCase() === p.name.toLowerCase());
+    if (found) { ids[code] = found.projectId; steps.push({ name: `${code}: ${p.name}`, ok: true, detail: `already there (project ${found.projectId})` }); continue; }
+    const r = await api(req, res, cfg, "POST", "/rest/v1.0/projects", { companyId, body: { company_id: Number(companyId), project: { name: p.name, active: true } } });
+    if (r.ok && r.json?.id) ids[code] = String(r.json.id);
+    steps.push({ name: `${code}: ${p.name}`, ok: r.ok && !!r.json?.id, detail: r.ok ? `created (project ${r.json?.id})` : `Procore answered ${r.status}: ${JSON.stringify(r.json?.errors ?? r.json?.message ?? r.json?.error ?? "").slice(0, 300)}` });
+  }
+  const line = ids.HP && ids.WG && ids.LV ? `HP:${ids.HP},WG:${ids.WG},LV:${ids.LV}` : null;
+  console.log("SiteSnap demo create projects", JSON.stringify(steps));
+  return { steps, line };
 }
 
 async function importBatch(req, res, cfg, g, body) {
@@ -201,9 +221,15 @@ function render(){
 function renderSetup(){
   if(S.configured){ $('#setup').innerHTML=''; return; }
   const opts=S.choices.map(p=>'<option value="'+esc(p.projectId)+'">'+esc(p.name)+' ('+esc(p.projectId)+')</option>').join('');
-  $('#setup').innerHTML='<div class="card"><b>Setup: pick the three demo projects</b><p><small>Then put the line below in Vercel (Settings → Environment Variables, Production) and redeploy. Nothing outside these three projects is ever touched.</small></p>'
-    +['HP','WG','LV'].map(c=>'<label>'+c+' · '+esc(S.projects[c].name)+'<select data-code="'+c+'"><option value="">Pick…</option>'+opts+'</select></label>').join('')+'<pre id="envline">DEMO_PROJECT_IDS=</pre></div>';
-  document.querySelectorAll('#setup select').forEach(s=>s.onchange=()=>{ $('#envline').textContent='DEMO_PROJECT_IDS='+[...document.querySelectorAll('#setup select')].map(x=>x.dataset.code+':'+(x.value||'?')).join(','); });
+  $('#setup').innerHTML='<div class="card"><b>Setup: the three demo projects</b><p><small>Press Create Demo Projects (or pick them below if they already exist). Then copy the value under the boxes into Vercel as DEMO_PROJECT_IDS (Config, Production) and redeploy. Nothing outside these three projects is ever touched.</small></p>'
+    +'<button id="mkproj">Create Demo Projects in Procore</button><div id="mkout"></div>'
+    +['HP','WG','LV'].map(c=>'<label>'+c+' · '+esc(S.projects[c].name)+'<select data-code="'+c+'"><option value="">Pick…</option>'+opts+'</select></label>').join('')
+    +'<p><small>Value for DEMO_PROJECT_IDS:</small></p><pre id="envline" style="font-size:17px;color:#ffc24d"></pre><button id="copyline" class="ghost">Copy the Value</button></div>';
+  const line=()=>{ const v=[...document.querySelectorAll('#setup select')].map(x=>x.dataset.code+':'+(x.value||'?')).join(','); $('#envline').textContent=v; return v; };
+  document.querySelectorAll('#setup select').forEach(sel=>{ const want=S.projects[sel.dataset.code].name.toLowerCase(); const hit=S.choices.find(p=>p.name.trim().toLowerCase()===want); if(hit) sel.value=hit.projectId; sel.onchange=line; });
+  line();
+  $('#copyline').onclick=async()=>{ const v=line(); if(v.includes('?')) return alert('Pick all three projects first.'); try{ await navigator.clipboard.writeText(v); $('#copyline').textContent='Copied'; }catch(e){ prompt('Copy this:',v); } };
+  $('#mkproj').onclick=async()=>{ busy('Creating the demo projects in Procore…'); try{ const b=await post({action:'createprojects'}); S=await post({action:'state'}); render(); $('#mkout').innerHTML=b.steps.map(s=>'<div class="card"><b class="'+(s.ok?'ok':'bad')+'">'+(s.ok?'✓':'✗')+' '+esc(s.name)+'</b><br><small>'+esc(s.detail)+'</small></div>').join(''); }catch(e){ alert(e.message); } busy(''); };
   $('#controls').hidden=true;
 }
 function renderPeople(){ $('#people').innerHTML=S.configured?['HP','WG','LV'].map(c=>'<button class="ghost" data-people="'+c+'">Add Demo People to '+c+'</button>').join('')+'<div id="peopleout"></div>':'<p class="muted">After setup.</p>'; }
@@ -265,6 +291,7 @@ export default async function handler(req, res) {
     const g = await guard(req, res, cfg);
 
     if (body.action === "state") return sendJson(res, 200, await state(g));
+    if (body.action === "createprojects") return sendJson(res, 200, await createProjects(req, res, cfg, g));
     if (body.action === "import") return sendJson(res, 200, await importBatch(req, res, cfg, g, body));
 
     if (body.action === "people") {

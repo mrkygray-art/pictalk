@@ -322,3 +322,17 @@ test("a live capture in a demo project is tagged [SS-DEMO]; elsewhere it isn't",
   assert.equal(calls.filter((c) => c.method === "POST" && /punch_items$/.test(c.url)).at(-1).body.punch_item.name, "Fire extinguisher missing");
 });
 
+
+test("setup: Create Demo Projects makes the missing ones, reuses one by name, and answers the line", async () => {
+  process.env.DEMO_PROJECT_IDS = "";
+  onFirst("GET", /\/rest\/v1\.1\/projects\?/, { body: [{ id: 373212, name: "Sandbox Test Project" }, { id: 1002, name: "Westgate Distribution Center" }] });
+  let n = 3000;
+  on("POST", /\/rest\/v1\.0\/projects$/, () => ({ status: 201, body: { id: ++n } }));
+  const b = (await post({ action: "createprojects" })).json();
+  const made = calls.filter((c) => c.method === "POST" && /\/rest\/v1\.0\/projects$/.test(c.url));
+  assert.deepEqual(made.map((c) => c.body.project.name), ["Harbor Point Medical Office", "Lakeview Elementary Modernization"]);
+  assert.equal(made[0].body.company_id, Number(CO));
+  assert.equal(b.line, "HP:3001,WG:1002,LV:3002");
+  admin = false;
+  assert.equal((await post({ action: "createprojects" })).statusCode, 403);
+});

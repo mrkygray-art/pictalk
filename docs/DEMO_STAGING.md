@@ -26,7 +26,8 @@ Vercel functions and writes to Procore with each person's own sign-in (decision 
 
 ## Setup (Ky)
 
-1. Vercel → sitesnap-procore → Settings → Environment Variables (Production):
+1. With only `DEMO_MODE=true` set (Config, Production) and redeployed, open the page and press **Create Demo Projects in Procore** (or pick existing ones), then copy the value it shows.
+   Vercel → sitesnap-procore → Settings → Environment Variables (Production):
    - `DEMO_MODE` = `true`
    - `DEMO_PROJECT_IDS` = `HP:<id>,WG:<id>,LV:<id>` (the project id is the number in the Procore address,
      `…/<id>/project/…`; with only `DEMO_MODE` set, the page lists your projects and builds this line for you)

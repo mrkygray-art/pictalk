@@ -2,7 +2,32 @@
 
 For `SPEC_voice-photo-to-procore-record.md`, Step 1. Checked 2026-10-14 against Procore's published API reference (the OpenAPI data behind developers.procore.com/reference: `developers.procore.com/api/v1/resource_groups` and its per-resource files).
 
-**Desk check only.** Nothing here has been tried in the sandbox yet. "Confirmed" means the reference says so. The sandbox test script that the spec's Step 1 calls for is waiting on decision A below.
+**Desk check, then the sandbox:** see Sandbox results below. "Confirmed" means the reference says so. The sandbox test script that the spec's Step 1 calls for is waiting on decision A below.
+
+## Sandbox results (2026-10-14, Ky ran `/api/procore/test-records` in "Sandbox Test Project")
+
+Signed in as Edward Gray (Procore user 481274); his own Procore sign-in wrote everything (decision A).
+
+| Check | Result |
+|---|---|
+| Upload a photo (JPEG) and a sound file (WAV) | Both worked: Procore gave an upload id for each |
+| Create an Observation with only name, type, description, status and `upload_ids` | **Created**, id 370992. **Procore numbered it #1 itself.** Status `initiated`, 2 attachments |
+| Create a Punch Item with only name, description, reference and `upload_ids` | **Created on the first try**, id 196869. **No manager or final approver needed through the API.** Procore numbered it #1 (`position`). Status Open, workflow `initiated`, 2 attachments |
+| Observation types | **22** in this company, across Commissioning, Environmental (9), Quality (Corrective Action, Deficiency, Non-Conformance, Pre-Punch), Safety (6), Warranty (Service Call) and Work to Complete. The test used the first one, Commissioning; the classifier has to pick the right type (usually Quality: Deficiency, or Safety: Safety Hazard). |
+| Observation statuses | initiated, ready_for_review, not_accepted, closed (labels Initiated, Ready For Review, Not Accepted, Closed) |
+| Webhook events for the project | 96 resources, including **Observation Items**, **Observation Item Response Logs**, **Punch Items**, **Change Events**, Change Event Line Items, Potential Change Orders, Task Items, RFIs, Images. So status sync can use webhooks. |
+
+**Answered by the sandbox:**
+- Q2 (create plus photo and audio): yes, for Observations and Punch Items.
+- Q3 (numbers): Procore assigns them for both.
+- Q5 (webhooks): the events we need exist.
+
+**Still to check:**
+- that both items and their attachments show in Procore's own tools and in All Open Items (Ky to look);
+- whether the sound plays inside Procore;
+- who may close each item type;
+- the send-email step to the assignee (decision C);
+- Change Event creation (Phase 2).
 
 ## What the reference confirms
 

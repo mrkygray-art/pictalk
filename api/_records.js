@@ -41,6 +41,8 @@ export function cleanCard(c = {}) {
 export function descriptionHtml(card, reporterName, link) {
   const parts = [];
   if (card.description) parts.push(`<p>${esc(card.description)}</p>`);
+  // Where, in words, when Procore wouldn't let this person add it as a new location
+  if (card.whereText) parts.push(`<p>Where: ${esc(card.whereText)}</p>`);
   parts.push(`<p>Reported by ${esc(reporterName || "a SiteSnap user")} via SiteSnap AI.</p>`);
   if (card.transcript) parts.push(`<p>What was said: "${esc(card.transcript)}"</p>`);
   if (link) parts.push(`<p><a href="${esc(link)}">Open in SiteSnap AI</a></p>`);

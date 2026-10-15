@@ -264,8 +264,20 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
           </div>
         </div>
         <label className="msg-field"><span>Where</span>
-          <input className="dir-input" value={card.locationText} placeholder={blank} onChange={(e) => set({ locationText: e.target.value, locationId: null })} />
+          <input
+            className="dir-input" value={card.locationText} placeholder={blank} list="report-locations" autoComplete="off"
+            onChange={(e) => {
+              // One of the project's own locations (typed or picked from the list) goes in as that location;
+              // anything else is a new one, which only some Procore permissions allow
+              const hit = (options?.locations ?? []).find((l) => String(l.name ?? "").trim().toLowerCase() === e.target.value.trim().toLowerCase());
+              set({ locationText: e.target.value, locationId: hit?.id ?? null });
+            }}
+          />
+          <datalist id="report-locations">{(options?.locations ?? []).map((l) => <option key={l.id} value={l.name} />)}</datalist>
         </label>
+        {card.locationText.trim() && !card.locationId && (options?.locations ?? []).length > 0 && (
+          <small className="msg-status">New place: not one of the project's locations in Procore.</small>
+        )}
         <label className="msg-field"><span>Trade</span>
           <select className="dir-input" value={card.tradeId ?? ""} onChange={(e) => set({ tradeId: Number(e.target.value) || null })}>
             <option value="">{(options?.trades ?? []).length ? "Not said" : options?.tradesReadable === false ? "Procore didn't share its trades list" : "No trades in Procore's company list yet"}</option>

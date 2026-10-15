@@ -120,6 +120,22 @@ test("an Observation Procore won't let them assign is created unassigned, with a
   assert.ok(!calls.some((c) => /send_email/.test(c.url)), "no one to email");
 });
 
+test("a typed place Procore won't let them add as a location: created without it, the place in the description, a plain note", async () => {
+  procore();
+  routes.unshift({ method: "POST", re: /\/rest\/v1\.1\/punch_items$/, reply: (u, init) => (JSON.parse(init.body).punch_item.mt_location
+    ? { status: 403, body: { errors: "You do not have sufficient permissions to create a location" } }
+    : { status: 201, body: { id: 196901, position: 3 } }) });
+  const out = await run(records, req("POST", "/api/procore/records", { companyId: "4291776", projectId: "373235", card: card({ locationText: "Parking lot" }), files: [] }));
+  assert.equal(out.statusCode, 201, out.body);
+  assert.match(out.json().warnings[0], /doesn't let you add new locations, so "Parking lot" is written in the description/);
+  const sent = calls.filter((c) => /punch_items$/.test(c.url) && c.method === "POST").map((c) => JSON.parse(c.body).punch_item);
+  assert.equal(sent.length, 2);
+  assert.deepEqual(sent[0].mt_location, ["Parking lot"]);
+  assert.equal(sent[1].mt_location, undefined);
+  assert.match(sent[1].description, /<p>Where: Parking lot<\/p>/);
+  assert.deepEqual(sent[1].login_information_ids, [900], "the assignee is kept");
+});
+
 test("refuses: a project they're not on, no sign-in, another site, odd files; nothing created", async () => {
   procore();
   const other = await run(records, req("POST", "/api/procore/records", { companyId: "4291776", projectId: "999", card: card(), files: [] }));

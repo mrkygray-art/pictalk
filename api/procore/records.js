@@ -59,6 +59,17 @@ export default async function handler(req, res) {
     const path = isObs ? "/rest/v1.0/observations/items" : "/rest/v1.1/punch_items";
     const build = (c) => (isObs ? observationBody : punchBody)(c, projectId, { reporterName, uploadIds, link });
     let made = await procoreSend(req, res, cfg, "POST", path, { companyId, body: build(card) });
+    // A typed place Procore won't let this person add as a new location: send it without the location,
+    // with the place written in the description, and say so
+    if (!made.ok && card.locationText && !card.locationId && [403, 422].includes(made.status) && /location/i.test(procoreError(made) ?? "")) {
+      const where = card.locationText;
+      const retry = await procoreSend(req, res, cfg, "POST", path, { companyId, body: build({ ...card, locationText: null, whereText: where }) });
+      if (retry.ok || !/location/i.test(procoreError(retry) ?? "")) {
+        made = retry;
+        card = { ...card, locationText: null, whereText: where };
+        if (retry.ok) warnings.push(`Procore doesn't let you add new locations, so "${where}" is written in the description. Next time pick one of the project's locations, or ask a Procore admin to add it.`);
+      }
+    }
     // Someone Procore won't let this person assign: create it anyway, unassigned, and say so
     if (!made.ok && card.assigneeIds.length && [403, 422].includes(made.status)) {
       const first = procoreError(made);

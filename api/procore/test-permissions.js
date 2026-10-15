@@ -111,16 +111,16 @@ export default async function handler(req, res) {
     const templates = Array.isArray(tpl.json) ? tpl.json : [];
     raw.templates = shape(tpl.json);
     steps.push({ name: "List the project's permission templates", ok: tpl.ok, status: tpl.status, detail: tpl.ok ? `${templates.length}: ${templates.map((t) => t.name).join(", ")}` : "not readable with this sign-in" });
-    const sampleT = templates.find((t) => /subcontractor/i.test(t.name)) ?? templates[0];
-    if (sampleT) {
-      for (const [label, path] of [
-        ["One template's details (project)", `/rest/v1.0/projects/${p}/permission_templates/${sampleT.id}`],
-        ["One template's details (company)", `/rest/v1.0/companies/${companyId}/permission_templates/${sampleT.id}`],
-      ]) {
-        const r = await get(path);
-        raw[label] = shape(r.json);
-        steps.push({ name: `${label}: ${sampleT.name}`, ok: r.ok, status: r.status, detail: r.ok ? `fields: ${raw[label].keys.join(", ")}` : "no such endpoint, or not allowed" });
-      }
+    // What each template allows, tool by tool (company endpoint: user_access_levels). Only the tools SiteSnap
+    // writes to or reads people from are shown; the full tool list is in raw for the first template.
+    const TOOLS = /punch|observation|task|directory|admin/i;
+    for (const t of templates) {
+      const r = await get(`/rest/v1.0/companies/${companyId}/permission_templates/${t.id}`);
+      const levels = r.json?.user_access_levels ?? {};
+      if (!raw.allTools && r.ok) raw.allTools = Object.keys(levels);
+      const shown = Object.entries(levels).filter(([k]) => TOOLS.test(k)).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`);
+      raw[`levels: ${t.name}`] = Object.fromEntries(Object.entries(levels).filter(([k]) => TOOLS.test(k)));
+      steps.push({ name: `What "${t.name}" allows`, ok: r.ok, status: r.status, detail: r.ok ? (shown.join("; ") || "no Punch List / Observations / Tasks / Directory levels in the answer") : "not readable with this sign-in" });
     }
     const ct = await get(`/rest/v1.0/companies/${companyId}/permission_templates`);
     raw.companyTemplates = shape(ct.json);
@@ -133,25 +133,13 @@ export default async function handler(req, res) {
     };
     const lists = [
       ["Observations: who can be on the distribution (documented)", "/rest/v1.0/observations/potential_distribution_members", { project_id: p }],
-      ["Observations: assignees (guess)", "/rest/v1.0/observations/assignees", { project_id: p }],
-      ["Observations: assignees (guess 2)", `/rest/v1.0/projects/${p}/observations/assignees`, {}],
-      ["Punch List: assignees (guess, v1.1)", "/rest/v1.1/punch_items/potential_assignees", { project_id: p }],
-      ["Punch List: assignees (guess, v1.0)", "/rest/v1.0/punch_items/potential_assignees", { project_id: p }],
-      ["Punch List: distribution (guess)", "/rest/v1.0/punch_items/potential_distribution_members", { project_id: p }],
-      ["Tasks: assignees (guess)", `/rest/v1.0/projects/${p}/tasks/potential_assignees`, {}],
+      ["Observations: who can be assigned", "/rest/v1.0/observations/assignees", { project_id: p }],
     ];
     for (const [label, path, q] of lists) {
       const r = await get(path, q);
       raw[label] = shape(r.json);
       const missing = r.ok ? missingFrom(r.json) : [];
       steps.push({ name: label, ok: r.ok, status: r.status, detail: r.ok ? `${raw[label].count ?? "?"} people. Not in it: ${missing.length ? missing.join(", ") : "nobody"}` : "no such endpoint, or not allowed" });
-    }
-
-    // One person's own record: does it say anything per tool?
-    if (meId) {
-      const r = await get(`/rest/v1.0/projects/${p}/users/${meId}`);
-      raw.showProjectUser = shape(r.json);
-      steps.push({ name: "Your own project record (Show Project User)", ok: r.ok, status: r.status, detail: r.ok ? `fields: ${raw.showProjectUser.keys.join(", ")}` : "not readable" });
     }
 
     console.log("SiteSnap permissions check", JSON.stringify(steps.map((s) => ({ name: s.name, status: s.status }))));

@@ -236,3 +236,10 @@ Idea (Ky, 2026-10-14): SiteSnap shows who can't be assigned yet (no access to Pu
 **Not in Procore's public docs:** reading what a template allows per tool, and who each tool will accept as an assignee. Only one such list is documented: `GET /rest/v1.0/observations/potential_distribution_members?project_id=`.
 
 **Sandbox check:** `/api/procore/test-permissions` (sandbox only, hidden, read only: GET calls only). It tries the documented calls and the likely ones (template details, Punch List / Observations / Tasks assignee lists, Show Project User), and reports each call's status, field names, and which project people are missing from each list. It never shows emails, phones or tokens. Run it as Ky (admin), then signed in as a non-admin test person. Tests: `tests/test-permissions.test.js`.
+
+**First run (Ky as admin, 2026-10-14):**
+- `GET /rest/v1.0/companies/{c}/permission_templates/{id}` works and returns `user_access_levels`: every tool by name (reports, change_events, …). The project-level `/projects/{p}/permission_templates/{id}` returns nothing useful. The page now shows the Punch List / Observations / Tasks / Directory levels for every template.
+- `GET /rest/v1.0/observations/assignees?project_id=` works (not in the public docs): 34 of 35 project people. Test Architect isn't in it, so the list follows permissions.
+- No such list for Punch List or Tasks (`potential_assignees` 404 in v1.0 and v1.1). SiteSnap would use the person's template levels instead.
+- Show Project User (`/projects/{p}/users/{id}`) 404; the list call already has each person's `permission_template` (`id, name, category, project_specific, type`).
+

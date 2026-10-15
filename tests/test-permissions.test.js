@@ -20,6 +20,7 @@ const reply = (u) => {
   if (/\/projects\/373235\/users\?/.test(u)) return [200, people];
   if (/\/projects\/373235\/users\/481274/.test(u)) return [200, people[0]];
   if (/\/projects\/373235\/permission_templates\?|\/projects\/373235\/permission_templates$/.test(u)) return [200, [{ id: 1, name: "Project Manager - Internal" }, { id: 2, name: "Subcontractor - External" }]];
+  if (/\/companies\/4291776\/permission_templates\/2/.test(u)) return [200, { id: 2, name: "Subcontractor - External", user_access_levels: { punch_list: "standard", observations: "standard", tasks: "none", directory: "read_only", budgeting: "none" } }];
   if (/potential_distribution_members/.test(u) && /observations/.test(u)) return [200, [{ id: 481274, name: "Edward Gray", email_address: "e@example.com" }, { id: 900, name: "Tyler Brandt" }]];
   if (/\/companies\?|\/projects\?/.test(u)) return [200, /companies/.test(u) ? [{ id: 4291776, name: "Kyco", is_active: true }] : [{ id: 373235, name: "Sandbox Test Project" }]];
   return [404, { errors: "Not found" }];
@@ -54,11 +55,15 @@ test("permissions check: read only, says who's missing from each list, never sho
   assert.ok(calls.every((c) => c.method === "GET"), "only GET calls");
   const b = out.json();
   assert.match(b.who, /Project Manager - Internal/);
-  const obs = b.steps.find((s) => s.name.startsWith("Observations: who can be on the distribution"));
+  const obs = b.steps.find((s) => s.name.startsWith("Observations: who can be on the distribution (documented)"));
   assert.ok(obs.ok);
   assert.match(obs.detail, /Not in it: Lisa Hubbard/);
   assert.match(b.steps[0].detail, /3 people; 2 have a permission template/);
-  assert.ok(b.steps.some((s) => s.status === 404), "guesses that don't exist show as 404");
+  const sub = b.steps.find((s) => s.name === 'What "Subcontractor - External" allows');
+  assert.ok(sub.ok);
+  assert.match(sub.detail, /punch_list: standard; observations: standard; tasks: none; directory: read_only/);
+  assert.ok(!/budgeting/.test(sub.detail), "only the tools SiteSnap uses");
+  assert.ok(b.steps.some((s) => s.status === 404), "a template Procore won't show reads as not readable");
   assert.ok(!/example\.com|555-0100|access-1|secret-never-leak/.test(out.body), out.body);
 });
 

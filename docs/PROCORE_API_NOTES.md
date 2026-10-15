@@ -210,3 +210,11 @@ firebase deploy --only firestore:rules,functions:onConversationMessage --project
 **Done when** (spec): closing in the app closes the Procore record, and closing in Procore closes the thread.
 
 Tests: `tests/record-status.test.js` (mocked Procore), `tests/messaging-rules.test.js`, `e2e/e2e-report.js` (to-do, status, Close in Procore).
+
+## Sandbox test people (2026-10-14)
+
+`/api/procore/seed-directory` (sandbox only, hidden, like `test-records`) loads Ky's 4 test companies and 16 people (`api/_seedDirectory.js`) into a project with the signed-in admin's own token. Check What's There lists what the cleanup would touch; Run makes the ticked earlier test records inactive, then adds one company per call.
+- Procore's API has no delete for company users or vendors, so "remove" = `is_active: false` (`PATCH /rest/v1.3/companies/{c}/users/{id}`, `PATCH /rest/v1.0/vendors/{id}`).
+- Never touched: the signed-in person, `@procore.com` users, Architect TEST Company and its people. Re-running updates the same records (matched by email / company name) instead of making duplicates; an update can't include `email_address`.
+- Vendor: Tags/Keywords go in `notes`, DBA in `trade_name`. User: `business_phone` + `business_phone_extension`, no permission template ("apply later"), `is_employee: false`.
+- Project Role: `POST /rest/v1.0/project_roles {project_id, project_role: {role, user_id}}`. Whether "General Contractor" and "Worker" are accepted role names in the sandbox: not yet tried.

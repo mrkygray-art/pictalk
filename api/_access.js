@@ -26,6 +26,7 @@ export function keepLevels(json) {
 /**
  * One person's access: for each record type, { ok: true | false | null (not known), why }.
  * Only None (1) blocks; Read Only hasn't been seen on these tools yet, so it isn't treated as a no.
+ * No project template isn't always a no: company admins have every tool without one (seen 2026-10-15).
  */
 export function accessFor(user, templates, observationIds) {
   const t = user.permission_template;
@@ -36,7 +37,13 @@ export function accessFor(user, templates, observationIds) {
       out[type] = { ok, why: ok ? "" : t?.name ? `"${t.name}" has no access to Observations` : "no permission template in Procore" };
       continue;
     }
-    if (!t?.id) { out[type] = { ok: false, why: "no permission template in Procore" }; continue; }
+    if (!t?.id) {
+      // No project template: a company admin still has every tool (and is on Procore's Observation list). Only
+      // say "can't" when that list answered and they're not on it either; otherwise it isn't known.
+      const onList = observationIds?.has(String(user.id));
+      out[type] = !observationIds || onList ? { ok: null, why: "" } : { ok: false, why: "no permission template in Procore" };
+      continue;
+    }
     const level = templates?.[String(t.id)]?.[key] ?? null;
     if (level == null) { out[type] = { ok: null, why: "" }; continue; }
     out[type] = level <= 1 ? { ok: false, why: `"${t.name}" has no access to ${TOOL_NAME[type]}` } : { ok: true, why: "" };

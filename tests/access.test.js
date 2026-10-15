@@ -67,13 +67,17 @@ const run = async () => {
   return out;
 };
 
-test("levels: only None (1) blocks; no template blocks everything", () => {
+test("levels: only None (1) blocks; no template blocks unless Procore's Observation list says they have access", () => {
   const templates = Object.fromEntries(Object.values(T).map((t) => [String(t.id), keepLevels({ name: t.name, user_access_levels: t.levels })]));
   assert.deepEqual(templates["1"], { name: "Project Manager - Internal", punch_list: 4, observations: 4, task_items: 4, directory: 4 }, "only the tools SiteSnap uses are kept");
   assert.deepEqual(accessFor(USERS[2], templates, null).observation, { ok: false, why: '"Architect/Engineer - External" has no access to Observations' });
   assert.equal(accessFor(USERS[2], templates, null).punch_item.ok, true);
   assert.equal(accessFor(USERS[3], templates, null).punch_item.ok, false);
-  assert.deepEqual(accessFor(USERS[4], templates, null).punch_item, { ok: false, why: "no permission template in Procore" });
+  assert.deepEqual(accessFor(USERS[4], templates, new Set(["481274"])).punch_item, { ok: false, why: "no permission template in Procore" });
+  assert.equal(accessFor(USERS[4], templates, null).punch_item.ok, null, "no template and no Observation list: not known");
+  const admin = { id: 1000, name: "Company Admin", permission_template: null };
+  assert.equal(accessFor(admin, templates, new Set(["1000"])).punch_item.ok, null, "no template but on Procore's Observation list (a company admin): no warning");
+  assert.equal(accessFor(admin, templates, new Set(["1000"])).observation.ok, true);
   assert.equal(accessFor(USERS[1], {}, null).punch_item.ok, null, "levels not known yet: no warning");
   assert.equal(accessFor({ ...USERS[1], permission_template: tpl({ id: 9, name: "Viewer" }) }, { 9: { punch_list: 2 } }, null).punch_item.ok, true, "Read Only isn't treated as a no (not seen yet)");
 });

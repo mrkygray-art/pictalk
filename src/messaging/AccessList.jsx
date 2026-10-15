@@ -13,7 +13,7 @@ export default function AccessList({ session, onBack }) {
   const problems = (p) => {
     const a = access?.people?.[String(p.id)];
     if (!a) return [];
-    if (!a.template) return ["No permission template in Procore, so they can't be assigned anything."];
+    if (!a.template && a.punch_item?.ok === false && a.observation?.ok === false) return ["No permission template in Procore, so they can't be assigned anything."];
     return ["punch_item", "observation"].filter((t) => a[t]?.ok === false).map((t) => `Can't get ${RECORD_LABEL[t]}s: ${a[t].why}.`);
   };
   const missing = people.map((p) => ({ p, list: problems(p) })).filter((x) => x.list.length);

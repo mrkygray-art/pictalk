@@ -107,8 +107,9 @@ export function useProcoreSession({ linkCompanyId, linkProjectId } = {}) {
     return () => clearInterval(t);
   }, [project, loadDirectory]);
 
-  const connect = () => {
+  const connect = (fresh = false) => {
     const ids = new URLSearchParams();
+    if (fresh === true) ids.set("fresh", "1");
     const c = project?.companyId || linkCompanyId;
     const p = project?.projectId || linkProjectId;
     if (c) ids.set("companyId", c);
@@ -117,6 +118,8 @@ export function useProcoreSession({ linkCompanyId, linkProjectId } = {}) {
   };
 
   const signOut = async () => {
+    // Forget the Procore connection on the server too, so a reload doesn't sign straight back in
+    await fetch("/api/procore/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => {});
     await fbSignOut(auth).catch(() => {});
     clearMe();
     setMe(null);

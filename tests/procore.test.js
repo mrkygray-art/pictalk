@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import process from "node:process";
 import { Buffer } from "node:buffer";
 import login from "../api/procore/login.js";
+import logout from "../api/procore/logout.js";
 import callback from "../api/procore/callback.js";
 import me from "../api/procore/me.js";
 import directory from "../api/procore/directory.js";
@@ -747,3 +748,25 @@ test("the Firestore key must be base64 JSON for sitesnap-procore; errors never e
     });
   }
 });
+
+// ---------- signing out, and signing in as someone else ----------
+
+test("Sign out clears SiteSnap's Procore session (so a reload doesn't sign straight back in); other sites can't", async () => {
+  const signedIn = { [SESSION_COOKIE]: sessionCookie(freshTokens()) };
+  const post = (origin) => ({ ...req("/api/procore/logout", signedIn), method: "POST", body: {}, headers: { ...req("/api/procore/logout", signedIn).headers, host: "sitesnap-procore.vercel.app", origin, "content-type": "application/json" } });
+  const out = await run(logout, post("https://sitesnap-procore.vercel.app"));
+  assert.equal(out.statusCode, 200, out.body);
+  assert.match(out.cookie(SESSION_COOKIE).raw, /Max-Age=0/);
+  const evil = await run(logout, post("https://evil.example"));
+  assert.equal(evil.statusCode, 403);
+  const get = await run(logout, { ...req("/api/procore/logout", signedIn), method: "GET" });
+  assert.equal(get.statusCode, 405);
+});
+
+test("'Use a different Procore account' asks Procore for its login screen; a plain sign-in doesn't", async () => {
+  const fresh = new URL((await run(login, req("/api/procore/login?companyId=123&projectId=456&fresh=1"))).getHeader("location"));
+  assert.equal(fresh.searchParams.get("prompt"), "login");
+  const plain = new URL((await run(login, req("/api/procore/login?companyId=123&projectId=456"))).getHeader("location"));
+  assert.equal(plain.searchParams.get("prompt"), null);
+});
+

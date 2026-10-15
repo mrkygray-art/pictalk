@@ -64,7 +64,11 @@ export default function MessagingApp() {
         {state.step === "unavailable" && <p className="procore-note">Procore sign-in isn't available on this site.</p>}
         {state.step === "failed" && <p className="procore-note">{state.message}</p>}
         {(state.step === "signin" || state.step === "failed") && (
-          <button type="button" className="big-btn photo-btn" onClick={session.connect}>Sign in with Procore</button>
+          <>
+            <button type="button" className="big-btn photo-btn" onClick={() => session.connect()}>Sign in with Procore</button>
+            <button type="button" className="text-btn" onClick={() => session.connect(true)}>Use a different Procore account</button>
+            <p className="procore-note">If Procore signs you straight back in as the same person, sign out of Procore first (in Procore, tap your initials, then Sign Out), or open SiteSnap in a private window.</p>
+          </>
         )}
         {state.step === "ready" && <p className="procore-note">Signing in…</p>}
       </main>

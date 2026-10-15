@@ -117,6 +117,19 @@ export function useProcoreSession({ linkCompanyId, linkProjectId } = {}) {
     window.location.assign(`/api/procore/login?${ids}`);
   };
 
+  // "Use a different Procore account": Procore keeps its own login, so sign out of SiteSnap, then open Procore's
+  // sign-out page in a small window (closed after a few seconds), then a fresh sign-in shows Procore's login.
+  // A blocked window falls back to the same tab (the person comes back and taps Sign in).
+  const switchAccount = async () => {
+    const w = window.open("/api/procore/logout", "procore-logout", "width=480,height=640");
+    await signOut();
+    if (!w) return window.location.assign("/api/procore/logout");
+    setState({ step: "switching" });
+    await new Promise((r) => setTimeout(r, 5000));
+    try { w.close(); } catch { /* already closed */ }
+    connect(true);
+  };
+
   const signOut = async () => {
     // Forget the Procore connection on the server too, so a reload doesn't sign straight back in
     await fetch("/api/procore/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => {});
@@ -127,5 +140,5 @@ export function useProcoreSession({ linkCompanyId, linkProjectId } = {}) {
   };
 
   const signedIn = state.step === "ready" && !!fbUser && !!me;
-  return { state, me, projects, project, choose, dir, dirError, loadingDir, refreshDirectory: () => project && loadDirectory(project), connect, signOut, signedIn };
+  return { state, me, projects, project, choose, dir, dirError, loadingDir, refreshDirectory: () => project && loadDirectory(project), connect, signOut, switchAccount, signedIn };
 }

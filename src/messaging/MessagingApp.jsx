@@ -66,11 +66,12 @@ export default function MessagingApp() {
         {(state.step === "signin" || state.step === "failed") && (
           <>
             <button type="button" className="big-btn photo-btn" onClick={() => session.connect()}>Sign in with Procore</button>
-            <button type="button" className="text-btn" onClick={() => session.connect(true)}>Use a different Procore account</button>
-            <p className="procore-note">If Procore signs you straight back in as the same person, sign out of Procore first (in Procore, tap your initials, then Sign Out), or open SiteSnap in a private window.</p>
+            <button type="button" className="text-btn" onClick={session.switchAccount}>Use a different Procore account</button>
+            <p className="procore-note">That signs you out of Procore too, then asks for the other person's Procore email and password.</p>
           </>
         )}
         {state.step === "ready" && <p className="procore-note">Signing in…</p>}
+        {state.step === "switching" && <p className="procore-note">Signing you out of Procore… (a Procore window opened; it closes by itself, then Procore asks who you are)</p>}
       </main>
     );
   }

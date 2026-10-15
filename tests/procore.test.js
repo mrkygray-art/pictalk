@@ -759,8 +759,15 @@ test("Sign out clears SiteSnap's Procore session (so a reload doesn't sign strai
   assert.match(out.cookie(SESSION_COOKIE).raw, /Max-Age=0/);
   const evil = await run(logout, post("https://evil.example"));
   assert.equal(evil.statusCode, 403);
-  const get = await run(logout, { ...req("/api/procore/logout", signedIn), method: "GET" });
-  assert.equal(get.statusCode, 405);
+  const put = await run(logout, { ...req("/api/procore/logout", signedIn), method: "PUT" });
+  assert.equal(put.statusCode, 405);
+});
+
+test("GET logout only sends the browser to Procore's own sign-out page; SiteSnap's session isn't touched", async () => {
+  const out = await run(logout, { ...req("/api/procore/logout", { [SESSION_COOKIE]: sessionCookie(freshTokens()) }), method: "GET" });
+  assert.equal(out.statusCode, 302);
+  assert.equal(out.getHeader("location"), "https://login-sandbox.procore.test/logout");
+  assert.equal(out.cookie(SESSION_COOKIE), undefined, "a link from another site can't sign you out of SiteSnap");
 });
 
 test("'Use a different Procore account' asks Procore for its login screen; a plain sign-in doesn't", async () => {

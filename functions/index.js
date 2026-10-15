@@ -130,3 +130,4 @@ exports.transcribeMessageVoice = messaging.transcribeMessageVoice;
 exports.describeMessagePhoto = messaging.describeMessagePhoto;
 exports.setMessageTask = messaging.setMessageTask;
 exports.onConversationRead = messaging.onConversationRead;
+exports.classifyCapture = require("./captures").classifyCapture;

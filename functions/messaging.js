@@ -218,6 +218,7 @@ async function processMessage(key, cid, mid, message) {
 }
 
 exports.processMessage = processMessage;
+exports.requireMember = requireMember;
 exports.cleanTasks = cleanTasks;
 
 exports.onConversationMessage = onDocumentCreated(

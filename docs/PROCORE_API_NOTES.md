@@ -148,3 +148,22 @@ Signed in as Edward Gray (Procore user 481274); his own Procore sign-in wrote ev
 The spec's "done when" is a script that creates an Observation and a Punch Item with a photo in the sandbox, both showing in Procore. That takes a Procore sign-in with permission to create both. Two ways:
 - **Ky signs in on the live site.** A temporary, signed-in-only server route creates one test Observation and one test Punch Item in `1234 - Sandbox Test Project`. Each is labeled "SiteSnap API test" and gets a small test photo, and the route reports the ids and links. This means a small push to production, with nothing visible in the app.
 - **A local script** that Ky signs in through once. This needs a localhost redirect URI added to the Procore app in the developer portal, and the client secret on this machine.
+
+## Step 2: the classifier (2026-10-14)
+
+`functions/classifier.js` (rules and checks) and `functions/captures.js` (the `classifyCapture` callable, project members only) turn what the foreman said, plus the project's own lists, into a draft record for the confirmation card:
+- **Model:** Claude (claude-opus-5-5, effort low, a strict JSON schema).
+- **Kept only where it matches the project:** assignees must be a real directory person (a first name only if one person has it), and trades, locations and Observation types must be on the project's lists. A date must be real and not in the past ("Friday", "tomorrow", "Oct 20" and "the 20th" work; "before the pour" stays blank).
+- **Everything else stays blank** and goes in `missing_fields`. Names that were said but match no one go in `unmatched_names`, so the foreman picks.
+- **Low confidence (< 0.6)** becomes an Observation, and the card leads with the type switcher.
+- **Change Events wait for Phase 2:** a Change Event or RFI is saved as an Observation for now, with "Possible cost or schedule impact: …" in the description and `suggested_record_type` kept.
+- **Bad answers:** a bad or missing answer falls back to an Observation with the raw words. The original transcript is always kept untouched.
+
+**Results with the real model** (`node scripts/classify-eval.cjs`, the spec's five sentences, the sandbox's 22 Observation types): **5 of 5 as the spec expects.**
+- Paint touch-up: Punch Item, Painting, Level 2 stairwell.
+- Fire caulking: Observation, Deficiency, high, electrical room.
+- Duct conflict: Observation (suggested Change Event), impact "two guys half a day".
+- Lisa's drywall: Punch Item for Lisa Hubbard, due 2026-10-16, Room 204.
+- "Something's off back there": low confidence, mostly blank.
+
+Rules tests: `tests/classifier.test.js`.

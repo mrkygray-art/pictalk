@@ -37,3 +37,6 @@ lab/clips/*.wav
 
 # Functions settings that must stay private (e.g. UNLIMITED_AI_EMAILS); deployed from this machine
 functions/.env
+
+# e2e screenshots
+e2e/report-shots/

@@ -139,6 +139,22 @@ async function findTasks(message, tagged, author, messageId) {
   return cleanTasks(JSON.parse(text), tagged, messageId);
 }
 
+/** One to-do per assignee for a record thread's first message: the record's title and due date */
+function recordTasks(conv, mid) {
+  const due = /^\d{4}-\d{2}-\d{2}$/.test(conv.procore?.due ?? "")
+    ? new Date(`${conv.procore.due}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+    : "";
+  return (conv.tagged ?? []).slice(0, 10).map((t, i) => ({
+    id: `${mid}-t${i + 1}`,
+    text: String(conv.procore?.title || "Take care of this").slice(0, 160),
+    assigneeIds: [String(t.procoreUserId)],
+    assigneeNames: [t.name ?? ""],
+    due,
+    status: "open",
+  }));
+}
+exports.recordTasks = recordTasks;
+
 async function transcribeAt(path, type) {
   const [audio] = await getStorage().bucket().file(path).download();
   return transcribeAudio(audio, type);
@@ -203,7 +219,10 @@ async function processMessage(key, cid, mid, message) {
   // Tasks never block the message; a failure just means no tasks flagged
   const conv = (await convRef.get()).data() ?? {};
   try {
-    const tasks = await findTasks(m, conv.tagged ?? [], m.authorName ?? "", mid);
+    // A thread that follows a Procore record: its first message gets one to-do per assignee (the record
+    // itself, with its due date), not the AI's guesses. Later messages are flagged as usual.
+    const recordStart = conv.procore && conv.messageCount === 1 && m.authorId === conv.createdBy?.procoreUserId;
+    const tasks = recordStart ? recordTasks(conv, mid) : await findTasks(m, conv.tagged ?? [], m.authorName ?? "", mid);
     await msgRef.update({ tasks, tasksStatus: "done" });
     if (tasks.length) {
       await convRef.update({

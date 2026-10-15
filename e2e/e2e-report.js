@@ -50,6 +50,7 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   page.on("pageerror", (e) => console.log("PAGE ERROR:", e.message));
   let signedIn = false;
   let sentToServer = null;
+  const statusCalls = [];
   await page.setRequestInterception(true);
   page.on("request", async (r) => {
     const u = new URL(r.url());
@@ -63,6 +64,19 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
     if (u.pathname === "/api/procore/records") {
       sentToServer = JSON.parse(r.postData());
       return json(201, { recordType: sentToServer.card.recordType, id: 196900, number: 2, url: `https://sandbox.procore.com/${PROJECT}/project/punch_list/196900`, warnings: [], reporterName: "Edward Gray" });
+    }
+    // Step 4: the server reads / changes the record in Procore and writes the thread (stood in for here)
+    if (u.pathname === "/api/procore/record-status") {
+      const input = r.method() === "POST" ? JSON.parse(r.postData()) : Object.fromEntries(u.searchParams);
+      statusCalls.push({ method: r.method(), action: input.action ?? null });
+      const ref = getFirestore().doc(`procoreProjects/${KEY}/conversations/${input.cid}`);
+      if (input.action === "close") {
+        await ref.collection("messages").add({ authorId: "481274", authorName: "Edward Gray", text: "", transcript: "", transcriptStatus: "none", photos: [], voicePath: null, voiceType: null, aiDescription: null, event: "closed", via: "procore", clientCreatedAt: Date.now(), createdAt: Date.now() });
+        await ref.set({ status: "closed", statusBy: "481274", statusAt: Date.now(), procoreStatus: { value: "closed", label: "Closed", closed: true, at: Date.now() } }, { merge: true });
+        return json(200, { status: { value: "closed", label: "Closed", closed: true }, threadStatus: "closed" });
+      }
+      await ref.set({ procoreStatus: { value: "open", label: "Open", closed: false, at: Date.now() } }, { merge: true });
+      return json(200, { status: { value: "open", label: "Open", closed: false }, threadStatus: "open" });
     }
     return json(404, { error: "not_found" });
   });
@@ -131,7 +145,17 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   const th = await text();
   check("the thread follows the record: Procore Punch Item #2 link, To Lisa Hubbard", th.includes("Open in Procore") && th.includes("To: Lisa Hubbard"));
   check("the thread's first message is the capture (photo + words)", th.includes("needs to be redone"));
+  await page.waitForFunction(() => document.querySelector(".msg-task"), { timeout: 30000 });
+  const task = await page.$eval(".msg-task", (e) => e.innerText);
+  check("Step 4: the record became Lisa's to-do with its due date", task.includes("Lisa Hubbard") && /Fri/.test(task), task.replace(/\s+/g, " "));
+  await waitText("· Open", 20000);
+  check("Step 4: opening the thread checks Procore and shows its status", statusCalls.some((c) => c.method === "GET"));
+  check("Step 4: the thread's Close button says Close in Procore", (await text()).includes("Close in Procore"));
   await shot("4-thread");
+  await click("button::-p-text(Close in Procore)");
+  await waitText("Reopen", 20000);
+  check("Step 4: Close in Procore closes it there (server asked to close) and the thread shows closed", statusCalls.some((c) => c.action === "close"));
+  await shot("5-closed");
   await click("button::-p-text(Messages)");
   await page.waitForFunction(() => document.body.innerText.includes("Punch Item #2"), { timeout: 20000 }).catch(() => {});
   await click(".feed-tabs button::-p-text(Mine)");

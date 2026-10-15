@@ -144,7 +144,7 @@ service cloud.firestore {
     }
     // The Procore record a thread follows (Step 3): what it is and where, never secrets
     function okProcoreLink(l) {
-      return l is map && l.keys().hasOnly(['recordType', 'id', 'number', 'url', 'projectId', 'title'])
+      return l is map && l.keys().hasOnly(['recordType', 'id', 'number', 'url', 'projectId', 'title', 'due'])
         && l.recordType in ['observation', 'punch_item'] && l.id is int
         && l.get('url', '') is string && l.get('url', '').size() <= 300
         && l.get('title', '') is string && l.get('title', '').size() <= 120;

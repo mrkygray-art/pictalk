@@ -82,5 +82,25 @@ export async function sendRecord(project, card, { photos = [], voice = null, lin
   return body; // { recordType, id, number, url, warnings }
 }
 
+/** What Procore says now about a thread's record; closes the thread if it was closed in Procore. */
+export async function syncRecord(project, cid) {
+  const r = await fetch(`/api/procore/record-status?${new URLSearchParams({ companyId: project.companyId, projectId: project.projectId, cid })}`, { headers: { Accept: "application/json" } });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(body.message ?? "Couldn't check Procore."), { status: r.status });
+  return body;
+}
+
+/** Change a thread's record in Procore: done (ready for review), close, or reopen. Procore decides who may. */
+export async function recordAction(project, cid, action) {
+  const r = await fetch("/api/procore/record-status", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ companyId: project.companyId, projectId: project.projectId, cid, action }),
+  });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(body.message ?? "Couldn't change it in Procore. Try again."), { status: r.status });
+  return body;
+}
+
 export const RECORD_LABEL = { observation: "Observation", punch_item: "Punch Item" };
 export { MAX_PHOTOS };

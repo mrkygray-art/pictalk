@@ -6,6 +6,7 @@ import { DelaySheet, QuickReplyBar } from "./QuickReplyBar";
 import { statusOf } from "./quickReplies";
 import { namesLine, timeAgo } from "./format";
 import { SHOW_AI_PHOTO_DESCRIPTION } from "../features";
+import { recordAction, syncRecord } from "./recordStore";
 import {
   addPeople, fileUrl, markRead, queueMessage, setStatus, setTask, watchConversation, watchMessages,
 } from "./messagingStore";
@@ -129,6 +130,12 @@ export default function ConversationView({ session, projectKey, cid, pending, on
   const [error, setError] = useState("");
 
   useEffect(() => watchConversation(projectKey, cid, setConv), [projectKey, cid]);
+  // A thread that follows a Procore record: check Procore once when it opens (closed there = closed here)
+  const recordId = conv?.procore?.id;
+  useEffect(() => {
+    if (recordId) syncRecord(session.project, cid).catch(() => {});
+  }, [recordId, cid, session.project]);
+  const [busy, setBusy] = useState("");
   useEffect(() => watchMessages(projectKey, cid, setMessages), [projectKey, cid]);
   // Opening it (and each new message while it's open) counts as read
   useEffect(() => { markRead(projectKey, me.procoreUserId, cid); }, [projectKey, cid, me.procoreUserId, messages.length]);
@@ -139,7 +146,38 @@ export default function ConversationView({ session, projectKey, cid, pending, on
   }, [sent]);
 
   const waiting = pending.filter((p) => p.key === projectKey && p.cid === cid && !messages.some((m) => m.id === p.mid));
-  const onTask = (mid, taskId, status) => setTask(projectKey, cid, mid, taskId, status).catch((e) => setError(e?.message ?? "Couldn't change that."));
+  // Done on a record thread: when no one else still has a to-do, the Procore record goes to Ready for review
+  const markRecordDone = async () => {
+    if (!conv?.procore) return;
+    const others = (conv.openTasks ?? []).filter((t) => !(t.assigneeIds ?? []).includes(me.procoreUserId));
+    if (others.length) return;
+    try {
+      await recordAction(session.project, cid, "done");
+      setSent("Marked ready for review in Procore.");
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+  const onTask = async (mid, taskId, status) => {
+    try {
+      await setTask(projectKey, cid, mid, taskId, status);
+      if (status === "done") await markRecordDone();
+    } catch (e) {
+      setError(e?.message ?? "Couldn't change that.");
+    }
+  };
+  // Closing or reopening a record thread goes through Procore (it decides who may)
+  const recordChange = async (action) => {
+    setError("");
+    setBusy(action);
+    try {
+      await recordAction(session.project, cid, action);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy("");
+    }
+  };
 
   if (conv === undefined && !waiting.length) return <p className="procore-note">Loading…</p>;
   const tagged = conv?.tagged ?? waiting[0]?.newConversation?.tagged ?? [];
@@ -153,12 +191,16 @@ export default function ConversationView({ session, projectKey, cid, pending, on
     try {
       await queueMessage({ key: projectKey, cid, me, status: statusOf(reply, extra) });
       setSent(`Sent: ${reply.told}`);
+      if (reply.code === "done") await markRecordDone();
     } catch {
       setError("Couldn't send that. Please try again.");
     }
   };
   const pick = (r) => (r.code === "delayed" ? setAskDelay(true) : quick(r));
-  const changeStatus = (next) => setStatus(projectKey, cid, next, me).catch(() => setError("Couldn't change it. Check your signal."));
+  const changeStatus = (next) => (conv?.procore
+    ? recordChange(next === "closed" ? "close" : "reopen")
+    : setStatus(projectKey, cid, next, me).catch(() => setError("Couldn't change it. Check your signal.")));
+  const everyoneDone = !!conv?.procore && !closed && (conv.openTasks ?? []).length === 0 && messages.some((m) => (m.tasks ?? []).length);
 
   if (adding && conv) {
     return (
@@ -182,7 +224,11 @@ export default function ConversationView({ session, projectKey, cid, pending, on
     <section className="conversation" aria-label="Message">
       <div className="conv-header">
         <button type="button" className="link-btn" onClick={onBack}><BackIcon /> Messages</button>
-        {conv && party && !closed && <button type="button" className="stop-more is-danger" onClick={() => changeStatus("closed")}>Close</button>}
+        {conv && party && !closed && (
+          <button type="button" className="stop-more is-danger" onClick={() => changeStatus("closed")} disabled={!!busy}>
+            {busy === "close" ? "Closing…" : conv.procore ? "Close in Procore" : "Close"}
+          </button>
+        )}
         {closed && <span className="pill closed-pill">Closed</span>}
       </div>
       <div className="conv-people">
@@ -190,6 +236,7 @@ export default function ConversationView({ session, projectKey, cid, pending, on
         {conv?.procore && (
           <p className="procore-link">
             <strong>Procore {conv.procore.recordType === "punch_item" ? "Punch Item" : "Observation"}{conv.procore.number ? ` #${conv.procore.number}` : ""}</strong>
+            {conv.procoreStatus?.label && <> · {conv.procoreStatus.label}</>}
             {" · "}<a href={conv.procore.url} target="_blank" rel="noopener">Open in Procore</a>
           </p>
         )}
@@ -204,10 +251,16 @@ export default function ConversationView({ session, projectKey, cid, pending, on
         {waiting.map((p) => <Message key={p.mid} m={p} me={me} pending onTask={() => {}} />)}
       </ul>
 
+      {everyoneDone && (
+        <div className="closed-box">
+          <p>Everyone's done. Close it in Procore?</p>
+          <button type="button" className="big-btn photo-btn" onClick={() => recordChange("close")} disabled={!!busy}>{busy === "close" ? "Closing…" : "Close in Procore"}</button>
+        </div>
+      )}
       {conv && closed && (
         <div className="closed-box">
           <p>This message is closed. It stays in All Project.</p>
-          {party && <button type="button" className="big-btn plain-btn" onClick={() => changeStatus("open")}>Reopen</button>}
+          {party && <button type="button" className="big-btn plain-btn" onClick={() => changeStatus("open")} disabled={!!busy}>{busy === "reopen" ? "Reopening…" : "Reopen"}</button>}
         </div>
       )}
       {conv && !closed && !replying && (

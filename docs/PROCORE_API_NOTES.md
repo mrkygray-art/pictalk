@@ -187,3 +187,26 @@ The flow (`src/messaging/ReportFlow.jsx`):
 firebase deploy --only firestore:rules,functions:classifyCapture --project sitesnap-procore
 ```
 **Done when** (spec): a real capture from the phone creates a correct record in Procore with photo, transcript and "Reported by".
+
+Ky's sandbox test (2026-10-14): passed. The photo and the audio file open in Procore, "Reported by" is in the description, and Procore's Change History shows the reporter's own name.
+
+## Step 4: thread, assignee, Done and close (2026-10-14)
+
+The thread follows the record, using decision B: Done in SiteSnap means "ready for review"; the PM (or the item's final approver) closes it.
+
+- **To-dos:** a record thread's first message gets one to-do per assignee: the record's title and its due date (`recordTasks` in `functions/messaging.js`, not the AI's guesses). Later messages are flagged as usual. The due date rides on the conversation's `procore.due` (rules allow it).
+- **Done:** when an assignee taps Done (on the to-do or as a quick reply) and no one else still has a to-do, the record goes to Ready for review in Procore. That's `PATCH /rest/v1.1/punch_items/{id}` with `workflow_status: "ready_for_review"`, or `PATCH /rest/v1.0/observations/items/{id}` with `status: "ready_for_review"`. The thread stays open.
+- **Everyone's done:** the thread asks "Everyone's done. Close it in Procore?"
+- **Close / Reopen:** on a record thread these buttons change Procore first (punch `status: closed` / `open` + `work_required`; observation `closed` / `initiated`), with the person's own sign-in, and the thread follows only if Procore agrees. If Procore refuses, the person sees: "Procore says you can't close this one. The project manager (or the item's final approver) closes it." Nothing changes.
+- **Closed in Procore:** opening the thread checks Procore (`GET /api/procore/record-status`). If the record was closed there, the thread closes too, with a "Closed by Procore" line. The status shows in the thread header ("Procore Punch Item #2 · Ready for review").
+- Endpoint: `api/procore/record-status.js` (GET = check, POST `{action: done | close | reopen}`). It checks project membership, then writes the thread with firebase-admin (`procoreStatus`, `status`, and the Closed/Reopened line).
+
+**Why not webhooks yet:** Procore's webhook only says "this record changed". Reading it needs someone's sign-in, and SiteSnap keeps none on the server. Checking when the thread opens covers it for now. Step 5 (the PM dashboard) needs a stored token or a service account, and that's when webhooks come in.
+
+**Deploy needed before it works live** (the to-do trigger and the rules for the due date):
+```
+firebase deploy --only firestore:rules,functions:onConversationMessage --project sitesnap-procore
+```
+**Done when** (spec): closing in the app closes the Procore record, and closing in Procore closes the thread.
+
+Tests: `tests/record-status.test.js` (mocked Procore), `tests/messaging-rules.test.js`, `e2e/e2e-report.js` (to-do, status, Close in Procore).

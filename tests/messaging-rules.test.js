@@ -170,4 +170,5 @@ test("a thread that follows a Procore record may start with no one tagged; a bad
   await assertFails(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/r4`), conv("102", [], { procore: { ...link, recordType: "rfi" } })));
   await assertFails(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/r5`), conv("102", [], { procore: { ...link, token: "x" } })), "only known keys");
   await assertFails(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/r6`), conv("102", [], { procore: { ...link, id: "196900" } })), "id is a number");
+  await assertSucceeds(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/r7`), conv("102", [], { procore: { ...link, due: "2026-10-16" } })), "the due date rides along");
 });

@@ -128,7 +128,7 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
         me,
         newConversation: {
           tagged: card.assignees,
-          procore: { recordType: made.recordType, id: Number(made.id), number: made.number == null ? "" : String(made.number), url: made.url, projectId: project.projectId, title: card.title.slice(0, 120) },
+          procore: { recordType: made.recordType, id: Number(made.id), number: made.number == null ? "" : String(made.number), url: made.url, projectId: project.projectId, title: card.title.slice(0, 120), due: card.dueDate || "" },
         },
         text: card.description,
         transcript: words,

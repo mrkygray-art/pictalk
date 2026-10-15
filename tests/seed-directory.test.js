@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import process from "node:process";
 import seedDirectory, { pace } from "../api/procore/seed-directory.js";
 import { seal, SESSION_COOKIE } from "../api/_procore.js";
-import { SEED, cleanupPlan, projectRoleFor, removable, userBody, vendorBody } from "../api/_seedDirectory.js";
+import { SEED, cleanupPlan, permissionTemplateFor, projectRoleFor, removable, userBody, vendorBody } from "../api/_seedDirectory.js";
 
 pace.gapMs = 0;
 pace.spikeWaitMs = 0;
@@ -180,6 +180,10 @@ test("company: updates an existing test company and adds it to the project", asy
   assert.ok(out.json().steps.every((s) => s.ok), out.body);
 });
 
+const TEMPLATES = [
+  { id: 71, name: "Architect/Engineer - External" }, { id: 72, name: "Foreman / Superintendent - Internal" },
+  { id: 73, name: "Owner/Client - External" }, { id: 74, name: "Project Manager - Internal" }, { id: 75, name: "Subcontractor - External" },
+];
 function personRoutes({ roles = ["Project Manager", "Superintendent", "Architect"], userList = [], inactive = false } = {}) {
   sandbox();
   routes.splice(routes.findIndex((r) => r.test("https://sandbox.procore.test/rest/v1.3/companies/4291776/users?page=1", {})), 1,
@@ -193,7 +197,8 @@ function personRoutes({ roles = ["Project Manager", "Superintendent", "Architect
   on("POST", /\/projects\/373235\/users\/301\/actions\/add$/, { body: {} });
   on("GET", /\/rest\/v1\.0\/project_roles\?/, { body: roles.map((role, i) => ({ id: i, role, user_id: null })) });
   on("POST", /\/rest\/v1\.0\/project_roles$/, { status: 201, body: {} });
-  on("GET", /\/rest\/v2\.0\/companies\/4291776\/roles\?/, { body: { data: [{ name: "Project Manager" }, { name: "Superintendent" }] } });
+  on("GET", /\/projects\/373235\/permission_templates/, { body: TEMPLATES });
+  on("PATCH", /\/projects\/373235\/permission_template_assignments$/, { body: {} });
 }
 const writes = () => calls.filter((c) => c.method !== "GET").map((c) => `${c.method} ${c.url.replace(ENV.PROCORE_API_URL, "")}`);
 
@@ -201,7 +206,7 @@ test("person: a PM is created in the right company, added to the project, and gi
   personRoutes();
   const out = await run(req("POST", { action: "person", index: 0, person: 0, ...ids }));
   assert.equal(out.statusCode, 200, out.body);
-  assert.deepEqual(writes(), ["POST /rest/v1.3/companies/4291776/users", "POST /rest/v1.0/projects/373235/users/301/actions/add", "POST /rest/v1.0/project_roles"]);
+  assert.deepEqual(writes(), ["POST /rest/v1.3/companies/4291776/users", "POST /rest/v1.0/projects/373235/users/301/actions/add", "PATCH /rest/v1.0/projects/373235/permission_template_assignments", "POST /rest/v1.0/project_roles"]);
   const created = calls.find((c) => c.method === "POST" && /\/users$/.test(c.url)).body.user;
   assert.deepEqual([created.email_address, created.vendor_id], ["mrkygray+mhale@gmail.com", 94]);
   assert.equal(calls.at(-1).body.project_role.role, "Project Manager");
@@ -212,8 +217,10 @@ test("person: a supervisor (GC) gets no Project Role and no role calls", async (
   personRoutes();
   const out = await run(req("POST", { action: "person", index: 0, person: 1, ...ids }));
   assert.equal(out.statusCode, 200, out.body);
-  assert.deepEqual(writes(), ["POST /rest/v1.3/companies/4291776/users", "POST /rest/v1.0/projects/373235/users/301/actions/add"]);
+  assert.deepEqual(writes(), ["POST /rest/v1.3/companies/4291776/users", "POST /rest/v1.0/projects/373235/users/301/actions/add", "PATCH /rest/v1.0/projects/373235/permission_template_assignments"]);
   assert.ok(!calls.some((c) => /project_roles|\/roles/.test(c.url)));
+  // Diane is Ironbridge (the GC) staff: Internal
+  assert.deepEqual(calls.find((c) => c.method === "PATCH").body, { permission_template_assignments: { user_id: 301, permission_template_id: 72 } });
   assert.match(out.json().steps.at(-1).detail, /none \(role type GC\)/);
 });
 
@@ -221,7 +228,7 @@ test("person: an existing, inactive one is updated and made active again", async
   personRoutes({ userList: [{ id: 301, email_address: "mrkygray+tbrandt@gmail.com" }], inactive: true });
   const out = await run(req("POST", { action: "person", index: 0, person: 2, ...ids }));
   assert.equal(out.statusCode, 200, out.body);
-  assert.deepEqual(writes(), ["PATCH /rest/v1.3/companies/4291776/users/301", "POST /rest/v2.0/companies/4291776/people/bulk_activate", "POST /rest/v1.0/projects/373235/users/301/actions/add"]);
+  assert.deepEqual(writes(), ["PATCH /rest/v1.3/companies/4291776/users/301", "POST /rest/v2.0/companies/4291776/people/bulk_activate", "POST /rest/v1.0/projects/373235/users/301/actions/add", "PATCH /rest/v1.0/projects/373235/permission_template_assignments"]);
   assert.doesNotMatch(out.body, /access-1|refresh-1|never-leak/);
 });
 
@@ -275,6 +282,8 @@ test("verify: finds each person, checks company, email, tag, project and roles, 
     { test: (u) => /\/people\?/.test(u), reply: { body: all.map((u) => ({ id: u.id + 1000, user_id: u.id, contact: { is_active: true } })) } });
   routes.splice(routes.findIndex((r) => r.test("https://sandbox.procore.test/rest/v1.0/vendors?page=1", {})), 1,
     { test: (u) => /\/rest\/v1\.0\/vendors\?/.test(u), reply: { body: [...VENDORS, ...vend] } });
+  people[4].permission_template = { id: 74, name: "Project Manager - Internal" }; // Harold, a sub PM: should be external
+  for (const u of people) u.permission_template ??= { id: 75, name: "Subcontractor - External" };
   on("GET", /\/projects\/373235\/users\?/, { body: all });
   on("GET", /\/rest\/v1\.0\/project_roles\?/, { body: people.filter((u) => u.roleType === "PM").map((u) => ({ role: "Project Manager", user_id: u.id })) });
   const out = await run(req("POST", { action: "verify", set: 2, ...ids }));
@@ -282,8 +291,39 @@ test("verify: finds each person, checks company, email, tag, project and roles, 
   const steps = out.json().steps;
   assert.equal(steps.length, 7);
   assert.match(steps[0].detail, /Derek Lindqvist: company is Pacific Concrete/);
-  assert.ok(steps.slice(1, 5).every((s) => s.ok), out.body);
+  assert.match(steps[1].detail, /Harold Beaumont: template is Project Manager - Internal, expected Subcontractor - External/);
+  assert.ok(steps.slice(2, 5).every((s) => s.ok), out.body);
   assert.ok(steps[5].ok);
   assert.match(steps[6].detail, /5 PM, 5 GC, 11 Worker.*22 people \(21 SiteSnap test people/);
   assert.equal(calls.filter((c) => c.method !== "GET").length, 0);
+});
+
+test("permission templates follow Ky's matching: 1 PM Internal, 3 Foreman / Superintendent Internal, 28 Subcontractor External", () => {
+  const counts = {};
+  for (const c of SEED) for (const u of c.users) { const t = permissionTemplateFor(c, u); counts[t] = (counts[t] ?? 0) + 1; }
+  assert.deepEqual(counts, { "Project Manager - Internal": 1, "Foreman / Superintendent - Internal": 3, "Subcontractor - External": 28 });
+  // Sub PMs stay external
+  assert.equal(permissionTemplateFor(SEED[1], SEED[1].users[0]), "Subcontractor - External");
+});
+
+test("templates: sets each person's template, skips one already right, reports someone missing", async () => {
+  sandbox();
+  const c = SEED[2]; // ClearFlow: Greg, Alicia, Omar
+  const listed = [
+    { id: 401, email_address: c.users[0].email_address, vendor: { id: 95, name: c.vendor.name } },
+    { id: 402, email_address: c.users[1].email_address, vendor: { id: 95, name: c.vendor.name } },
+  ];
+  routes.splice(routes.findIndex((r) => r.test("https://sandbox.procore.test/rest/v1.3/companies/4291776/users?page=1", {})), 1,
+    { test: (u) => /\/rest\/v1\.3\/companies\/4291776\/users\?/.test(u), reply: { body: listed } });
+  on("GET", /\/projects\/373235\/permission_templates/, { body: TEMPLATES });
+  on("GET", /\/projects\/373235\/users\?/, { body: [{ id: 401, permission_template: { id: 75, name: "Subcontractor - External" } }, { id: 402, permission_template: null }] });
+  on("PATCH", /\/projects\/373235\/permission_template_assignments$/, { body: {} });
+  const out = await run(req("POST", { action: "templates", index: 2, ...ids }));
+  assert.equal(out.statusCode, 200, out.body);
+  const steps = out.json().steps;
+  assert.equal(steps[0].detail, "already set");
+  assert.ok(steps[1].ok);
+  assert.deepEqual(calls.filter((x) => x.method === "PATCH").map((x) => x.body), [{ permission_template_assignments: { user_id: 402, permission_template_id: 75 } }]);
+  assert.equal(steps[2].ok, false);
+  assert.match(steps[2].detail, /not in the directory/);
 });

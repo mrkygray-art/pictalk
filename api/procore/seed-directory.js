@@ -7,6 +7,8 @@
 // POST { action: "company", index }         : one test company: create it (or update it), add it to the project.
 // POST { action: "person", index, person }  : one of its people: create (or update and reactivate), add to the
 //                                project, and (PMs only) give the Project Manager Project Role.
+// POST { action: "templates", index }      : sets each of that company's people's permission template on the project
+//                                (PATCH /rest/v1.0/projects/{p}/permission_template_assignments; see permissionTemplateFor).
 // POST { action: "verify", set }            : reads the directory back and checks each test person: company, email,
 //                                tag, on the project, Project Role; duplicates; totals. Nothing changes.
 // Small steps, and every Procore call is paced: Procore allows about 25 calls per 10 seconds ("spike limit",
@@ -20,7 +22,7 @@
 // Sandbox only (PROCORE_API_URL must be Procore's sandbox). Same-origin JSON for the POSTs. Never returns a token.
 import { config, HttpError, procoreId, requireSameOriginJson, readBody, sendError, sendJson } from "../_procore.js";
 import { procoreSend } from "../_procoreWrite.js";
-import { SEED, TAG, cleanupPlan, isSeedEmail, projectRoleFor, removable, userBody, vendorBody } from "../_seedDirectory.js";
+import { SEED, TAG, cleanupPlan, isSeedEmail, permissionTemplateFor, projectRoleFor, removable, userBody, vendorBody } from "../_seedDirectory.js";
 
 const brief = (r) => (r.ok ? `ok (${r.status})` : `Procore answered ${r.status}: ${JSON.stringify(r.json?.errors ?? r.json?.message ?? r.json?.error ?? r.json ?? "").slice(0, 300)}`);
 const lower = (s) => String(s ?? "").trim().toLowerCase();
@@ -92,7 +94,7 @@ button:disabled{opacity:.5}select{font:inherit;font-size:17px;width:100%;padding
 .row{display:flex;gap:10px;align-items:flex-start;background:#221d18;border-radius:12px;padding:10px 14px;margin:6px 0}.row input{width:22px;height:22px;margin-top:2px;flex:none}
 .ok{color:#30d158}.bad{color:#ff5f57}.tag{font-size:13px;color:#ffc24d}a{color:#ffc24d}small{color:#b8ac9c}h2{margin-top:28px}</style></head>
 <body><h1>Test companies and people</h1>
-<p>Adds test companies and people to the project you pick: job title, phones, company, and tag. Project Managers get the Project Manager role; supervisors and workers get none (their job title shows). Permission templates are left for later. Running it again updates the same records, never duplicates. Everything is made up; emails go to your Gmail with +addresses. It goes slowly on purpose (Procore allows about 25 calls per 10 seconds): give it about 5 minutes and keep this page open.</p>
+<p>Adds test companies and people to the project you pick: job title, phones, company, and tag. Project Managers get the Project Manager role; supervisors and workers get none (their job title shows). Permission templates follow Ky's matching: Ironbridge (the GC) is Internal (Project Manager, or Foreman / Superintendent); everyone at the other companies is Subcontractor - External. Running it again updates the same records, never duplicates. Everything is made up; emails go to your Gmail with +addresses. It goes slowly on purpose (Procore allows about 25 calls per 10 seconds): give it about 5 minutes and keep this page open.</p>
 <p>First it makes your <b>earlier test people and companies inactive</b> (Procore has no delete). You see the list and choose before anything changes. Procore's own test records, Architect TEST Company, and you are never touched.</p>
 <p id="who"><small>Checking your Procore sign-in…</small></p>
 <label for="p">Project</label> <select id="p"></select>
@@ -100,6 +102,7 @@ button:disabled{opacity:.5}select{font:inherit;font-size:17px;width:100%;padding
 <button id="check" disabled>Check What's There</button>
 <div id="plan"></div>
 <button id="run" hidden>Make Ticked Ones Inactive and Add Test People</button>
+<button id="templates" hidden>Set Permission Templates (both sets, 32 people)</button>
 <button id="verify" hidden>Verify</button>
 <div id="out"></div>
 <script>
@@ -120,7 +123,7 @@ $('#check').onclick=async()=>{
   try{
     const b=await post({action:'plan'});
     $('#plan').innerHTML='<h2>Companies</h2><p><small>Ticked = made inactive. Greyed = stays.</small></p>'+rows(b.vendors,'vendor')+'<h2>People</h2>'+rows(b.users,'user')+'<h2>Will add</h2><p>'+b.seed.filter(c=>String(c.set)===$('#set').value).map(c=>'<b>'+esc(c.name)+'</b> ('+c.vendor+'), '+c.people.length+' people').join('<br>')+'</p>';
-    $('#run').hidden=false; $('#verify').hidden=false; window.seedList=b.seed;
+    $('#run').hidden=false; $('#templates').hidden=false; $('#verify').hidden=false; window.seedList=b.seed;
   }catch(e){ $('#plan').innerHTML='<p class="bad">'+esc(e.message)+'</p>'; }
   $('#check').disabled=false;
 };
@@ -129,6 +132,14 @@ $('#verify').onclick=async()=>{
   $('#verify').disabled=true; $('#out').innerHTML='<h2>Verify</h2><p><small>Reading the directory…</small></p>';
   try{ show((await post({action:'verify',set:$('#set').value})).steps); }catch(e){ $('#out').innerHTML+='<p class="bad">'+esc(e.message)+'</p>'; }
   $('#verify').disabled=false;
+};
+$('#templates').onclick=async()=>{
+  $('#templates').disabled=true; $('#out').innerHTML='<h2>Permission templates</h2>';
+  try{
+    for(const c of (window.seedList||[]).filter(c=>c.size)){ $('#out').innerHTML+='<p><small>'+esc(c.name)+'…</small></p>'; show((await post({action:'templates',index:c.index})).steps); }
+    for(const set of ['1','2']){ $('#out').innerHTML+='<h2>Verify set '+set+'</h2>'; show((await post({action:'verify',set})).steps); }
+  }catch(e){ $('#out').innerHTML+='<p class="bad">'+esc(e.message)+' Wait a minute and press the button again; finished people are skipped.</p>'; }
+  $('#templates').disabled=false;
 };
 $('#run').onclick=async()=>{
   const picked=(k)=>[...document.querySelectorAll('input[data-kind='+k+']:checked:not(:disabled)')].map(i=>i.value);
@@ -235,6 +246,8 @@ async function addPerson(req, res, cfg, companyId, projectId, seed, u, vendorId)
   if (onProject.some((x) => String(x.id) === String(userId))) steps.push({ name: `${name} on the project`, ok: true, detail: "already there" });
   else step(`Added ${name} to the project`, await api(req, res, cfg, "POST", `/rest/v1.0/projects/${projectId}/users/${userId}/actions/add`, { companyId, body: { user: {} } }));
 
+  steps.push(await setTemplate(req, res, cfg, companyId, projectId, await projectTemplates(req, res, cfg, companyId, projectId), seed, u, userId, onProject[0]?.permission_template));
+
   // Project Role: PMs get Project Manager; GC and Worker get none (their job title shows)
   if (!u.projectRole) {
     steps.push({ name: `${name}: Project Role`, ok: true, detail: `none (role type ${u.roleType}); job title shows` });
@@ -254,13 +267,49 @@ async function addPerson(req, res, cfg, companyId, projectId, seed, u, vendorId)
   return steps;
 }
 
+// The permission templates this project offers, by lower-case name (GET /rest/v1.0/projects/{p}/permission_templates)
+async function projectTemplates(req, res, cfg, companyId, projectId) {
+  const r = await api(req, res, cfg, "GET", `/rest/v1.0/projects/${projectId}/permission_templates`, { companyId });
+  return new Map((r.ok && Array.isArray(r.json) ? r.json : []).map((t) => [lower(t.name), t]));
+}
+
+// One person's permission template on the project; skipped when Procore already shows the right one
+async function setTemplate(req, res, cfg, companyId, projectId, templates, company, u, userId, current) {
+  const name = `${u.first_name} ${u.last_name}: permission template`;
+  const want = permissionTemplateFor(company, u);
+  const t = templates.get(lower(want));
+  if (!t) return { name, ok: false, detail: `This project has no "${want}" template${templates.size ? "" : " (couldn't read the project's templates)"}.` };
+  if (current && String(current.id) === String(t.id)) return { name: `${name} ${want}`, ok: true, detail: "already set" };
+  const r = await api(req, res, cfg, "PATCH", `/rest/v1.0/projects/${projectId}/permission_template_assignments`, {
+    companyId, body: { permission_template_assignments: { user_id: Number(userId), permission_template_id: Number(t.id) } },
+  });
+  return { name: `${name} ${want}`, ok: r.ok, detail: brief(r) };
+}
+
+// Every person of one test company: their permission template on the project
+async function templatesFor(req, res, cfg, companyId, projectId, company) {
+  if (!company.users.length) return [{ name: `${company.vendor.name}`, ok: true, detail: "no people" }];
+  const templates = await projectTemplates(req, res, cfg, companyId, projectId);
+  const users = (await pages(req, res, cfg, `/rest/v1.3/companies/${companyId}/users`, { companyId })) ?? [];
+  const onProject = (await pages(req, res, cfg, `/rest/v1.0/projects/${projectId}/users`, { companyId })) ?? [];
+  const steps = [];
+  for (const u of company.users) {
+    const x = users.find((y) => lower(y.email_address) === lower(u.email_address));
+    if (!x) { steps.push({ name: `${u.first_name} ${u.last_name}: permission template`, ok: false, detail: "not in the directory; run Add Test People first" }); continue; }
+    steps.push(await setTemplate(req, res, cfg, companyId, projectId, templates, company, u, x.id, onProject.find((y) => String(y.id) === String(x.id))?.permission_template));
+  }
+  return steps;
+}
+
 // Read everything back for one set: each person once, in the right company, exact email, tag, on the project,
-// Project Role only for PMs; no duplicate emails; totals for the whole directory.
+// Project Role only for PMs, the permission template from permissionTemplateFor; no duplicate emails; totals for the whole directory.
 async function verify(req, res, cfg, companyId, projectId, set) {
   const steps = [];
   const { users, vendors } = await directory(req, res, cfg, companyId);
   const active = users.filter((u) => u.is_active);
-  const onProject = new Set(((await pages(req, res, cfg, `/rest/v1.0/projects/${projectId}/users`, { companyId })) ?? []).map((u) => String(u.id)));
+  const projectUsers = (await pages(req, res, cfg, `/rest/v1.0/projects/${projectId}/users`, { companyId })) ?? [];
+  const onProject = new Set(projectUsers.map((u) => String(u.id)));
+  const templateOf = (id) => projectUsers.find((u) => String(u.id) === String(id))?.permission_template;
   const roles = (await pages(req, res, cfg, "/rest/v1.0/project_roles", { companyId, query: { project_id: projectId } })) ?? [];
   const rolesOf = (id) => roles.filter((r) => String(r.user_id) === String(id)).map((r) => r.role);
   for (const c of SEED.filter((x) => x.set === set)) {
@@ -283,8 +332,10 @@ async function verify(req, res, cfg, companyId, projectId, set) {
       const has = rolesOf(x.id);
       if (u.projectRole && !has.some((r) => lower(r) === lower(u.projectRole))) problems.push(`${name}: no ${u.projectRole} role`);
       if (!u.projectRole && has.length) problems.push(`${name}: has role ${has.join(", ")}`);
+      const tpl = templateOf(x.id)?.name;
+      if (onProject.has(String(x.id)) && lower(tpl) !== lower(permissionTemplateFor(c, u))) problems.push(`${name}: template is ${tpl || "not set"}, expected ${permissionTemplateFor(c, u)}`);
     }
-    steps.push({ name: `${c.vendor.name}: ${c.users.length} people`, ok: !problems.length, detail: problems.length ? problems.join("; ") : "all found: right company, email, tag, on the project, roles as expected" });
+    steps.push({ name: `${c.vendor.name}: ${c.users.length} people`, ok: !problems.length, detail: problems.length ? problems.join("; ") : "all found: right company, email, tag, on the project, roles and permission templates as expected" });
   }
   const emails = active.map((u) => lower(u.email_address)).filter(Boolean);
   const dupes = [...new Set(emails.filter((e, i) => emails.indexOf(e) !== i))];
@@ -325,6 +376,7 @@ export default async function handler(req, res) {
     let out;
     if (body.action === "cleanup") out = { steps: await cleanup(req, res, cfg, companyId, body) };
     else if (body.action === "verify") out = { steps: await verify(req, res, cfg, companyId, projectId, Number(body.set) === 1 ? 1 : 2) };
+    else if (body.action === "templates" && seed) out = { steps: await templatesFor(req, res, cfg, companyId, projectId, seed) };
     else if (body.action === "company" && seed) out = await addCompany(req, res, cfg, companyId, projectId, seed);
     else if (body.action === "person" && who) out = { steps: await addPerson(req, res, cfg, companyId, projectId, seed, who, body.vendorId) };
     else throw new HttpError(400, "bad_request", "Unknown step.");

@@ -110,6 +110,16 @@ export const SEED = [
   ]),
 ];
 
+// Permission templates (Ky's permission_template_matching.md, 2026-10-14). Ironbridge is the GC (Ky's company),
+// so its people are Internal: the PM gets Project Manager, everyone else Foreman / Superintendent (the laborer and
+// safety coordinator are a judgment call: closest Internal template). Every other company is a subcontractor, so all
+// its people, PMs included, get Subcontractor - External.
+export const GC_VENDOR = "Ironbridge Construction Group";
+export function permissionTemplateFor(company, u) {
+  if (company.vendor.name !== GC_VENDOR) return "Subcontractor - External";
+  return u.roleType === "PM" ? "Project Manager - Internal" : "Foreman / Superintendent - Internal";
+}
+
 // ---------- Procore request bodies ----------
 
 // Create / update company vendor (POST /rest/v1.0/vendors, PATCH /rest/v1.0/vendors/{id})

@@ -17,6 +17,12 @@ Signed in as Edward Gray (Procore user 481274); his own Procore sign-in wrote ev
 | Observation statuses | initiated, ready_for_review, not_accepted, closed (labels Initiated, Ready For Review, Not Accepted, Closed) |
 | Webhook events for the project | 96 resources, including **Observation Items**, **Observation Item Response Logs**, **Punch Items**, **Change Events**, Change Event Line Items, Potential Change Orders, Task Items, RFIs, Images. So status sync can use webhooks. |
 
+**Seen in Procore (Ky's screenshots of Observation #1):**
+- **Private was on.** The project's Observation settings make new items private, and that applies to API creates too. Real records must send `personal: false` (Observations) and `private: false` (Punch Items) so the project team sees them.
+- **No due date.** A hand-made Observation got the project's 8-day default; the API one didn't. SiteSnap should send the foreman's date, or leave it blank unless a project setting says otherwise.
+- **Nobody notified** (Notification Date blank), as expected. Decision C (email the assignee) is a separate call.
+- **Created By shows Edward Gray:** the real author (decision A).
+
 **Answered by the sandbox:**
 - Q2 (create plus photo and audio): yes, for Observations and Punch Items.
 - Q3 (numbers): Procore assigns them for both.

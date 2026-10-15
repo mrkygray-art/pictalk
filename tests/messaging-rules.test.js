@@ -172,3 +172,9 @@ test("a thread that follows a Procore record may start with no one tagged; a bad
   await assertFails(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/r6`), conv("102", [], { procore: { ...link, id: "196900" } })), "id is a number");
   await assertSucceeds(setDoc(doc(fs("102"), `procoreProjects/${KEY}/conversations/r7`), conv("102", [], { procore: { ...link, due: "2026-10-16" } })), "the due date rides along");
 });
+
+test("the saved permission template levels are server only: no one reads or writes them from the app", async () => {
+  const path = "procoreCompanies/4291776/meta/permissionTemplates";
+  await assertFails(getDoc(doc(fs("101"), path)));
+  await assertFails(setDoc(doc(fs("101"), path), { templates: {}, at: 1 }));
+});

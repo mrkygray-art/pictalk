@@ -82,6 +82,28 @@ export async function sendRecord(project, card, { photos = [], voice = null, lin
   return body; // { recordType, id, number, url, warnings }
 }
 
+const ACCESS_KEY = "sitesnap-access:";
+/** Who Procore will accept for a Punch Item / Observation on this project (saved per project for weak signal).
+ *  { people: { [procoreUserId]: { template, punch_item: { ok, why }, observation: { ok, why } } }, levelsKnown } */
+export async function projectAccess(project) {
+  const k = `${ACCESS_KEY}${project.companyId}_${project.projectId}`;
+  try {
+    const r = await fetch(`/api/procore/access?${new URLSearchParams({ companyId: project.companyId, projectId: project.projectId })}`, { headers: { Accept: "application/json" } });
+    if (r.ok && (r.headers.get("content-type") ?? "").includes("application/json")) {
+      const v = await r.json();
+      try { store()?.setItem(k, JSON.stringify(v)); } catch { /* full */ }
+      return v;
+    }
+  } catch { /* no signal: use the saved copy */ }
+  try { return JSON.parse(store()?.getItem(k) ?? "null"); } catch { return null; }
+}
+
+/** Why Procore won't take this person for this kind of record, or "" */
+export function cantGet(access, procoreUserId, recordType) {
+  const a = access?.people?.[String(procoreUserId)]?.[recordType];
+  return a?.ok === false ? a.why : "";
+}
+
 /** What Procore says now about a thread's record; closes the thread if it was closed in Procore. */
 export async function syncRecord(project, cid) {
   const r = await fetch(`/api/procore/record-status?${new URLSearchParams({ companyId: project.companyId, projectId: project.projectId, cid })}`, { headers: { Accept: "application/json" } });

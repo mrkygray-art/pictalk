@@ -61,6 +61,12 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
     if (u.pathname === "/api/procore/session") return json(200, { token: await getAuth().createCustomToken("procore_481274", { procoreUserId: "481274" }), me: { procoreUserId: "481274", name: "Edward Gray" }, projects: PROJECTS });
     if (u.pathname === "/api/procore/directory") return json(200, { people: PEOPLE, canTag: false, labels: [], compact: false, rolesAvailable: true });
     if (u.pathname === "/api/procore/record-options") return json(200, OPTIONS);
+    // Jim Henson's template has no Punch List access (what an admin's visit saved)
+    if (u.pathname === "/api/procore/access") return json(200, { levelsKnown: true, levelsAt: Date.now(), observationList: true, people: {
+      481274: { template: "Project Manager - Internal", punch_item: { ok: true, why: "" }, observation: { ok: true, why: "" } },
+      900: { template: "Subcontractor - External", punch_item: { ok: true, why: "" }, observation: { ok: true, why: "" } },
+      902: { template: "Owner/Client - External", punch_item: { ok: false, why: '"Owner/Client - External" has no access to Punch List' }, observation: { ok: false, why: '"Owner/Client - External" has no access to Observations' } },
+    } });
     if (u.pathname === "/api/procore/records") {
       sentToServer = JSON.parse(r.postData());
       return json(201, { recordType: sentToServer.card.recordType, id: 196900, number: 2, url: `https://sandbox.procore.com/${PROJECT}/project/punch_list/196900`, warnings: [], reporterName: "Edward Gray" });
@@ -129,6 +135,21 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   check("the card says where it goes", t.includes("Goes to Procore's Punch List"));
   check("no technical words on the card", !/record_type|json|confidence|undefined|null/i.test(t));
   await shot("2-card");
+  // Step 2 (permissions): the picker marks who Procore won't take; picking them warns on the card
+  await click("button::-p-text(Change)");
+  await page.waitForFunction(() => document.querySelector(".dir-note"), { timeout: 15000 });
+  const note = await page.$eval(".dir-person.is-limited", (e) => e.innerText);
+  check("permissions: the picker marks Jim Henson (no Punch List access)", note.includes("Jim Henson") && note.includes("Can't get Punch Items in Procore"), note.replace(/\s+/g, " "));
+  check("permissions: people Procore takes aren't marked", (await page.$$(".dir-person.is-limited")).length === 1);
+  await click(".dir-person.is-limited");
+  await shot("2b-picker");
+  await click("button.dir-done");
+  await waitText("It will go in unassigned");
+  check("permissions: the card warns before sending", (await text()).includes("Jim Henson can't get Punch Items in Procore"));
+  await click("button::-p-text(Change)");
+  await click(".dir-person.is-limited");
+  await click("button.dir-done");
+  check("permissions: the warning goes when he's taken off", !(await text()).includes("It will go in unassigned"));
 
   await click("button::-p-text(Send to Procore)");
   await waitText("Sent to Procore", 30000);
@@ -161,6 +182,13 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   await shot("5-closed");
   await click("button::-p-text(Messages)");
   await page.waitForFunction(() => document.body.innerText.includes("Punch Item #2"), { timeout: 20000 }).catch(() => {});
+  await click("button::-p-text(Who can't get Punch Items or Observations?)");
+  await waitText("Who can't get records");
+  await waitText("Jim Henson");
+  const list = await text();
+  check("permissions: the list shows who can't get what, by company", list.includes("Kyco") && list.includes("Can't get Punch Items") && list.includes("Can't get Observations") && !list.includes("Lisa Hubbard"));
+  await shot("6-access");
+  await click("button::-p-text(Back to Messages)");
   await click(".feed-tabs button::-p-text(Mine)");
   await page.waitForFunction(() => document.querySelector(".conv-card .pill.is-procore"), { timeout: 20000 });
   check("the feed card shows the Procore record", (await page.$eval(".conv-card .pill.is-procore", (e) => e.textContent)) === "Punch Item #2");

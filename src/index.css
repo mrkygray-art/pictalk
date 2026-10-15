@@ -1765,6 +1765,16 @@ button:focus-visible {
 .dir-who strong { font-size: 18px; overflow-wrap: anywhere; }
 .dir-who span { color: var(--muted); font-size: 15px; overflow-wrap: anywhere; }
 .dir-who small { color: var(--muted); font-size: 12px; opacity: 0.8; }
+.dir-person.is-limited .dir-who strong { opacity: 0.6; }
+.dir-who small.dir-note { color: var(--warning-ink, #ffc24d); opacity: 1; font-size: 13px; }
+.procore-warn { color: var(--warning-ink, #ffc24d); font-size: 14px; }
+.access-list { display: grid; gap: 12px; }
+.access-group { background: var(--surface, #221d18); border-radius: 14px; padding: 12px 16px; }
+.access-group h3 { margin: 0 0 6px; font-size: 16px; }
+.access-group ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.access-group li { display: grid; gap: 2px; }
+.access-group li small { color: var(--muted); }
+.access-group li span { color: var(--warning-ink, #ffc24d); font-size: 14px; }
 .dir-list .procore-tag { padding: 0 16px 10px 56px; margin: 0; }
 .dir-groups { display: grid; gap: 12px; }
 .dir-groups h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 6px 4px; }

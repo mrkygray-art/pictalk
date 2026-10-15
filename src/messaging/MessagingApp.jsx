@@ -5,6 +5,7 @@ import Feed from "./Feed";
 import ConversationView from "./ConversationView";
 import Composer from "./Composer";
 import ReportFlow from "./ReportFlow";
+import AccessList from "./AccessList";
 import { readBeta } from "./beta";
 import { onQueueChange, pendingMessages, startMessageSync, watchReads } from "./messagingStore";
 
@@ -126,8 +127,10 @@ export default function MessagingApp() {
           {beta && <p className="msg-new-hint">Stays in SiteSnap. Nothing goes to Procore.</p>}
           <Feed projectKey={key} me={me.procoreUserId} reads={reads} pending={pending} onOpen={(cid) => setView({ name: "conversation", cid })} />
           <p className="msg-footnote">Only people on this Procore project can see its messages. Everyone on a message can see when it was sent, seen and answered.</p>
+          {beta && <button type="button" className="text-btn" onClick={() => setView({ name: "access" })}>Who can't get Punch Items or Observations?</button>}
         </>
       )}
+      {view.name === "access" && <AccessList session={session} onBack={() => setView({ name: "feed" })} />}
       {view.name === "report" && (
         <ReportFlow session={session} onClose={() => setView({ name: "feed" })} onOpenThread={(cid) => setView({ name: "conversation", cid })} />
       )}

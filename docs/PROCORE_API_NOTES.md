@@ -259,3 +259,11 @@ Only Project Managers have Tasks access, which is why Procore's Create Task pick
 
 **Step 1 answer:** workable. Everyone can read who has which template and the Observation assignee list; the per-tool levels need an admin, so SiteSnap would read them when an admin signs in and keep a copy server-side (5 templates), for everyone to use.
 
+## Permission templates, Step 2: read-only warnings (2026-10-15)
+
+- `GET /api/procore/access?companyId=&projectId=` (`api/procore/access.js`, `api/_access.js`): for each project person, whether Procore will take them for a Punch Item or an Observation, and why not. Read only on Procore, with the person's own sign-in: project users (each person's template), Procore's Observation assignee list (it decides Observations when it answers), and each template's levels.
+- The levels are admin-only in Procore, so they're saved per company in Firestore `procoreCompanies/{c}/meta/permissionTemplates` (`{templates: {id: {name, punch_list, observations, task_items, directory}}, at}`, server only: no rule matches it) whenever an admin opens Report an Issue or the list, at most once a day or when a new template shows up. A non-admin's 403 never overwrites the saved copy.
+- Only **None (1)** counts as "can't". Read Only (2) hasn't shown up on these tools yet, so it isn't treated as a no. No template = can't get anything.
+- App (behind `?beta=report`): the picker on the card marks people the chosen type can't take ("Can't get Punch Items in Procore: … has no access to Punch List"); picking them shows a warning on the card (it goes in unassigned, they stay tagged on the thread). The feed has **Who can't get Punch Items or Observations?**: the list by company, with how to fix it in Procore. The access answer is cached per project for weak signal.
+- Tests: `tests/access.test.js`, the rules test in `tests/messaging-rules.test.js`, `e2e/e2e-report.js` (picker, card warning, list).
+

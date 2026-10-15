@@ -8,7 +8,7 @@ export const MAX_TAGGED = 50;
 const PLACEHOLDER = { name: "Search by name", title: "Search by title, like foreman", company: "Search by company", all: "Search name, title or company" };
 const SHOW_MAX = 60;
 
-export default function RecipientSearch({ dir, dirError, loadingDir, onRefresh, projectName, selected, onChange, onDone, doneLabel = "Done", alreadyTagged = [] }) {
+export default function RecipientSearch({ dir, dirError, loadingDir, onRefresh, projectName, selected, onChange, onDone, doneLabel = "Done", alreadyTagged = [], noteFor = null }) {
   const [filter, setFilter] = useState("name");
   const [query, setQuery] = useState("");
   const input = useRef(null);
@@ -39,14 +39,16 @@ export default function RecipientSearch({ dir, dirError, loadingDir, onRefresh, 
   const row = (p) => {
     const on = picked.has(String(p.id)) || fixed.has(String(p.id));
     const sub = [p.title || p.role, filter === "company" ? null : p.company].filter(Boolean).join(" · ");
+    const note = noteFor?.(p) ?? "";
     return (
       <li key={p.id}>
-        <button type="button" className={`dir-person${on ? " is-on" : ""}`} aria-pressed={on} onClick={() => toggle(p)} disabled={fixed.has(String(p.id))}>
+        <button type="button" className={`dir-person${on ? " is-on" : ""}${note ? " is-limited" : ""}`} aria-pressed={on} onClick={() => toggle(p)} disabled={fixed.has(String(p.id))}>
           <span className="dir-check" aria-hidden="true">{on ? "✓" : ""}</span>
           <span className="dir-who">
             <strong>{p.name ?? "Unnamed"}</strong>
             {sub && <span>{sub}</span>}
             {fixed.has(String(p.id)) && <small>Already on this message</small>}
+            {note && <small className="dir-note">{note}</small>}
           </span>
         </button>
       </li>

@@ -3,7 +3,7 @@ import { CameraIcon, MicIcon, StopIcon } from "./icons";
 import { formatTime, useRecorder } from "./useRecorder";
 import RecipientSearch from "./RecipientSearch";
 import { newId, queueMessage, transcribeVoice, uploadFile, voicePathFor } from "./messagingStore";
-import { draftRecord, MAX_PHOTOS, RECORD_HINT, RECORD_LABEL, RECORD_TOOL, recordOptions, sendRecord } from "./recordStore";
+import { cantGet, draftRecord, MAX_PHOTOS, projectAccess, RECORD_HINT, RECORD_LABEL, RECORD_TOOL, recordOptions, sendRecord } from "./recordStore";
 
 // Report an Issue (voice + photo -> Procore record). The foreman describes it; SiteSnap works out what
 // kind of Procore record it is, fills it in, and one tap on Send creates it in Procore under their own
@@ -21,6 +21,7 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
   const [words, setWords] = useState(""); // what was said (editable)
   const [wordsState, setWordsState] = useState(null); // null | working | done | failed | offline
   const [options, setOptions] = useState(null);
+  const [access, setAccess] = useState(null); // who Procore will take for each kind of record
   const [card, setCard] = useState(null);
   const [draftNote, setDraftNote] = useState(null); // { lowConfidence, suggested, unmatched, impact }
   const [picking, setPicking] = useState(false);
@@ -28,7 +29,12 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
   const [sent, setSent] = useState(null);
   const fileInput = useRef(null);
 
-  useEffect(() => { recordOptions(project).then(setOptions); }, [project]);
+  // One Procore read after the other (a token refresh replaces the refresh token)
+  useEffect(() => {
+    let live = true;
+    recordOptions(project).then((o) => { if (live) setOptions(o); return projectAccess(project); }).then((a) => { if (live) setAccess(a); }).catch(() => {});
+    return () => { live = false; };
+  }, [project]);
   useEffect(() => () => {
     photos.forEach((p) => URL.revokeObjectURL(p.url));
     if (voice) URL.revokeObjectURL(voice.url);
@@ -151,6 +157,7 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
           dir={session.dir} dirError={session.dirError} loadingDir={session.loadingDir} onRefresh={session.refreshDirectory}
           projectName={project.name} selected={card.assignees} onChange={(a) => set({ assignees: a })}
           onDone={() => setPicking(false)} doneLabel="Done"
+          noteFor={(p) => { const why = cantGet(access, p.id, card.recordType); return why ? `Can't get ${RECORD_LABEL[card.recordType]}s in Procore: ${why}` : ""; }}
         />
       </section>
     );
@@ -222,6 +229,9 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
             <p>{card.assignees.length ? <strong>{card.assignees.map((a) => a.name).join(", ")}</strong> : blank}</p>
             <span className="stop-more">{card.assignees.length ? "Change" : "Pick"}</span>
           </button>
+          {card.assignees.map((a) => [a, cantGet(access, a.procoreUserId, card.recordType)]).filter(([, why]) => why).map(([a, why]) => (
+            <small key={a.procoreUserId} className="procore-warn">{a.name} can't get {RECORD_LABEL[card.recordType]}s in Procore ({why}). It will go in unassigned; {a.name.split(" ")[0]} is still tagged on the thread.</small>
+          ))}
           {draftNote.unmatched.length > 0 && <small className="msg-status">Heard "{draftNote.unmatched.join(", ")}" but couldn't find them on this project. Pick them above.</small>}
         </div>
         <div className="msg-field"><span>Priority</span>

@@ -20,7 +20,8 @@
 // POST { action: "deletecheck", code }              : creates a test Observation and Punch Item, closes, edits
 //                                                    and deletes them, and says what Procore allowed.
 // Same-origin JSON for the POSTs. Never returns a token.
-import { config, HttpError, procoreGet, procoreId, readBody, requireSameOriginJson, sendError, sendJson } from "../_procore.js";
+import { createHash } from "node:crypto";
+import { config, HttpError, procoreGet, procoreId, readBody, readCookies, requireSameOriginJson, SESSION_COOKIE, sendError, sendJson } from "../_procore.js";
 import { listProjects } from "../_projects.js";
 import { addCompany, addPerson, api, pace } from "../_seedSteps.js";
 import {
@@ -45,7 +46,23 @@ async function isAdmin(req, res, cfg, companyId, projectIds) {
   return false;
 }
 
+// The check costs about five Procore calls (companies, projects, two template reads, me), so a warm server
+// remembers it for a few minutes per sign-in: a page pressing button after button stays under Procore's limit.
+const GUARD_MS = 5 * 60 * 1000;
+const guardCache = new Map();
+const guardKey = (req) => createHash("sha256").update(`${readCookies(req)[SESSION_COOKIE] ?? ""}|${process.env.DEMO_PROJECT_IDS ?? ""}`).digest("hex");
+export const forgetGuards = () => guardCache.clear();
+
 async function guard(req, res, cfg) {
+  const key = guardKey(req);
+  const hit = guardCache.get(key);
+  if (hit && Date.now() - hit.at < GUARD_MS) return hit.g;
+  const g = await checkGuard(req, res, cfg);
+  guardCache.set(key, { g, at: Date.now() });
+  return g;
+}
+
+async function checkGuard(req, res, cfg) {
   const { projects } = await listProjects(req, res, cfg);
   const ids = demoProjects();
   const demo = ids ? Object.fromEntries(Object.entries(ids).map(([code, id]) => {
@@ -200,6 +217,8 @@ const esc=(s)=>String(s??'').replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>'
 const LABEL={imported:'Imported',not_imported:'Not imported',failed:'Failed',partial:'Partial',waiting:'Waiting'};
 const PLAN={open:'Open',overdue:'Overdue',closed:'Closed'};
 const post=async(body)=>{ const r=await fetch('/api/procore/demo-staging',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const b=await r.json().catch(()=>({message:'No answer from the server'})); if(!r.ok){ const e=new Error(b.message||'Failed'); e.status=r.status; throw e; } return b; };
+// Procore said slow down (429): wait a minute, then try that step once more
+const post2=async(body,note)=>{ try{ return await post(body); }catch(e){ if(!/429|slow down|rate/i.test(e.message)) throw e; if(note) note('Procore said slow down. Waiting a minute, then trying that step again…'); await new Promise(r=>setTimeout(r,60000)); return post(body); } };
 const when=(t)=>t?new Date(t).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'never';
 const busy=(t)=>{ $('#busy').textContent=t||''; document.querySelectorAll('button').forEach(b=>b.disabled=!!t); };
 function render(){
@@ -257,8 +276,9 @@ document.addEventListener('click',async(ev)=>{
   if(t.dataset.re){ if(!confirm('Remove the old Procore record for '+t.dataset.re+' (delete, or close and rename) and import it again?')) return; busy('Re-importing '+t.dataset.re+'…'); try{ await post({action:'reimport',id:t.dataset.re}); S=await post({action:'state'}); render(); busy(''); }catch(e){ busy(''); alert(e.message); } }
   if(t.dataset.people){ const code=t.dataset.people; const out=$('#peopleout'); out.innerHTML='<h2>'+code+' people</h2>'; busy('Adding demo people to '+code+'… (a few minutes; keep this page open)');
     const show=(steps)=>{ out.innerHTML+=steps.map(s=>'<div class="card"><b class="'+(s.ok?'ok':'bad')+'">'+(s.ok?'✓':'✗')+' '+esc(s.name)+'</b><br><small>'+esc(s.detail)+'</small></div>').join(''); };
-    try{ const list=(await post({action:'people',code})).companies;
-      for(const [i,c] of list.entries()){ const co=await post({action:'people',code,company:i}); show(co.steps); for(let p=0;p<c.people;p++) show((await post({action:'people',code,company:i,person:p,vendorId:co.vendorId})).steps); }
+    const note=(t)=>{ out.innerHTML+='<p><small>'+esc(t)+'</small></p>'; };
+    try{ const list=(await post2({action:'people',code},note)).companies;
+      for(const [i,c] of list.entries()){ const co=await post2({action:'people',code,company:i},note); show(co.steps); for(let p=0;p<c.people;p++) show((await post2({action:'people',code,company:i,person:p,vendorId:co.vendorId},note)).steps); }
       out.innerHTML+='<p><b>Done.</b> <small>Screenshot anything with a ✗ and send it to Claude.</small></p>';
     }catch(e){ out.innerHTML+='<p class="bad">'+esc(e.message)+' Wait a minute and press it again; finished people are just updated.</p>'; } busy(''); }
 });
@@ -296,7 +316,7 @@ export default async function handler(req, res) {
     const g = await guard(req, res, cfg);
 
     if (body.action === "state") return sendJson(res, 200, await state(g));
-    if (body.action === "createprojects") return sendJson(res, 200, await createProjects(req, res, cfg, g));
+    if (body.action === "createprojects") { const out = await createProjects(req, res, cfg, g); forgetGuards(); return sendJson(res, 200, out); }
     if (body.action === "import") return sendJson(res, 200, await importBatch(req, res, cfg, g, body));
 
     if (body.action === "people") {

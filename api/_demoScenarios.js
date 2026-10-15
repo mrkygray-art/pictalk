@@ -49,21 +49,22 @@ export const PROJECTS = {
   LV: { name: "Lakeview Elementary Modernization", stage: "Final: closeout and punch", shows: "Fixes needed before handover; safety and paperwork" },
 };
 
+// abbreviated_name: Procore allows 10 characters at most
 const vendor = (name, abbreviated_name, phone, city, zip, notes) => ({
   name, abbreviated_name, business_phone: phone, address: "100 Demo Way", city, zip,
   email_address: `office@${abbreviated_name.toLowerCase().replace(/[^a-z]/g, "")}.example.com`, notes: `SiteSnap demo data: ${notes}`, labor_union: null,
 });
 
 export const DEMO_COMPANIES = {
-  cornerstone: vendor("Cornerstone Builders", "Cornerstone", "(310) 555-0180", "Torrance", "90501", "general contractor"),
+  cornerstone: vendor("Cornerstone Builders", "Cornerstn", "(310) 555-0180", "Torrance", "90501", "general contractor"),
   bayline: vendor("Bayline Concrete", "Bayline", "(310) 555-0181", "Carson", "90745", "concrete"),
   pacific: vendor("Pacific Structural Inspections", "PSI", "(310) 555-0182", "Long Beach", "90802", "special inspections"),
   volt: vendor("Volt Line Electric", "Volt Line", "(310) 555-0183", "Hawthorne", "90250", "electrical"),
-  summit: vendor("Summit Mechanical", "Summit Mech", "(424) 555-0184", "El Segundo", "90245", "plumbing and fire sprinklers"),
+  summit: vendor("Summit Mechanical", "SummitMech", "(424) 555-0184", "El Segundo", "90245", "plumbing and fire sprinklers"),
   sentry: vendor("Sentry Low-Voltage Systems", "Sentry", "(424) 555-0185", "Gardena", "90248", "security cameras and access control"),
   cleanline: vendor("Clean Line Drywall", "Clean Line", "(323) 555-0186", "Compton", "90220", "drywall"),
   westgate: vendor("Westgate Logistics", "Westgate", "(562) 555-0187", "Ontario", "91761", "owner, Westgate Distribution Center"),
-  lakeview: vendor("Lakeview School District", "Lakeview USD", "(562) 555-0188", "Lakewood", "90712", "owner, Lakeview Elementary"),
+  lakeview: vendor("Lakeview School District", "LakeviewSD", "(562) 555-0188", "Lakewood", "90712", "owner, Lakeview Elementary"),
   finishpro: vendor("Finish Pro Painting", "Finish Pro", "(323) 555-0189", "Inglewood", "90301", "painting"),
 };
 

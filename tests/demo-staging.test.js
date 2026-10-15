@@ -343,3 +343,16 @@ test("admin check: a new demo project with no templates yet doesn't lock the adm
   assert.equal(out.statusCode, 200);
   assert.ok(calls.some((c) => /\/projects\/(1002|1003|2000)\/permission_templates$/.test(c.url)));
 });
+
+test("company short names fit Procore's 10-character limit", async () => {
+  const { DEMO_COMPANIES } = await import("../api/_demoScenarios.js");
+  for (const v of Object.values(DEMO_COMPANIES)) assert.ok(v.abbreviated_name.length <= 10, v.abbreviated_name);
+});
+
+test("the sign-in check is remembered for the same sign-in: a second press doesn't ask Procore again", async () => {
+  const r = req("POST", { action: "state" });
+  await demoStaging(r, res());
+  const before = calls.filter((c) => /permission_templates|\/me|\/companies\?/.test(c.url)).length;
+  await demoStaging({ ...r, body: { action: "state" } }, res());
+  assert.equal(calls.filter((c) => /permission_templates|\/me|\/companies\?/.test(c.url)).length, before);
+});

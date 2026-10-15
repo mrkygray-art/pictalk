@@ -144,5 +144,16 @@ test("record-options: the project's Observation types, trades and locations", as
     trades: [{ id: 5, name: "Drywall" }],
     locations: [{ id: 50, name: "Level 2" }],
     canObservations: true,
+    tradesReadable: true,
   });
+});
+
+test("record-options: trades Procore won't share are told apart from none set up", async () => {
+  on("GET", /observation_types$/, { body: [] });
+  on("GET", /\/companies\/4291776\/trades$/, { status: 403, body: { errors: "Forbidden" } });
+  on("GET", /\/projects\/373235\/locations\?/, { body: [] });
+  const out = await run(recordOptions, req("GET", "/api/procore/record-options?companyId=4291776&projectId=373235"));
+  assert.equal(out.statusCode, 200, out.body);
+  assert.deepEqual(out.json().trades, []);
+  assert.equal(out.json().tradesReadable, false);
 });

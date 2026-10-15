@@ -20,6 +20,8 @@ export default async function handler(req, res) {
     const types = await procoreSend(req, res, cfg, "GET", `/rest/v1.0/projects/${projectId}/observation_types`, { companyId });
     if (types.status === 401) throw new HttpError(401, "not_connected", "Connect Procore again.");
     const trades = await procoreSend(req, res, cfg, "GET", `/rest/v1.0/companies/${companyId}/trades`, { companyId });
+    // Say why the list is empty: Procore refused it (permission) vs. the company has none set up
+    if (!trades.ok) console.log("SiteSnap record options: trades not readable", trades.status);
     let locations = [];
     try {
       locations = await allPages(req, res, cfg, `/rest/v1.0/projects/${projectId}/locations`, { companyId, query: {} });
@@ -31,6 +33,7 @@ export default async function handler(req, res) {
       trades: list(trades).filter((t) => t.active !== false).map((t) => ({ id: t.id, name: t.name })),
       locations: locations.slice(0, 500).map((l) => ({ id: l.id, name: l.node_name || l.name })),
       canObservations: types.ok,
+      tradesReadable: trades.ok,
     });
   } catch (err) {
     sendError(res, err);

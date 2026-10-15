@@ -234,7 +234,7 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
         </label>
         <label className="msg-field"><span>Trade</span>
           <select className="dir-input" value={card.tradeId ?? ""} onChange={(e) => set({ tradeId: Number(e.target.value) || null })}>
-            <option value="">{(options?.trades ?? []).length ? "Not said" : "No trades set up in Procore"}</option>
+            <option value="">{(options?.trades ?? []).length ? "Not said" : options?.tradesReadable === false ? "Procore didn't share its trades list" : "No trades in Procore's company list yet"}</option>
             {(options?.trades ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </label>

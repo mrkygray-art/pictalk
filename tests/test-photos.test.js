@@ -94,10 +94,12 @@ test("photos check: makes the test album once, uploads one public photo with des
   assert.match(stepNamed(b, "Rate limit").detail, /limit 3600/);
   assert.ok(!/e@example\.com|access-1|secret-never-leak/.test(out.body), out.body);
 
-  // A second run reuses the album
-  calls = [];
+  // A second run makes the person's own test album (so each person's album permission is tested), a third reuses it
   const again = (await run()).json();
-  assert.match(stepNamed(again, "Create an album").detail, /already exists/);
+  assert.match(stepNamed(again, "Create an album").detail, /Yes: made "SiteSnap test album – Edward Gray"/);
+  calls = [];
+  const third = (await run()).json();
+  assert.match(stepNamed(third, "Create an album").detail, /already exists/);
   assert.ok(!calls.some((c) => c.method === "POST" && /image_categories/.test(c.url)));
 });
 

@@ -3,8 +3,9 @@
 // POST /api/procore/test-photos : with the signed-in person's own Procore sign-in, answers the six blocking
 //   questions against the real Photos tool: can SiteSnap create an album, does an upload work for this person,
 //   does a description stick (at creation and by update, and how long), how to list by album / date / trade,
-//   what the thumbnail links need, and the rate-limit headers. Writes ONE test album ("SiteSnap test album",
-//   public, reused on later runs) and ONE test photo into it; delete them in Procore afterwards if you like.
+//   what the thumbnail links need, and the rate-limit headers. Writes a public test album ("SiteSnap test album";
+//   after that one per person, "SiteSnap test album – Name", reused on later runs) and ONE test photo per run;
+//   delete them in Procore afterwards if you like.
 // Run it as an admin, then as a test person with less than Standard on Photos, to see the refusal.
 // Sandbox only (PROCORE_API_URL must be Procore's sandbox). Same-origin JSON for the POST.
 import { config, HttpError, procoreId, requireSameOriginJson, readBody, sendError, sendJson, session } from "../_procore.js";
@@ -47,7 +48,7 @@ button{font:inherit;font-size:20px;font-weight:700;padding:14px 20px;border:0;bo
 select{font:inherit;font-size:17px;width:100%;padding:12px;border-radius:12px;background:#221d18;color:#f5efe6;border:1px solid #3a332b}
 .step{background:#221d18;border-radius:12px;padding:10px 14px;margin:8px 0}.ok{color:#30d158}.bad{color:#ff5f57}.maybe{color:#ffc24d}a{color:#ffc24d}small{color:#b8ac9c}img{max-width:120px;border-radius:8px;margin-top:6px}</style></head>
 <body><h1>Photos check</h1>
-<p>Checks what SiteSnap can do with Procore's <b>Photos</b> tool before we build Project photos. It makes <b>one album</b> called "${TEST_ALBUM}" (only the first time) and puts <b>one test photo</b> in it, using your own Procore sign-in. You can delete them in Procore afterwards.</p>
+<p>Checks what SiteSnap can do with Procore's <b>Photos</b> tool before we build Project photos. It makes <b>one album</b> called "${TEST_ALBUM}" (the first time; after that, one per person, to test whether each person can make albums) and puts <b>one test photo</b> in it, using your own Procore sign-in. You can delete them in Procore afterwards.</p>
 <p id="who"><small>Checking your Procore sign-in…</small></p>
 <p><small><b>To run it as someone else</b> (a test person with less than Standard on Photos): open this page in a <b>private / incognito window</b>, tap Sign in with Procore, and log in to Procore as that person.</small></p>
 <label for="p">Project</label> <select id="p"></select>
@@ -126,18 +127,21 @@ export default async function handler(req, res) {
     raw.albums = { keys: albums[0] ? Object.keys(albums[0]) : [], list: albums.slice(0, 20).map((a) => ({ id: a.id, name: a.name, private: a.private, count: a.count, cover_photo: a.cover_photo && typeof a.cover_photo === "object" ? Object.keys(a.cover_photo) : a.cover_photo ?? null })), headers: cats.headers };
     step("List albums", cats, cats.ok ? `${albums.length} album(s); ${albums.filter((a) => a.private).length} private. ${albums.slice(0, 8).map((a) => `${a.name}${a.private ? " (private)" : ""}: ${a.count ?? "?"}`).join(", ")}`
       : cats.status === 403 ? "Procore said no: this person can't see Photos here (or the tool is off in this project)" : `Procore answered ${cats.status}: ${brief(cats)}`);
-    let album = albums.find((a) => a.name === TEST_ALBUM);
+    // Once the shared test album exists, each person tries their own, so album making is tested per person
+    const shared = albums.find((a) => a.name === TEST_ALBUM);
+    const albumName = shared ? `${TEST_ALBUM} – ${me.json?.name ?? "?"}` : TEST_ALBUM;
+    let album = albums.find((a) => a.name === albumName);
     if (album) {
-      steps.push({ name: "Create an album (question 1)", ok: true, status: 200, detail: `"${TEST_ALBUM}" already exists from an earlier run (id ${album.id}); not made again` });
+      steps.push({ name: "Create an album (question 1)", ok: true, status: 200, detail: `"${albumName}" already exists from an earlier run (id ${album.id}); not made again` });
     } else {
-      const made = await send("POST", "/rest/v1.0/image_categories", { query: q(), body: { image_category: { name: TEST_ALBUM, private: false } } });
+      const made = await send("POST", "/rest/v1.0/image_categories", { query: q(), body: { image_category: { name: albumName, private: false } } });
       if (made.ok) album = made.json;
       raw.createAlbum = made.ok ? { id: made.json?.id, private: made.json?.private, keys: Object.keys(made.json ?? {}) } : { error: brief(made) };
       step("Create an album (question 1)", made, made.ok ? `Yes: made "${made.json?.name}" (id ${made.json?.id}, private: ${made.json?.private})` : `No: Procore answered ${made.status}: ${brief(made)}`);
     }
     // Can't make one (the spec's fallback): try the upload into an existing public album instead
     if (!album) {
-      album = albums.find((a) => !a.private);
+      album = shared ?? albums.find((a) => !a.private);
       if (album) steps.push({ name: "Fallback: use an existing album", ok: true, status: 200, detail: `uploading into "${album.name}" (id ${album.id}) instead` });
       else steps.push({ name: "Fallback: use an existing album", ok: false, status: 0, detail: "no public album to upload into" });
     }

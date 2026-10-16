@@ -95,11 +95,18 @@ export async function addPerson(req, res, cfg, companyId, projectId, seed, u, ve
   const byEmail = (list) => (list ?? []).find((x) => lower(x.email_address) === lower(u.email_address));
   const existing = byEmail(await pages(req, res, cfg, `/rest/v1.3/companies/${companyId}/users`, search))
     ?? byEmail(await pages(req, res, cfg, `/rest/v1.0/companies/${companyId}/users/inactive`, { companyId }));
-  const ur = existing
+  let found = existing;
+  let ur = existing
     ? await api(req, res, cfg, "PATCH", `/rest/v1.3/companies/${companyId}/users/${existing.id}`, { companyId, body: userBody(u, vendor.id, seed.vendor, { update: true }) })
     : await api(req, res, cfg, "POST", `/rest/v1.3/companies/${companyId}/users`, { companyId, body: userBody(u, vendor.id, seed.vendor) });
-  const userId = ur.ok ? ur.json?.id ?? existing?.id : null;
-  if (!step(`${existing ? "Updated" : "Created"} ${name} (${u.job_title})`, ur) || !userId) return steps;
+  // 409 "email already exists": made moments ago (Procore's search doesn't find a new user yet), so look through
+  // the whole company list and update that person instead
+  if (ur.status === 409 && !existing) {
+    found = byEmail(await pages(req, res, cfg, `/rest/v1.3/companies/${companyId}/users`, { companyId }));
+    if (found) ur = await api(req, res, cfg, "PATCH", `/rest/v1.3/companies/${companyId}/users/${found.id}`, { companyId, body: userBody(u, vendor.id, seed.vendor, { update: true }) });
+  }
+  const userId = ur.ok ? ur.json?.id ?? found?.id : null;
+  if (!step(`${found ? "Updated" : "Created"} ${name} (${u.job_title})`, ur) || !userId) return steps;
 
   // Active in the directory (someone made inactive earlier comes back)
   const person = ((await pages(req, res, cfg, `/rest/v1.0/companies/${companyId}/people`, search)) ?? []).find((p) => String(p.user_id) === String(userId));

@@ -341,3 +341,16 @@ test("templates: sets each person's template, skips one already right, reports s
   assert.equal(steps[2].ok, false);
   assert.match(steps[2].detail, /not in the directory/);
 });
+
+test("person: made moments ago (409 'email already exists', search misses them) -> found in the full list and updated", async () => {
+  personRoutes();
+  // The search (filters[search]) finds nobody; the whole list has them
+  routes.unshift({ test: (u, init) => (init.method ?? "GET") === "GET" && /\/rest\/v1\.3\/companies\/4291776\/users\?/.test(u),
+    reply: (u) => ({ body: /filters/.test(decodeURIComponent(u)) ? [] : [{ id: 301, email_address: "mrkygray+mhale@gmail.com" }] }) });
+  routes.unshift({ test: (u, init) => init.method === "POST" && /\/rest\/v1\.3\/companies\/4291776\/users$/.test(u), reply: { status: 409, body: { errors: "The user email address already exists for this company" } } });
+  const out = await run(req("POST", { action: "person", index: 0, person: 0, ...ids }));
+  assert.equal(out.statusCode, 200, out.body);
+  assert.ok(writes().includes("PATCH /rest/v1.3/companies/4291776/users/301"));
+  assert.match(out.json().steps[0].name, /^Updated Marcus Hale/);
+  assert.ok(out.json().steps.every((s) => s.ok), out.body);
+});

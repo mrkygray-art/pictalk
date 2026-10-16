@@ -408,7 +408,12 @@ async function remove(req, res, cfg, companyId, projectId) {
     if (r.ok || r.status === 404) {
       await ref.doc(d.id).delete();
       rows.push({ label, date: v.date, status: r.ok ? "deleted" : "skipped", procoreId: v.procoreId, error: r.ok ? null : "Already gone from Procore" });
-    } else rows.push({ label, date: v.date, status: "failed", procoreId: v.procoreId, error: refusal(r) });
+    } else {
+      // Say what the entry looks like in Procore (approval status, who made it), to see why a delete is refused
+      const one = await api(req, res, cfg, "GET", `/rest/v1.0/projects/${projectId}/${SECTIONS[section].path}/${v.procoreId}`, { companyId });
+      const seen = one.ok ? ` The entry in Procore: status ${one.json?.status ?? "not shown"}, made by ${one.json?.created_by?.name ?? "not shown"}, date ${one.json?.date ?? v.date}.` : ` (Reading the entry: ${one.status}.)`;
+      rows.push({ label, date: v.date, status: "failed", procoreId: v.procoreId, error: `Procore wouldn't delete it. Procore answered ${r.status}: ${procoreMessage(r) || "no details"}.${seen} It stays in the ledger; try again later.` });
+    }
   }
   return { rows };
 }

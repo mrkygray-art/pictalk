@@ -75,6 +75,8 @@ const USERS = { sam: ["201", "Sam Sender"], tia: ["202", "Tia Tagged"], uma: ["2
     await page.goto(APP, { waitUntil: "domcontentloaded" });
     await waitText("Sign in with Procore");
     await click("button::-p-text(Sign in with Procore)");
+    await waitText("Project photos"); // the project home's three tiles
+    await click(".home-tile:nth-child(2)"); // Message
     await waitText("New Message");
     return { page, shot, text, click, waitText, ctx };
   }
@@ -82,7 +84,7 @@ const USERS = { sam: ["201", "Sam Sender"], tia: ["202", "Tia Tagged"], uma: ["2
   // ---- Sam: sign in, the feed, New Message ----
   const sam = await open("sam");
   let t = await sam.text();
-  check("sign-in leads straight to the project feed (one project, chosen for you)", t.includes("001 - SiteSnap Test Project") && t.includes("Messages"));
+  check("sign-in leads to the project home, then Message opens the feed (one project, chosen for you)", t.includes("001 - SiteSnap Test Project") && t.includes("Messages"));
   check("header shows who's signed in: name · company · title", t.includes("Sam Sender · Kyco Builders · Superintendent"));
   check("no job / stop language on the home screen", !/My Jobs|Start New Job|Save This Stop|End Job|stops? per job|No job open/i.test(t), t.match(/My Jobs|Start New Job|Save This Stop|End Job|No job open/i)?.[0] ?? "");
   const tabs = await sam.page.$$eval(".feed-tabs button", (b) => b.map((x) => x.textContent.trim()));

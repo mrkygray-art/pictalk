@@ -62,6 +62,14 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
     if (u.pathname === "/api/procore/session") return json(200, { token: await getAuth().createCustomToken("procore_481274", { procoreUserId: "481274" }), me: { procoreUserId: "481274", name: "Edward Gray" }, projects: PROJECTS });
     if (u.pathname === "/api/procore/directory") return json(200, { people: PEOPLE, canTag: false, labels: [], compact: false, rolesAvailable: true });
     if (u.pathname === "/api/procore/record-options") return json(200, OPTIONS);
+    // Project photos (Procore's Photos tool): two albums, three photos, one with an area and a trade
+    if (u.pathname === "/api/procore/photo-file") return r.respond({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==", "base64") });
+    if (u.pathname === "/api/procore/photos") {
+      const f = (id) => `/api/procore/photo-file?companyId=4291776&projectId=373235&u=${encodeURIComponent(`https://sandbox.procore.com/fas/${id}`)}`;
+      const ph = (id, ago, extra = {}) => ({ id, albumId: 7, albumName: "Field photos", albumPrivate: false, description: `Photo ${id}: rebar spacing at grid C`, by: "Chloe Abara", createdAt: new Date(Date.now() - ago).toISOString(), takenAt: null, location: null, trades: [], thumb: f(id), full: f(id), ...extra });
+      if (u.searchParams.get("view") === "albums") return json(200, { albums: [{ id: 7, name: "Field photos", count: 3, private: false, updatedAt: new Date().toISOString(), cover: f(1) }, { id: 8, name: "Unclassified", count: 0, private: false, updatedAt: null, cover: null }] });
+      return json(200, { photos: [ph(1, 60_000, { location: { id: 9, name: "Level 2 East" }, trades: [{ id: 5, name: "Electrical" }] }), ph(2, 120_000), ph(3, 26 * 3600_000)], page: 1, nextPage: null, total: 3, timeZone: "America/Los_Angeles" });
+    }
     // Jim Henson's template has no Punch List access (what an admin's visit saved)
     if (u.pathname === "/api/procore/access") return json(200, { levelsKnown: true, levelsAt: Date.now(), observationList: true, people: {
       481274: { template: "Project Manager - Internal", punch_item: { ok: true, why: "" }, observation: { ok: true, why: "" } },
@@ -92,18 +100,16 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   const click = async (sel) => { await page.locator(sel).setTimeout(15000).click(); await sleep(400); };
   const waitText = (t, timeout = 25000) => page.waitForFunction((x) => document.body.innerText.includes(x), { timeout }, t);
 
-  // Without the beta switch: no Report an Issue
-  await page.goto(APP, { waitUntil: "domcontentloaded" });
+  // The project home: three tiles for everyone (?beta=report only adds the "who can't get records" list)
+  await page.goto(`${APP}?beta=report`, { waitUntil: "domcontentloaded" });
   await waitText("Sign in with Procore");
   await click("button::-p-text(Sign in with Procore)");
-  await waitText("New Message");
-  check("hidden unless turned on: no Report an Issue for everyone else", !(await text()).includes("Report an Issue"));
-  // Turn it on for this phone
-  await page.goto(`${APP}?beta=report`, { waitUntil: "domcontentloaded" });
-  await waitText("Report an Issue");
-  check("?beta=report shows Report an Issue on this phone", true);
-  check("the two buttons say what they do", (await text()).includes("Creates a Procore Observation or Punch Item") && (await text()).includes("Stays in SiteSnap. Nothing goes to Procore."));
-  await click("button::-p-text(Report an Issue)");
+  await waitText("Project photos");
+  const tiles = await page.$$eval(".home-tile strong", (b) => b.map((x) => x.textContent.trim()));
+  check("home: Report an issue | Message | Project photos, in that order", tiles.join("|") === "Report an issue|Message|Project photos", tiles.join("|"));
+  check("the Report tile says what it does", (await text()).includes("Becomes a Procore Observation or Punch Item"));
+  await shot("0-home");
+  await click(".home-tile:nth-child(1)");
   await waitText("Take a photo and say what you see");
 
   const photo = path.join(OUT, "photo.jpg");
@@ -190,16 +196,39 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   await shot("5-closed");
   await click("button::-p-text(Messages)");
   await page.waitForFunction(() => document.body.innerText.includes("Punch Item #2"), { timeout: 20000 }).catch(() => {});
+  await click(".msg-home-back");
   await click("button::-p-text(Who can't get Punch Items or Observations?)");
   await waitText("Who can't get records");
   await waitText("Jim Henson");
   const list = await text();
   check("permissions: the list shows who can't get what, by company", list.includes("Kyco") && list.includes("Can't get Punch Items") && list.includes("Can't get Observations") && !list.includes("Lisa Hubbard"));
   await shot("6-access");
-  await click("button::-p-text(Back to Messages)");
-  await click(".feed-tabs button::-p-text(Mine)");
+  await click("button::-p-text(Back to Home)");
+  await click(".home-tile:nth-child(2)");
+  await click(".feed-tabs button::-p-text(Sent)");
   await page.waitForFunction(() => document.querySelector(".conv-card .pill.is-procore"), { timeout: 20000 });
   check("the feed card shows the Procore record", (await page.$eval(".conv-card .pill.is-procore", (e) => e.textContent)) === "Punch Item #2");
+
+  // Project photos: By day (Today / Yesterday), By area and By trade appear once a photo has one, Albums, full view
+  await click(".msg-home-back");
+  await click(".home-tile:nth-child(3)");
+  await waitText("Today");
+  const chips = await page.$$eval(".ph-tabs button", (b) => b.map((x) => x.textContent.trim()));
+  check("photos: By day | By area | By trade | Albums", chips.join("|") === "By day|By area|By trade|Albums", chips.join("|"));
+  check("photos: grouped by the project's day", (await text()).includes("Today") && (await text()).includes("Yesterday"));
+  check("photos: thumbnails load through SiteSnap", await page.$eval(".ph-grid img", (i) => i.src.includes("/api/procore/photo-file?")));
+  await shot("7-photos");
+  await click(".ph-tabs button::-p-text(By area)");
+  check("photos: By area groups by Procore location", (await text()).includes("Level 2 East") && (await text()).includes("No area set"));
+  await click(".ph-grid button");
+  await waitText("Chloe Abara");
+  check("photos: full view shows who, the album and the description", (await text()).includes("Album: Field photos") && (await text()).includes("rebar spacing"));
+  await shot("8-photo");
+  await click(".ph-full-back");
+  await click(".ph-tabs button::-p-text(Albums)");
+  await waitText("Unclassified");
+  check("photos: albums with counts", (await text()).includes("3 photos") && (await text()).includes("0 photos"));
+  await shot("9-albums");
 
   await browser.close();
   const passed = results.filter(Boolean).length;

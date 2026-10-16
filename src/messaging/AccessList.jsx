@@ -41,7 +41,7 @@ export default function AccessList({ session, onBack }) {
           </div>
         )))}
       {access?.levelsAt && <p className="msg-footnote">Template access last read from Procore {new Date(access.levelsAt).toLocaleString()}.</p>}
-      <button type="button" className="text-btn" onClick={onBack}>Back to Messages</button>
+      <button type="button" className="text-btn" onClick={onBack}>Back to Home</button>
     </section>
   );
 }

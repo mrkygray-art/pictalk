@@ -7,27 +7,31 @@ import Composer from "./Composer";
 import ReportFlow from "./ReportFlow";
 import AccessList from "./AccessList";
 import PushToggle from "./PushToggle";
+import ProjectHome from "./ProjectHome";
+import PhotosView from "./PhotosView";
+import { BackIcon } from "./icons";
 import { readBeta } from "./beta";
-import { onQueueChange, pendingMessages, startMessageSync, watchReads } from "./messagingStore";
+import { isUnread, onQueueChange, pendingMessages, startMessageSync, watchFeed, watchReads } from "./messagingStore";
 
-// SiteSnap AI as project messaging (SPEC-messaging-pivot): sign in with Procore, pick a project, and
-// the home screen is that project's conversation feed. New Message: tag people, take photos, talk,
-// send. The old job / stop screens are kept in the code behind VITE_FEATURE_JOBS=1 (src/features.js).
+// SiteSnap AI (SPEC-messaging-pivot, then docs/sitesnap-project-home-and-photos-spec.md): sign in with
+// Procore, pick a project, and land on the project home: Report an issue, Message (the conversation feed;
+// New Message: tag people, take photos, talk, send) and Project photos (Procore's Photos tool). The old job / stop screens are kept in the code behind VITE_FEATURE_JOBS=1 (src/features.js).
 const RESULT = { denied: "Procore sign-in was cancelled.", error: "Procore sign-in didn't work. Try again." };
 
 export default function MessagingApp() {
   const [embed] = useState(readEmbed);
-  const [beta] = useState(readBeta); // Report an Issue (voice + photo -> Procore record) while it is tested
+  const [beta] = useState(readBeta); // ?beta=report: the "who can't get records" list (Report an issue is on the home screen now)
   const session = useProcoreSession({ linkCompanyId: embed.companyId, linkProjectId: embed.projectId });
   const { state, me, projects, project, choose, signedIn } = session;
   // An alert opens its thread: /?companyId=&projectId=&cid=
   const [view, setView] = useState(() => {
     const cid = new URLSearchParams(window.location.search).get("cid");
-    return cid && /^[A-Za-z0-9_-]{1,64}$/.test(cid) ? { name: "conversation", cid } : { name: "feed" };
-  }); // feed | conversation {cid} | compose | report | access
+    return cid && /^[A-Za-z0-9_-]{1,64}$/.test(cid) ? { name: "conversation", cid } : { name: "home" };
+  }); // home | feed | conversation {cid} | compose | report | photos | access
   const [choosing, setChoosing] = useState(false);
   const [reads, setReads] = useState(new Map());
   const [pending, setPending] = useState([]);
+  const [forMe, setForMe] = useState([]); // for the Message tile's count
   const [result] = useState(() => RESULT[new URLSearchParams(window.location.search).get("procore")] ?? "");
   const key = project ? `${project.companyId}_${project.projectId}` : null;
 
@@ -45,6 +49,7 @@ export default function MessagingApp() {
     return onQueueChange(load);
   }, []);
   useEffect(() => (signedIn && key ? watchReads(key, me.procoreUserId, setReads) : undefined), [signedIn, key, me?.procoreUserId]);
+  useEffect(() => (signedIn && key && view.name === "home" ? watchFeed(key, "forMe", me.procoreUserId, (list, err) => !err && setForMe(list)) : undefined), [signedIn, key, me?.procoreUserId, view.name]);
 
   // Inside Procore's frame there's no sign-in (Procore's login page can't load there): open a tab
   if (embed.embedded) {
@@ -96,7 +101,7 @@ export default function MessagingApp() {
             <ul>
               {projects.map((p) => (
                 <li key={`${p.companyId}_${p.projectId}`}>
-                  <button type="button" className={`dir-project-btn${p.projectId === project?.projectId && p.companyId === project?.companyId ? " is-on" : ""}`} onClick={() => { choose(p); setChoosing(false); setView({ name: "feed" }); }}>
+                  <button type="button" className={`dir-project-btn${p.projectId === project?.projectId && p.companyId === project?.companyId ? " is-on" : ""}`} onClick={() => { choose(p); setChoosing(false); setView({ name: "home" }); }}>
                     <strong>{p.name}</strong>
                     {multiCompany && p.companyName && <span>{p.companyName}</span>}
                   </button>
@@ -105,7 +110,7 @@ export default function MessagingApp() {
             </ul>
           </div>
         )}
-        {project && <button type="button" className="text-btn" onClick={() => setChoosing(false)}>Keep {project.name}</button>}
+        {project && <button type="button" className="text-btn" onClick={() => { setChoosing(false); setView({ name: "home" }); }}>Keep {project.name}</button>}
         <button type="button" className="text-btn" onClick={session.signOut}>Sign out</button>
       </main>
     );
@@ -126,24 +131,34 @@ export default function MessagingApp() {
         </p>
       </header>
 
-      {view.name === "feed" && (
+      {view.name === "home" && (
         <>
-          <div className="msg-title-row">
-            <h2 className="page-title">Messages</h2>
-          </div>
-          {beta && <button type="button" className="big-btn photo-btn msg-new" onClick={() => setView({ name: "report" })}>Report an Issue</button>}
-          {beta && <p className="msg-new-hint">Creates a Procore Observation or Punch Item.</p>}
-          <button type="button" className={`big-btn ${beta ? "plain-btn" : "photo-btn"} msg-new`} onClick={() => setView({ name: "compose" })}>New Message</button>
-          {beta && <p className="msg-new-hint">Stays in SiteSnap. Nothing goes to Procore.</p>}
-          <Feed projectKey={key} me={me.procoreUserId} reads={reads} pending={pending} onOpen={(cid) => setView({ name: "conversation", cid })} />
-          <p className="msg-footnote">Only people on this Procore project can see its messages. Everyone on a message can see when it was sent, seen and answered.</p>
+          <ProjectHome
+            unread={forMe.filter((c) => isUnread(c, me.procoreUserId, reads)).length}
+            onReport={() => setView({ name: "report" })}
+            onMessages={() => setView({ name: "feed" })}
+            onPhotos={() => setView({ name: "photos" })}
+          />
           <PushToggle myId={me.procoreUserId} />
           {beta && <button type="button" className="text-btn" onClick={() => setView({ name: "access" })}>Who can't get Punch Items or Observations?</button>}
         </>
       )}
-      {view.name === "access" && <AccessList session={session} onBack={() => setView({ name: "feed" })} />}
+      {view.name === "photos" && <PhotosView session={session} onBack={() => setView({ name: "home" })} />}
+      {view.name === "feed" && (
+        <>
+          <button type="button" className="link-btn msg-home-back" onClick={() => setView({ name: "home" })}><BackIcon /> Home</button>
+          <div className="msg-title-row">
+            <h2 className="page-title">Messages</h2>
+          </div>
+          <button type="button" className="big-btn photo-btn msg-new" onClick={() => setView({ name: "compose" })}>New Message</button>
+          <p className="msg-new-hint">Stays in SiteSnap. Nothing goes to Procore.</p>
+          <Feed projectKey={key} me={me.procoreUserId} reads={reads} pending={pending} onOpen={(cid) => setView({ name: "conversation", cid })} />
+          <p className="msg-footnote">Only people on this Procore project can see its messages. Everyone on a message can see when it was sent, seen and answered.</p>
+        </>
+      )}
+      {view.name === "access" && <AccessList session={session} onBack={() => setView({ name: "home" })} />}
       {view.name === "report" && (
-        <ReportFlow session={session} onClose={() => setView({ name: "feed" })} onOpenThread={(cid) => setView({ name: "conversation", cid })} />
+        <ReportFlow session={session} onClose={() => setView({ name: "home" })} onOpenThread={(cid) => setView({ name: "conversation", cid })} />
       )}
       {view.name === "compose" && (
         <Composer mode="new" session={session} onCancel={() => setView({ name: "feed" })} onSent={(cid) => setView({ name: "conversation", cid })} />

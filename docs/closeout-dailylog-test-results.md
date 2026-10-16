@@ -23,3 +23,9 @@ Check page: `/api/procore/test-dailylog` (Daily Log). Close-Out isn't built yet.
 - Edward on the current page: which way the delay type and photos stick, and whether `contact_id` sets the manpower company.
 - Chloe again with Daily Log at Standard (Ky taking her off the template, custom permissions) to see a sub foreman write.
 - An internal foreman (Foreman / Superintendent - Internal); its Daily Log level isn't known yet.
+
+### Run 3: Daily Log Examples page, Edward, 2026-10-16
+- Manpower `contact_id` = the vendor id **sets the company** (VoltLine Electric Inc. shows in Procore). Confirmed.
+- Notes `comment`, Deliveries `delivery_from` / `contents` / `comments` / time all kept.
+- Delays sent with the display name came out **No Delay Type**. Procore's examples send the key (`"weather"`), so `delayTypeKey` now sends the key. To confirm on the next send.
+- Deleting: all 12 samples answered 403 to DELETE and to PATCH status pending while their days were **Completed** (entries approved, made by Edward). After Ky reopened the days in the Daily Log Calendar, all 12 deleted at once. A completed day is locked to the API.

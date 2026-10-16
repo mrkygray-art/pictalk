@@ -33,6 +33,14 @@ Same requests as the app's Daily log (`api/_dailyLog.js`): `POST /rest/v1.0/proj
 
 Ledger: Firestore `procoreProjects/{companyId}_{projectId}/dailyLogSamples/{sampleId}_{section}` (server only, like the rest of `procoreProjects`): project, log type, Procore id, date, foreman, time. A resend skips anything already there; delete removes the Procore entry (404 = already gone) and then the row.
 
+**Delay type:** Procore's `delay_type` takes the type's key (`weather`, `existing_conditions`), as in its own examples; sending the display name ("Weather") made delays with **No Delay Type**. `delayTypeKey` in `api/_dailyLog.js` sends the key, for this page and for the app's Daily log. If Procore still drops a type, the results table says "Procore didn't keep the delay type". Not yet confirmed in the sandbox.
+
+**Completed days are locked:** once a day is Completed in Procore (Complete Day / Complete Only / Complete & Distribute), its entries can't be deleted or edited through the API, even by the admin who made them: DELETE and PATCH both answer 403 (sandbox, 2026-10-16). After Ky reopened the days in the Daily Log Calendar, all 12 samples deleted at once. Delete samples before completing a day. On a 403 the page also tries setting the entry back to pending before deleting again, and the error says to reopen the day.
+
+**Add 2 foremen** (per project): adds Derek Lawson (Plumbing Foreman, ClearFlow Plumbing & Mechanical) and Maria Santos (Electrical Foreman, VoltLine Electric Inc.), `EXTRA_FOREMEN` in `api/_seedDirectory.js`, with the test-people page's own steps (company onto the project, person created or updated, added, Subcontractor - External template), then reloads the project's foremen. Safe to run again: a 409 "email already exists" (someone made moments ago, not yet in Procore's search) finds the person in the full company list and updates them. The test-people cleanup always keeps them.
+
+**Clear old "SiteSnap test" entries** (per project): finds the entries the Daily Log check page left in the last 5 working days (text starting "SiteSnap test"), lists them in a confirm box, and deletes only those.
+
 Code: `api/procore/daily-log-examples.js` (page + actions), `api/_dailyLogExamples.js` (bank, foremen, stage, samples), `tests/daily-log-examples.test.js`.
 
 ## Not in version 1 (spec section 11)

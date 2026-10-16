@@ -54,9 +54,9 @@ table{border-collapse:collapse;width:100%;font-size:14px;margin:8px 0}td,th{bord
 <p><small>Procore creates the entries <b>as you</b> (the signed-in person), not as the foreman. So each Notes entry starts with "Reported by: name, title, company", and the foreman's company is set on the Manpower and Delay entries. Every Notes entry ends with <b>${MARKER}</b>. Everything this page creates is listed in its ledger, and <b>Delete Samples I Created</b> removes only those.</small></p>
 <p id="who"><small>Checking your Procore sign-in…</small></p>
 <button id="load" disabled>Load Projects</button>
-<div id="tools" class="bar" hidden>
+<div class="bar"><div id="tools" hidden>
 <button id="find" class="small">Find Foremen</button><button id="gen" class="small">Generate Previews</button><button id="sendall" class="small">Send All</button><button id="delall" class="small danger">Delete Samples I Created</button>
-<button id="all" class="small ghost">Tick all</button><button id="none" class="small ghost">Untick all</button>
+<button id="all" class="small ghost">Tick all</button><button id="none" class="small ghost">Untick all</button></div>
 <div id="status"><small></small></div></div>
 <div id="list"></div>
 <script>

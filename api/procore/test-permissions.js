@@ -37,7 +37,7 @@ button{font:inherit;font-size:20px;font-weight:700;padding:14px 20px;border:0;bo
 select{font:inherit;font-size:17px;width:100%;padding:12px;border-radius:12px;background:#221d18;color:#f5efe6;border:1px solid #3a332b}
 .step{background:#221d18;border-radius:12px;padding:10px 14px;margin:8px 0}.ok{color:#30d158}.bad{color:#ff5f57}.maybe{color:#ffc24d}a{color:#ffc24d}small{color:#b8ac9c}</style></head>
 <body><h1>Permissions check</h1>
-<p>Reads what Procore will tell SiteSnap about permission templates and who each tool (Observations, Punch List, Tasks) will take as an assignee. <b>Read only: nothing changes in Procore.</b> It uses your own Procore sign-in, so run it once as yourself and once signed in as a test person who isn't an admin.</p>
+<p>Reads what Procore will tell SiteSnap about permission templates (including each one's Photos level) and who each tool (Observations, Punch List, Tasks) will take as an assignee. <b>Read only: nothing changes in Procore.</b> It uses your own Procore sign-in, so run it once as yourself and once signed in as a test person who isn't an admin.</p>
 <p id="who"><small>Checking your Procore sign-in…</small></p>
 <p><small><b>To run it as someone else</b> (a test person who isn't an admin): open this page in a <b>private / incognito window</b>, tap Sign in with Procore, and log in to Procore with that person's email and password. The check always runs as whoever is signed in to Procore in that window.</small></p>
 <label for="p">Project</label> <select id="p"></select>
@@ -115,7 +115,7 @@ export default async function handler(req, res) {
     steps.push({ name: "List the project's permission templates", ok: tpl.ok, status: tpl.status, detail: tpl.ok ? `${templates.length}: ${templates.map((t) => t.name).join(", ")}` : "not readable with this sign-in" });
     // What each template allows, tool by tool (company endpoint: user_access_levels). Only the tools SiteSnap
     // writes to or reads people from are shown; the full tool list is in raw for the first template.
-    const TOOLS = /punch|observation|task|directory|admin/i;
+    const TOOLS = /punch|observation|task|directory|admin|photo|image/i;
     for (const t of templates) {
       const r = await get(`/rest/v1.0/companies/${companyId}/permission_templates/${t.id}`);
       const levels = r.json?.user_access_levels ?? {};

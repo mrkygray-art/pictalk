@@ -242,10 +242,7 @@ $('#list').addEventListener('click',async(e)=>{
     if(act==='checkleft'){
       t.disabled=true; const f=(await post({action:'checkentries',companyId:p.companyId,projectId:p.projectId,dryRun:true})).found;
       if(!f.length){ alert('No "SiteSnap test" entries from the Daily Log check in the last 5 working days here.'); t.disabled=false; return; }
-      if(!confirm('Delete '+f.length+' entries the Daily Log check page left here?
-
-'+f.map(x=>'• '+day(x.date)+' · '+x.section+' · '+x.text).join('
-'))){ t.disabled=false; return; }
+      if(!confirm('Delete '+f.length+' entries the Daily Log check page left here?\\n\\n'+f.map(x=>'• '+day(x.date)+' · '+x.section+' · '+x.text).join('\\n'))){ t.disabled=false; return; }
       p.results=(await post({action:'checkentries',companyId:p.companyId,projectId:p.projectId,dryRun:false})).rows.map(r=>({...r,n:day(r.date)})); render();
     }
     if(act==='del'){

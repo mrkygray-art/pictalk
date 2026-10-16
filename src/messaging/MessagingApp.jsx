@@ -9,6 +9,8 @@ import AccessList from "./AccessList";
 import PushToggle from "./PushToggle";
 import ProjectHome from "./ProjectHome";
 import PhotosView from "./PhotosView";
+import DailyLogFlow from "./DailyLogFlow";
+import { hasDraft, lastSent } from "./dailyLogStore";
 import { startPhotoSync } from "./photoQueue";
 import { BackIcon } from "./icons";
 import { readBeta } from "./beta";
@@ -28,7 +30,7 @@ export default function MessagingApp() {
   const [view, setView] = useState(() => {
     const cid = new URLSearchParams(window.location.search).get("cid");
     return cid && /^[A-Za-z0-9_-]{1,64}$/.test(cid) ? { name: "conversation", cid } : { name: "home" };
-  }); // home | feed | conversation {cid} | compose | report | photos | access
+  }); // home | feed | conversation {cid} | compose | report | photos | dailylog | access
   const [choosing, setChoosing] = useState(false);
   const [reads, setReads] = useState(new Map());
   const [pending, setPending] = useState([]);
@@ -140,12 +142,15 @@ export default function MessagingApp() {
             onReport={() => setView({ name: "report" })}
             onMessages={() => setView({ name: "feed" })}
             onPhotos={() => setView({ name: "photos" })}
+            onDailyLog={() => setView({ name: "dailylog" })}
+            dailyStatus={dailyStatusFor(key)}
           />
           <PushToggle myId={me.procoreUserId} />
           {beta && <button type="button" className="text-btn" onClick={() => setView({ name: "access" })}>Who can't get Punch Items or Observations?</button>}
         </>
       )}
       {view.name === "photos" && <PhotosView session={session} onBack={() => setView({ name: "home" })} />}
+      {view.name === "dailylog" && <DailyLogFlow key={key} session={session} onClose={() => setView({ name: "home" })} />}
       {view.name === "feed" && (
         <>
           <button type="button" className="link-btn msg-home-back" onClick={() => setView({ name: "home" })}><BackIcon /> Home</button>
@@ -170,4 +175,12 @@ export default function MessagingApp() {
       )}
     </main>
   );
+}
+
+// The Daily log tile's line: a draft on this phone, else what was sent today (the project's date), else nothing
+function dailyStatusFor(key) {
+  if (hasDraft(key)) return "draft";
+  const sent = lastSent(key);
+  const today = new Intl.DateTimeFormat("en-CA").format(new Date());
+  return sent && sent.date === today ? { count: sent.count } : null;
 }

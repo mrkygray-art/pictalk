@@ -40,3 +40,4 @@ functions/.env
 
 # e2e screenshots
 e2e/report-shots/
+e2e/dailylog-shots/

@@ -4,7 +4,7 @@
 // Like procoreGet: refreshes the token first when needed and retries once on a 401. Never logs tokens.
 import { session } from "./_procore.js";
 
-async function call(req, res, cfg, method, path, { companyId, query, body } = {}) {
+async function call(req, res, cfg, method, path, { companyId, query, body, form } = {}) {
   let tokens = await session(req, res, cfg);
   const url = `${cfg.apiUrl}${path}${query ? `?${new URLSearchParams(query)}` : ""}`;
   const send = (t) => fetch(url, {
@@ -12,10 +12,11 @@ async function call(req, res, cfg, method, path, { companyId, query, body } = {}
     headers: {
       Authorization: `Bearer ${t.at}`,
       Accept: "application/json",
-      ...(body ? { "Content-Type": "application/json" } : {}),
+      ...(body && !form ? { "Content-Type": "application/json" } : {}),
       ...(companyId ? { "Procore-Company-Id": String(companyId) } : {}),
     },
-    ...(body ? { body: JSON.stringify(body) } : {}),
+    // form: multipart (fields + files, e.g. a Daily Log entry with attachments); fetch sets its own boundary
+    ...(form ? { body: form() } : body ? { body: JSON.stringify(body) } : {}),
   });
   let resp = await send(tokens);
   if (resp.status === 401) {
@@ -33,7 +34,8 @@ async function call(req, res, cfg, method, path, { companyId, query, body } = {}
   return { status: resp.status, ok: resp.ok, json, headers };
 }
 
-/** A Procore API call; returns { status, ok, json, headers } and never throws on a Procore error answer. */
+/** A Procore API call; returns { status, ok, json, headers } and never throws on a Procore error answer.
+ *  opts.form: a function returning a fresh FormData (called again if the token is refreshed and the call retried). */
 export const procoreSend = (req, res, cfg, method, path, opts) => call(req, res, cfg, method, path, opts);
 
 /**

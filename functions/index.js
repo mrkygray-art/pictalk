@@ -131,3 +131,5 @@ exports.describeMessagePhoto = messaging.describeMessagePhoto;
 exports.setMessageTask = messaging.setMessageTask;
 exports.onConversationRead = messaging.onConversationRead;
 exports.classifyCapture = require("./captures").classifyCapture;
+// SiteSnap Daily log by voice (functions/dailyLog.js)
+exports.organizeDailyLog = require("./dailyLog").organizeDailyLog;

@@ -4,11 +4,12 @@
 
 > **In development.** SiteSnap AI has been tested only in Procore's developer sandbox, with fictional people, companies, and projects. No real crew uses it yet. It needs a Procore sign-in, so it isn't open to visitors. SiteSnap AI is an independent project. It isn't affiliated with, sponsored by, or endorsed by Procore Technologies, Inc.; Procore is a trademark of its owner.
 
-SiteSnap AI is a phone-first web app for construction crews that works with Procore. Everyone signs in with their own Procore account and picks a Procore project, and that project's directory is the team. The project home has three tiles: Report an issue, Message (with the count of messages waiting for you), and Project photos.
+SiteSnap AI is a phone-first web app for construction crews that works with Procore. Everyone signs in with their own Procore account and picks a Procore project, and that project's directory is the team. The project home has four tiles: Report an issue, Message (with the count of messages waiting for you), Project photos, and Daily log.
 
 1. **Report an Issue: voice + photo → a real Procore record.** A foreman takes a photo and says what's wrong. Claude drafts an **Observation** or a **Punch Item** using the project's own lists, and one tap creates it in Procore with the photo and the voice recording attached.
 2. **Project messaging, like Microsoft Teams for one jobsite.** A Procore project is the team and messages are threads. You tag who a message is for, CC people to keep them in the loop, and attach photos and a transcribed voice note. Claude pulls out the to-dos and who they're for.
 3. **Project photos, kept in Procore's own Photos tool.** Browse the project's photos by day, area, trade, or album, and snap new ones with an optional voice note. They file into that day's album, even when there's no signal at the time.
+4. **Daily log by voice (new, being checked in the sandbox).** A foreman says one end-of-day update ("six guys on site, drywall delayed waiting on materials, forklift delivery at 10"). Claude sorts it into Procore Daily Log entries (Manpower, Delays, Deliveries, Notes), the foreman checks the cards, and Send writes each one into Procore's Daily Log for that day, with photos.
 
 **Portfolio case study, with a looping demo and a quick tour:** https://ky-gray-portfolio.vercel.app/#sitesnap
 **Built on:** [PicTalk](https://github.com/mrkygray-art/pictalk) (the `master` branch). This `sitesnap` branch is the SiteSnap fork, and every push to it deploys to the SiteSnap app on Vercel.
@@ -47,6 +48,16 @@ CC is SiteSnap-only: a CC'd person sees the thread in their CC tab but is never 
 <p>
   <img src="docs/sitesnap/procore-punch-list.webp" alt="Procore Punch List with SiteSnap items in Initiated, Ready to Close, and Closed" width="760">
 </p>
+
+## Daily log by voice
+
+The foreman never opens Procore's Daily Log. Nothing is written until they tap Send.
+
+- **Talk, then check:** talk as many times as needed (the words add up and can be typed or fixed), add photos, and tap Organize My Log. Claude returns four sections as structured JSON, and the server keeps only companies, delay types, and locations that exist on the project. Anything unsure (AM or PM not said, a company that isn't on the project, a trade with no company) shows a **Check this** tag with one-tap answers. Nothing is invented: a blank box means "not said". If the model can't organize it, the whole update is kept as one Note.
+- **Defaults:** the foreman's own company fills in when they don't name one ("six guys on site"), the date is the project's own date (Today, Yesterday, or another past day), and photos go with Notes unless given to an entry.
+- **Send:** entries go to Procore one at a time with the person's own Procore sign-in, each with its own ✓ or Retry, so one failure never blocks the rest. Procore's rate limit gets "Procore is busy, trying again in a moment" and an automatic retry. SiteSnap asks before adding manpower for a company already logged that day, and never sets an entry's approval status.
+- **Never lost:** the draft (words, cards, photos) stays on the phone until every entry is in, and the server remembers each entry's id, so a retry never creates a duplicate.
+- **Permissions:** a person whose Procore role can't use the Daily Log sees a plain message instead of a broken screen. A sandbox check page tries each section as the signed-in person.
 
 ## Project photos
 

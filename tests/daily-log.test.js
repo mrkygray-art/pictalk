@@ -145,7 +145,7 @@ test("notes entry with a photo goes as multipart with the photo attached", async
 
 test("delay and delivery fields", () => {
   assert.deepEqual(procoreFields("delays", { type: "Weather", start: "13:00", end: "15:00", company: 10, location: null, comment: "Rain" }, { date: "2026-10-16" }),
-    { date: "2026-10-16", delay_type: "Weather", start_time: "13:00", end_time: "15:00", vendor_id: 10, comments: "Rain" });
+    { date: "2026-10-16", delay_type: "weather", start_time: "13:00", end_time: "15:00", vendor_id: 10, comments: "Rain" });
   assert.deepEqual(procoreFields("deliveries", { what: "Concrete", time: "07:30", from: "ABC Ready Mix", comment: "" }, { date: "2026-10-16" }),
     { date: "2026-10-16", time_hour: 7, time_minute: 30, delivery_from: "ABC Ready Mix", contents: "Concrete" });
 });
@@ -190,7 +190,7 @@ test("check page: reads every section, finds the delay types, adds one test entr
   }
   assert.match(named("Add a test Manpower entry").detail, /sent Ironbridge Construction as contact_id/);
   assert.match(named("Read the project's delay types").detail, /2 type\(s\) at .*: Weather, Material/);
-  assert.match(named("Add a test Delays entry").detail, /type "Weather"/);
+  assert.match(named("Add a test Delays entry").detail, /type "weather"/);
   assert.equal(named("Delay type: delay_type = the name").ok, true);
   assert.equal(named("Delay type: delay_type_id = the id").ok, false, "only a type that comes back counts");
   assert.ok(named("Photo stuck? Delays (as the app sends it)").ok);

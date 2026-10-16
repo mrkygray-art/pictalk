@@ -26,17 +26,20 @@ const USERS = [
   { id: 5, name: "Old Foreman", job_title: "Foreman", is_active: false },
 ];
 
-let calls, rows, probe, refuse, users, nextId;
+let calls, rows, probe, refuse, users, nextId, leftovers;
 const reply = (u, init) => {
   const m = init.method ?? "GET";
   if (/\/projects\/373235\?/.test(u)) return [200, { id: 373235, name: "Westgate Distribution Center", time_zone: "Pacific Time (US & Canada)" }];
+  const listed = /\/projects\/373235\/(manpower|notes|delivery|delay)_logs\?/.exec(u);
+  if (listed && m === "GET" && probe === 200) return [200, (leftovers[listed[1]] ?? []).filter((x) => u.includes(`log_date=${x.date}`))];
   if (/\/projects\/373235\/manpower_logs\?/.test(u) && m === "GET") return [probe, probe === 200 ? [] : { errors: "Forbidden" }];
   if (/\/projects\/373235\/users/.test(u)) return [200, users];
   if (/daily_logs\/delay_log_types/.test(u)) return [200, [{ id: 1, display_name: "Weather", visible: true }, { id: 2, display_name: "Material", visible: true }, { id: 3, display_name: "Inspection", visible: true }]];
   const s = /\/projects\/373235\/(manpower|notes|delivery|delay)_logs(?:\/(\d+))?$/.exec(u);
   if (s && m === "POST") {
     if (refuse?.[s[1]]) return refuse[s[1]](init);
-    return [201, { id: nextId++ }];
+    const sent = JSON.parse(init.body ?? "{}");
+    return [201, { id: nextId++, ...(s[1] === "delay" ? { delay_type: sent.delay_log?.delay_type === "material" ? "material" : "" } : {}) }];
   }
   if (s && m === "DELETE") return s[2] === "404404" ? [404, { errors: "Not found" }] : [204, null];
   return [404, { errors: "Not found" }];
@@ -63,6 +66,7 @@ beforeEach(() => {
   refuse = null;
   users = USERS;
   nextId = 5000;
+  leftovers = {};
   saved = { fetch: globalThis.fetch, env: { ...process.env } };
   Object.assign(process.env, ENV);
   setStore(fakeDb);
@@ -294,4 +298,29 @@ test("ledger and delete: counts per project; delete removes only ledger entries 
   assert.deepEqual(deletes.sort(), ["manpower_logs/5000", "notes_logs/404404", "notes_logs/5001"]);
   assert.equal(rows.get(KEY).size, 0);
   assert.deepEqual((await post({ action: "ledger" })).json().byKey, {});
+});
+
+test("send: the delay type goes as Procore's key; a type Procore drops is reported", async () => {
+  const b = (await post({ action: "send", companyId: C, projectId: P, sample: oneSample() })).json();
+  const delay = JSON.parse(calls.find((c) => c.method === "POST" && c.url.includes("/delay_logs")).body).delay_log;
+  assert.equal(delay.delay_type, "material");
+  assert.equal(b.rows.find((r) => r.label === "Delays").error, null);
+  const again = (await post({ action: "send", companyId: C, projectId: P, sample: { ...oneSample(), id: "othersample1", delay: { ...oneSample().delay, type: "Existing Conditions" } } })).json();
+  assert.match(again.rows.find((r) => r.label === "Delays").error, /Procore didn't keep the delay type \(sent "existing_conditions"\)/);
+});
+
+test("check entries: finds only the check page's 'SiteSnap test' entries, deletes them only when asked", async () => {
+  const d = workingDays(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date()))[0];
+  leftovers = {
+    manpower: [{ id: 11, date: d, notes: "SiteSnap test" }, { id: 12, date: d, notes: "Electrical · Panel gear" }],
+    notes: [{ id: 21, date: d, comment: "SiteSnap test note" }, { id: 22, date: d, comment: `Reported by: Jamal. Pulled wire. ${MARKER}` }],
+    delivery: [{ id: 31, date: d, contents: "SiteSnap test delivery" }],
+    delay: [{ id: 41, date: d, comments: "SiteSnap test: delay_type = the key" }],
+  };
+  const found = (await post({ action: "checkentries", companyId: C, projectId: P, dryRun: true })).json().found;
+  assert.deepEqual(found.map((f) => f.id).sort(), ["11", "21", "31", "41"]);
+  assert.ok(!calls.some((c) => c.method === "DELETE"));
+  const out = (await post({ action: "checkentries", companyId: C, projectId: P, dryRun: false })).json();
+  assert.ok(out.rows.every((r) => r.status === "deleted"));
+  assert.deepEqual(calls.filter((c) => c.method === "DELETE").map((c) => c.url.replace(/^.*\/projects\/373235\//, "")).sort(), ["delay_logs/41", "delivery_logs/31", "manpower_logs/11", "notes_logs/21"]);
 });

@@ -13,6 +13,9 @@
 // POST { action: "ledger" } : what this page made, per project.
 // POST { action: "delete", companyId, projectId } : deletes only that project's ledger entries in Procore (a 404 =
 //      already gone), then their ledger rows.
+// POST { action: "checkentries", companyId, projectId, dryRun } : the entries the Daily Log check page
+//      (api/procore/test-dailylog.js) left behind in the last 5 working days: text starting "SiteSnap test". Lists
+//      them (dryRun), else deletes them. Nothing else is touched.
 // Entries are created as the signed-in person (Procore has no "on behalf of"): the foreman is named in the Notes
 // ("Reported by: …") and their company is the manpower / delay company. Every Notes entry ends with the marker.
 // Paced (about 2 calls a second); a 429 waits out Procore's window and tries once more. Same-origin JSON for POSTs.
@@ -130,7 +133,8 @@ function render(){
     const cards=p.samples.map((s,j)=>card(p,s,j)).join('');
     const btns=(c&&c.access==='ok'?'<button class="small ghost" data-act="regen" data-k="'+k+'">'+(p.samples.length?'Regenerate all 3':'Generate 3')+'</button>':'')
       +(p.samples.length?'<button class="small" data-act="send" data-k="'+k+'">Send this project\\'s samples</button>':'')
-      +(made?'<button class="small danger" data-act="del" data-k="'+k+'">Delete samples I created here ('+made+')</button>':'');
+      +(made?'<button class="small danger" data-act="del" data-k="'+k+'">Delete samples I created here ('+made+')</button>':'')
+      +(c&&c.access==='ok'?'<button class="small ghost" data-act="checkleft" data-k="'+k+'">Clear old "SiteSnap test" entries</button>':'');
     return '<div class="proj"><label class="row"><input type="checkbox" data-act="on" data-k="'+k+'"'+(p.on?' checked':'')+'><span><b>'+esc(p.name)+'</b> <small>ID '+esc(p.projectId)+'</small>'+(made?' <span class="tag">'+made+' entr'+(made===1?'y':'ies')+' made by this page</span>':'')+'</span></label>'
       +(p.on?body+cards+'<div>'+btns+'</div>'+results(p):'')+'</div>';
   }).join('');
@@ -234,6 +238,15 @@ $('#list').addEventListener('click',async(e)=>{
       const todo=p.samples.filter(x=>!x.sent); if(!todo.length){ alert('Every sample here is already sent.'); return; }
       if(!confirm('Create '+todo.length+' sample Daily Logs ('+todo.reduce((a,x)=>a+entriesOf(x),0)+' entries) in Procore, in "'+p.name+'"?\\n\\nThey are created as you.')) return;
       t.disabled=true; status('Sending '+esc(p.name)+'…'); await sendProject(p); await refreshLedger(); render(); status('Done: '+esc(p.name)+'.');
+    }
+    if(act==='checkleft'){
+      t.disabled=true; const f=(await post({action:'checkentries',companyId:p.companyId,projectId:p.projectId,dryRun:true})).found;
+      if(!f.length){ alert('No "SiteSnap test" entries from the Daily Log check in the last 5 working days here.'); t.disabled=false; return; }
+      if(!confirm('Delete '+f.length+' entries the Daily Log check page left here?
+
+'+f.map(x=>'• '+day(x.date)+' · '+x.section+' · '+x.text).join('
+'))){ t.disabled=false; return; }
+      p.results=(await post({action:'checkentries',companyId:p.companyId,projectId:p.projectId,dryRun:false})).rows.map(r=>({...r,n:day(r.date)})); render();
     }
     if(act==='del'){
       const n=ledger[keyOf(p)]?.count||0; if(!confirm('Delete the '+n+' Daily Log entries this page created in "'+p.name+'"?\\n\\nOnly entries in the ledger are deleted.')) return;
@@ -347,6 +360,10 @@ async function send(req, res, cfg, companyId, projectId, body) {
       key, companyId, projectId, projectName: text(body.projectName, 200), sampleId, section, procoreId: String(procoreEntryId), date,
       foreman: text(s.foreman?.name, 80), createdAt: Date.now(),
     });
+    if (section === "delays" && entry.type) {
+      const kept = typeof r.json?.delay_type === "object" ? delayTypeName(r.json.delay_type) : r.json?.delay_type;
+      if (!kept) note = [note, `Procore didn't keep the delay type (sent "${procoreFields(section, entry, { date }).delay_type}")`].filter(Boolean).join("; ");
+    }
     rows.push({ label, status: "created", procoreId: String(procoreEntryId), error: note || null });
   }
   return { rows };
@@ -385,6 +402,34 @@ async function remove(req, res, cfg, companyId, projectId) {
   return { rows };
 }
 
+// ---------- leftovers from the Daily Log check page ----------
+
+const CHECK_TEXT = /^SiteSnap test/i;
+const textsOf = (x) => [x?.notes, x?.comment, x?.comments, x?.contents, x?.delivery_from].filter((t) => typeof t === "string");
+
+async function checkEntries(req, res, cfg, companyId, projectId, dryRun) {
+  const proj = await api(req, res, cfg, "GET", `/rest/v1.0/projects/${projectId}`, { companyId, query: { company_id: companyId } });
+  if (proj.status === 401) throw new HttpError(401, "not_connected", "Sign in with Procore again.");
+  const days = workingDays(projectDay(proj.json?.time_zone), 5);
+  const found = [];
+  for (const section of Object.keys(SECTIONS)) {
+    for (const date of days) {
+      const r = await api(req, res, cfg, "GET", `/rest/v1.0/projects/${projectId}/${SECTIONS[section].path}`, { companyId, query: { log_date: date } });
+      if (r.status === 403 || r.status === 404) break;
+      for (const x of Array.isArray(r.json) ? r.json : []) {
+        if (x?.id != null && textsOf(x).some((t) => CHECK_TEXT.test(t.trim()))) found.push({ section, id: String(x.id), date, text: textsOf(x).find((t) => CHECK_TEXT.test(t.trim())) });
+      }
+    }
+  }
+  if (dryRun) return { found };
+  const rows = [];
+  for (const f of found) {
+    const r = await api(req, res, cfg, "DELETE", `/rest/v1.0/projects/${projectId}/${SECTIONS[f.section].path}/${f.id}`, { companyId });
+    rows.push({ label: SECTIONS[f.section].label, date: f.date, procoreId: f.id, status: r.ok ? "deleted" : r.status === 404 ? "skipped" : "failed", error: r.ok ? null : refusal(r) });
+  }
+  return { rows };
+}
+
 export default async function handler(req, res) {
   try {
     const cfg = config();
@@ -407,6 +452,7 @@ export default async function handler(req, res) {
     if (body.action === "crew") return sendJson(res, 200, await crew(req, res, cfg, companyId, projectId, text(body.name, 200)));
     if (body.action === "send") return sendJson(res, 200, await send(req, res, cfg, companyId, projectId, body));
     if (body.action === "delete") return sendJson(res, 200, await remove(req, res, cfg, companyId, projectId));
+    if (body.action === "checkentries") return sendJson(res, 200, await checkEntries(req, res, cfg, companyId, projectId, body.dryRun !== false));
     throw new HttpError(400, "bad_request", "Unknown action.");
   } catch (err) {
     sendError(res, err);

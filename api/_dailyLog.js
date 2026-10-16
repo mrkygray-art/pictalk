@@ -4,7 +4,7 @@
 // shows a different name, change it here only.
 //   Manpower   POST /rest/v1.0/projects/{id}/manpower_logs  { manpower_log: { date, num_workers, num_hours, contact_id, location_id, notes } }
 //              (the company is contact_id: vendor_id is ignored by Procore and leaves the company blank)
-//   Delays     POST /rest/v1.0/projects/{id}/delay_logs     { delay_log: { date, delay_type, start_time, end_time, vendor_id, location_id, comments } }
+//   Delays     POST /rest/v1.0/projects/{id}/delay_logs     { delay_log: { date, delay_type (the key, see delayTypeKey), start_time, end_time, vendor_id, location_id, comments } }
 //   Deliveries POST /rest/v1.0/projects/{id}/delivery_logs  { delivery_log: { date, time_hour, time_minute, delivery_from, contents, comments } }
 //   Notes      POST /rest/v1.0/projects/{id}/notes_logs     { notes_log: { date, comment, location_id } }
 //   Lists:     GET  …/{section path}?log_date=YYYY-MM-DD (no date = today only)
@@ -25,6 +25,14 @@ export const delayTypePaths = (companyId, projectId) => [
   `/rest/v1.0/projects/${projectId}/delay_log_types`,
   `/rest/v1.0/companies/${companyId}/delay_log_types`,
 ];
+
+// What Procore's delay_type takes: the type's key ("weather", "existing_conditions"), as in Procore's examples.
+// Sending the display name ("Weather") makes an entry with No Delay Type (sandbox, 2026-10-16). Built-in types'
+// keys are their names in snake case (translation_key).
+export const delayTypeKey = (t) => {
+  const s = String(t ?? "").trim();
+  return /^[a-z0-9_]+$/.test(s) ? s : s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+};
 
 // A delay type's name: the sandbox answers display_name / english_or_display_name (no name), e.g.
 // { id, display_name: "Existing Conditions", translation_key: "existing_conditions", visible: true }
@@ -87,7 +95,7 @@ export function procoreFields(section, e, { date }) {
     put("location_id", e.location);
     put("notes", [e.trade, e.comment].filter(Boolean).join(" · "));
   } else if (section === "delays") {
-    put("delay_type", e.type);
+    put("delay_type", delayTypeKey(e.type));
     put("start_time", e.start);
     put("end_time", e.end);
     put("vendor_id", e.company);

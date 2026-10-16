@@ -7,6 +7,7 @@ import { Buffer } from "node:buffer";
 import photos, { PER_PAGE } from "../api/procore/photos.js";
 import photoFile, { allowedLink } from "../api/procore/photo-file.js";
 import { seal, SESSION_COOKIE } from "../api/_procore.js";
+import { setStore } from "../api/_firestore.js";
 import { dayOf, groupPhotos, hasArea, hasTrade } from "../src/messaging/photosStore.js";
 
 const ENV = {
@@ -85,6 +86,22 @@ test("photos: newest first, paged by Procore's Link header, project time zone on
   const two = (await get(photos, { ...P, view: "photos", page: "2", albumId: "7" })).json();
   assert.equal(two.nextPage, null);
   assert.equal(new URL(calls.filter((c) => /\/images\?/.test(c.url)).at(-1).url).searchParams.get("image_category_id"), "7");
+});
+
+test("photos: a photo filed from Report an issue carries its record (the Linked badge)", async () => {
+  const links = { 1: { type: "punch_item", id: 196869, number: "2" } };
+  const col = { doc: (id) => ({ id }) };
+  setStore({
+    collection: () => ({ doc: () => ({ collection: () => col }) }),
+    getAll: async (...refs) => refs.map((r) => ({ id: r.id, exists: !!links[r.id], data: () => links[r.id] })),
+  });
+  try {
+    const b = (await get(photos, { ...P, view: "photos" })).json();
+    assert.deepEqual(b.photos.find((p) => p.id === 1).linked, { type: "punch_item", id: 196869, number: "2" });
+    assert.equal(b.photos.find((p) => p.id === 2).linked, null);
+  } finally {
+    setStore(null);
+  }
 });
 
 test("photos: Procore's refusal comes back in plain words", async () => {

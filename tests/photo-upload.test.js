@@ -31,11 +31,11 @@ const reply = (u, init) => {
   }
   return [404, { errors: "Not found" }];
 };
-// A fake Firestore: procoreProjects/{key}/photoCaptures/{id}
+// A fake Firestore: procoreProjects/{key}/{photoCaptures | photoLinks}/{id}
 const fakeDb = {
-  collection: () => ({ doc: (key) => ({ collection: () => ({ doc: (id) => ({
-    get: async () => ({ exists: log.has(`${key}/${id}`), data: () => log.get(`${key}/${id}`) }),
-    set: async (v) => { log.set(`${key}/${id}`, v); },
+  collection: () => ({ doc: (key) => ({ collection: (name) => ({ doc: (id) => ({
+    get: async () => ({ exists: log.has(`${key}/${name}/${id}`), data: () => log.get(`${key}/${name}/${id}`) }),
+    set: async (v) => { log.set(`${key}/${name}/${id}`, v); },
   }) }) }) }),
 };
 beforeEach(() => {
@@ -96,6 +96,25 @@ test("a retry with the same capture id never makes a second photo in Procore", a
   assert.equal(again.json().duplicate, true);
   assert.equal(again.json().imageId, 2614999);
   assert.equal(calls.length, 0, "no Procore calls at all");
+});
+
+test("a Report an issue photo is remembered with its record, for the Linked badge", async () => {
+  const out = await post({ captureId: "r-abcdef12-1", link: { type: "punch_item", id: 196869, number: "2" } });
+  assert.equal(out.statusCode, 200, out.body);
+  assert.deepEqual(log.get("4291776_373212/photoLinks/2614999"), { type: "punch_item", id: 196869, number: "2", captureId: "r-abcdef12-1", savedAt: log.get("4291776_373212/photoLinks/2614999").savedAt });
+  assert.equal(log.get("4291776_373212/photoCaptures/r-abcdef12-1").link.id, 196869);
+  // A made-up link type is dropped, not stored
+  await post({ captureId: "r-abcdef12-2", link: { type: "rfi", id: 1 } });
+  assert.equal(log.get("4291776_373212/photoCaptures/r-abcdef12-2").link, null);
+});
+
+test("the voice note path must be this project's messages", async () => {
+  await post({ captureId: "m-voice001-1", voicePath: "messages/4291776_373212/c1/m1/voice.webm" });
+  assert.equal(log.get("4291776_373212/photoCaptures/m-voice001-1").voicePath, "messages/4291776_373212/c1/m1/voice.webm");
+  for (const [i, bad] of ["messages/999_1/c/m/voice.webm", "messages/4291776_373212/../x/voice.webm", "messages/4291776_373212/c/m/photo-1.jpg"].entries()) {
+    await post({ captureId: `m-voicebad-${i}`, voicePath: bad });
+    assert.equal(log.get(`4291776_373212/photoCaptures/m-voicebad-${i}`).voicePath, null, bad);
+  }
 });
 
 test("a picked album is used; a private one is refused in plain words", async () => {

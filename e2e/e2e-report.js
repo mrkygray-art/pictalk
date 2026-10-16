@@ -67,14 +67,14 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
     if (u.pathname === "/api/procore/photo-file") return r.respond({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==", "base64") });
     if (u.pathname === "/api/procore/photo-upload") {
       const b = JSON.parse(r.postData() || "{}");
-      uploads.push({ captureId: b.captureId, albumId: b.albumId, description: b.description, type: b.photo?.type, bytes: Buffer.from(b.photo?.data ?? "", "base64").length });
+      uploads.push({ captureId: b.captureId, albumId: b.albumId, description: b.description, link: b.link ?? null, type: b.photo?.type, bytes: Buffer.from(b.photo?.data ?? "", "base64").length });
       return json(200, { imageId: 3000 + uploads.length, albumId: b.albumId ?? 7, albumName: b.albumId ? "Unclassified" : "Field photos 2026-10-16", duplicate: false });
     }
     if (u.pathname === "/api/procore/photos") {
       const f = (id) => `/api/procore/photo-file?companyId=4291776&projectId=373235&u=${encodeURIComponent(`https://sandbox.procore.com/fas/${id}`)}`;
       const ph = (id, ago, extra = {}) => ({ id, albumId: 7, albumName: "Field photos", albumPrivate: false, description: `Photo ${id}: rebar spacing at grid C`, by: "Chloe Abara", createdAt: new Date(Date.now() - ago).toISOString(), takenAt: null, location: null, trades: [], thumb: f(id), full: f(id), ...extra });
       if (u.searchParams.get("view") === "albums") return json(200, { albums: [{ id: 7, name: "Field photos", count: 3, private: false, updatedAt: new Date().toISOString(), cover: f(1) }, { id: 8, name: "Unclassified", count: 0, private: false, updatedAt: null, cover: null }] });
-      return json(200, { photos: [ph(1, 60_000, { location: { id: 9, name: "Level 2 East" }, trades: [{ id: 5, name: "Electrical" }] }), ph(2, 120_000), ph(3, 26 * 3600_000)], page: 1, nextPage: null, total: 3, timeZone: "America/Los_Angeles" });
+      return json(200, { photos: [ph(1, 60_000, { location: { id: 9, name: "Level 2 East" }, trades: [{ id: 5, name: "Electrical" }], linked: { type: "punch_item", id: 196869, number: "2" } }), ph(2, 120_000), ph(3, 26 * 3600_000)], page: 1, nextPage: null, total: 3, timeZone: "America/Los_Angeles" });
     }
     // Jim Henson's template has no Punch List access (what an admin's visit saved)
     if (u.pathname === "/api/procore/access") return json(200, { levelsKnown: true, levelsAt: Date.now(), observationList: true, people: {
@@ -223,12 +223,18 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   check("photos: By day | By area | By trade | Albums", chips.join("|") === "By day|By area|By trade|Albums", chips.join("|"));
   check("photos: grouped by the project's day", (await text()).includes("Today") && (await text()).includes("Yesterday"));
   check("photos: thumbnails load through SiteSnap", await page.$eval(".ph-grid img", (i) => i.src.includes("/api/procore/photo-file?")));
+  // Spec section 4: the report's photo also went to the day's album, linked to the record, in the background
+  await page.waitForFunction(() => !document.body.innerText.includes("waiting to upload"), { timeout: 30000 }).catch(() => {});
+  const filed = uploads.filter((x) => x.captureId.startsWith("r-"));
+  check("auto-file: the report's photo also went to the day's album, linked to Punch Item #2", filed.length === 1 && filed[0].albumId === null && filed[0].link?.type === "punch_item" && filed[0].link?.number === "2" && /Punch Item #2/.test(filed[0].description), JSON.stringify(filed.map((x) => ({ ...x, description: x.description.slice(0, 80) }))));
+  check("auto-file: the switch is on by default", await page.$eval(".ph-autofile input", (i) => i.checked));
   await shot("7-photos");
   await click(".ph-tabs button::-p-text(By area)");
   check("photos: By area groups by Procore location", (await text()).includes("Level 2 East") && (await text()).includes("No area set"));
   await click(".ph-grid button");
   await waitText("Chloe Abara");
   check("photos: full view shows who, the album and the description", (await text()).includes("Album: Field photos") && (await text()).includes("rebar spacing"));
+  check("photos: a photo from a report says Linked to Punch Item #2", (await text()).includes("Linked to Punch Item #2"));
   await shot("8-photo");
   await click(".ph-full-back");
   await click(".ph-tabs button::-p-text(Albums)");
@@ -248,7 +254,8 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   await shot("10-snap");
   await click(".save-btn::-p-text(Save Photo)");
   await waitText("Saved to Field photos 2026-10-16");
-  check("snap: saved to Procore's album, as JPEG, with the words and who took it", uploads.length === 1 && uploads[0].type === "image/jpeg" && uploads[0].albumId === null && /Rebar spacing at grid C looks wide\n\nPhoto by Edward Gray, /.test(uploads[0].description), JSON.stringify(uploads[0]));
+  const snaps = () => uploads.filter((x) => !/^[rm]-/.test(x.captureId));
+  check("snap: saved to Procore's album, as JPEG, with the words and who took it", snaps().length === 1 && snaps()[0].type === "image/jpeg" && snaps()[0].albumId === null && /Rebar spacing at grid C looks wide\n\nPhoto by Edward Gray, /.test(snaps()[0].description), JSON.stringify(snaps()[0]));
   await shot("11-saved");
 
   // No signal: saved on the phone, "1 waiting to upload", then it goes up once when signal returns
@@ -263,11 +270,11 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   await waitText("Saved on this phone");
   await click("button::-p-text(Done)");
   await waitText("1 waiting to upload");
-  check("offline: the photo waits on the phone", uploads.length === 1);
+  check("offline: the photo waits on the phone", snaps().length === 1);
   await shot("12-waiting");
   await page.setOfflineMode(false);
   await page.waitForFunction(() => !document.body.innerText.includes("waiting to upload"), { timeout: 30000 });
-  check("offline: it uploads once signal is back, to the album picked, with one capture id", uploads.length === 2 && uploads[1].albumId === 8 && uploads[1].captureId !== uploads[0].captureId, JSON.stringify(uploads.map((x) => [x.captureId.slice(0, 8), x.albumId])));
+  check("offline: it uploads once signal is back, to the album picked, with one capture id", snaps().length === 2 && snaps()[1].albumId === 8 && snaps()[1].captureId !== snaps()[0].captureId, JSON.stringify(snaps().map((x) => [x.captureId.slice(0, 8), x.albumId])));
 
   await browser.close();
   const passed = results.filter(Boolean).length;

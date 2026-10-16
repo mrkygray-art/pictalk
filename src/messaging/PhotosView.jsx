@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BackIcon, CameraIcon } from "./icons";
 import { groupPhotos, hasArea, hasTrade, loadAlbums, loadPhotos, timeLine } from "./photosStore";
-import { discardPhoto, lastSavedPhoto, onPhotoQueueChange, pendingPhotos, retryPhoto } from "./photoQueue";
+import { autoFileOn, discardPhoto, lastSavedPhoto, linkLabel, onPhotoQueueChange, pendingPhotos, retryPhoto, setAutoFile } from "./photoQueue";
 import SnapFlow from "./SnapFlow";
 
 // Project photos (docs/sitesnap-project-home-and-photos-spec.md, section 2): Procore's Photos tool, read-only.
@@ -77,6 +77,7 @@ function Grid({ photos, onOpen }) {
         <li key={p.id}>
           <button type="button" onClick={() => onOpen(p)} aria-label={p.description ? p.description.slice(0, 80) : "Open photo"}>
             <img src={p.thumb} alt="" loading="lazy" decoding="async" />
+            {p.linked && <span className="ph-grid-tag">{linkLabel(p.linked)}</span>}
           </button>
         </li>
       ))}
@@ -98,6 +99,7 @@ function FullPhoto({ photo, timeZone, onClose }) {
       <img src={failed ? photo.thumb : photo.full} alt={photo.description || "Project photo"} onError={() => setFailed(true)} />
       {failed && <p className="procore-note">Showing a smaller copy. The full photo couldn't load here; it's in Procore.</p>}
       <div className="ph-full-info">
+        {photo.linked && <p className="ph-linked">Linked to {linkLabel(photo.linked)}</p>}
         <p className="ph-full-who"><strong>{photo.by || "Someone"}</strong> · {timeLine(photo.createdAt, timeZone)}</p>
         <p className="ph-muted">{photo.albumName ? `Album: ${photo.albumName}` : ""}{photo.albumPrivate ? " (private)" : ""}</p>
         {where && <p className="ph-muted">{where}</p>}
@@ -170,6 +172,17 @@ function AlbumView({ project, album, onBack, onOpen }) {
   );
 }
 
+// Spec section 4's setting, kept on this phone (on unless turned off)
+function AutoFileSwitch() {
+  const [on, setOn] = useState(autoFileOn);
+  return (
+    <label className="ph-autofile">
+      <input type="checkbox" checked={on} onChange={(e) => { setAutoFile(e.target.checked); setOn(e.target.checked); }} />
+      <span>Also save photos from reports and messages to the project's daily album</span>
+    </label>
+  );
+}
+
 export default function PhotosView({ session, onBack }) {
   const { project } = session;
   const projectKey = `${project.companyId}_${project.projectId}`;
@@ -228,6 +241,7 @@ export default function PhotosView({ session, onBack }) {
           {shown === "albums"
             ? <AlbumList key={albumsVersion} project={project} onOpenAlbum={setAlbum} />
             : <Groups state={state} by={shown} onOpen={(photo) => setOpen({ photo, timeZone: state.timeZone })} onMore={more} />}
+          <AutoFileSwitch />
           <p className="msg-footnote">Photos live in Procore's Photos tool. You see the ones Procore shows you.</p>
         </>
       )}

@@ -8,6 +8,7 @@ import { SHOW_AI_PHOTO_DESCRIPTION } from "../features";
 import {
   describePhoto, newId, photoPathFor, queueMessage, splitRecipients, transcribeVoice, uploadFile, voicePathFor,
 } from "./messagingStore";
+import { autoFilePhotos } from "./photoQueue";
 
 const MAX_PHOTOS = 10;
 
@@ -114,6 +115,8 @@ export default function Composer({ mode = "new", session, conversation = null, o
         aiDescription: desc?.status === "done" ? desc.text : null,
         status,
       });
+      // Spec section 4: also into the day's album (in the background; never blocks the message)
+      autoFilePhotos({ project, captureBase: `m-${ids.current.mid}`, photos: photos.map((p) => p.blob), words: [text, transcript].map((x) => x.trim()).filter(Boolean).join(" "), by: me.name, from: "SiteSnap message", voicePath: voice?.path ?? null });
       onSent?.(ids.current.cid);
     } catch {
       setError("Couldn't save this message. Please try again.");

@@ -20,18 +20,46 @@ export const lastSavedPhoto = () => lastSaved;
 export const voicePathForPhoto = (key, captureId, type) =>
   `messages/${key}/photos/${captureId}/voice.${/mp4|m4a|aac/.test(type) ? "m4a" : /ogg/.test(type) ? "ogg" : "webm"}`;
 
+const LINK_LABEL = { punch_item: "Punch Item", observation: "Observation" };
+export const linkLabel = (link) => (link ? `${LINK_LABEL[link.type] ?? "Record"}${link.number ? ` #${link.number}` : ""}` : "");
+
 /** What goes in Procore's description: the words, then who took it and when (Procore shows the upload time,
- *  which can be later when the photo waited for signal) */
-export function descriptionFor(words, by, takenAt) {
+ *  which can be later when the photo waited for signal), and where it came from (a report or a message) */
+export function descriptionFor(words, by, takenAt, from = "") {
   const when = new Date(takenAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-  return [String(words ?? "").trim(), `Photo by ${by || "SiteSnap"}, ${when}`].filter(Boolean).join("\n\n");
+  return [String(words ?? "").trim(), [`Photo by ${by || "SiteSnap"}, ${when}`, from].filter(Boolean).join(" · ")].filter(Boolean).join("\n\n");
+}
+
+// Spec section 4: photos sent through Report an issue or Message also go to the day's album. On unless this
+// phone turned it off.
+const AUTO_KEY = "sitesnap-autofile-photos";
+export function autoFileOn() {
+  try { return localStorage.getItem(AUTO_KEY) !== "off"; } catch { return true; }
+}
+export function setAutoFile(on) {
+  try { if (on) localStorage.removeItem(AUTO_KEY); else localStorage.setItem(AUTO_KEY, "off"); } catch { /* private mode */ }
+}
+
+/** Also file these photos in the day's album. Never throws and never waits on the network: the report or
+ *  message has already gone; anything that goes wrong shows on the Project photos screen with Retry.
+ *  captureBase must be the same on a retried send, so a photo is never filed twice. */
+export function autoFilePhotos({ project, captureBase, photos, words = "", by, link = null, from = "", voicePath = null }) {
+  if (!autoFileOn() || !photos?.length) return Promise.resolve(0);
+  let chain = Promise.resolve(0);
+  photos.forEach((photo, i) => {
+    chain = chain.then((n) => queuePhoto({ captureId: `${captureBase}-${i + 1}`, project, albumId: null, albumLabel: "today", words, by, photo, link, from, voicePath })
+      .then(() => n + 1)
+      .catch((err) => { console.warn("SiteSnap: photo not filed in the daily album", err?.message); return n; }));
+  });
+  return chain;
 }
 
 /** Save a snapped photo on the phone and start uploading. Throws a plain-language Error for a photo it can't take. */
-export async function queuePhoto({ captureId, project, albumId = null, albumLabel, words = "", wordsPending = false, by, photo, voice = null, voicePath = null }) {
+export async function queuePhoto({ captureId, project, albumId = null, albumLabel, words = "", wordsPending = false, by, photo, voice = null, voicePath = null, link = null, from = "" }) {
+  if (await get(PREFIX + captureId)) return; // already waiting (a retried send)
   const small = await shrinkPhoto(photo, PHOTO_MAX_SIDE, PHOTO_QUALITY);
   if (!/^image\/(jpeg|png|webp)$/.test(small.type)) throw new Error("This kind of photo can't be saved. Take it with the camera instead.");
-  await set(PREFIX + captureId, {
+  await set(PREFIX + captureId, { link, from,
     captureId, key: `${project.companyId}_${project.projectId}`, companyId: project.companyId, projectId: project.projectId,
     takenAt: new Date().toISOString(), albumId, albumLabel, words, wordsPending, by, photo: small, voice, voicePath,
     status: "waiting", attempts: 0, nextTry: 0, error: "",
@@ -96,7 +124,8 @@ export async function syncPhotos({ now = false } = {}) {
           headers: { "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({
             companyId: entry.companyId, projectId: entry.projectId, captureId: entry.captureId, takenAt: entry.takenAt,
-            albumId: entry.albumId, description: descriptionFor(entry.words, entry.by, entry.takenAt), voicePath: entry.voicePath,
+            albumId: entry.albumId, description: descriptionFor(entry.words, entry.by, entry.takenAt, entry.from || linkLabel(entry.link)), voicePath: entry.voicePath,
+            link: entry.link ?? null,
             photo: { type: entry.photo.type, data: await base64(entry.photo) },
           }),
         });

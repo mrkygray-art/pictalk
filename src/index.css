@@ -3005,3 +3005,12 @@ select.dir-input { appearance: auto; }
 .snap-albums small { color: var(--muted); }
 .snap-done { font-size: 20px; font-weight: 700; color: var(--green, #30d158); text-align: center; }
 .snap-done.is-waiting { color: var(--text); font-size: 17px; font-weight: 600; }
+
+.ph-linked { justify-self: start; padding: 4px 12px; border-radius: 12px; background: var(--brand); color: #1f1a14; font-size: 15px; font-weight: 700; }
+.ph-grid button { position: relative; }
+.ph-grid-tag {
+  position: absolute; left: 4px; bottom: 4px; max-width: calc(100% - 8px); padding: 2px 6px; border-radius: 8px;
+  background: rgba(0, 0, 0, 0.72); color: #fff; font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ph-autofile { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 14px; background: var(--surface); font-size: 15px; line-height: 1.35; cursor: pointer; }
+.ph-autofile input { width: 22px; height: 22px; flex: none; accent-color: var(--brand); margin: 0; }

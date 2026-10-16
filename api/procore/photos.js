@@ -9,6 +9,22 @@
 // Procore sign-in that a foreman's phone doesn't have (docs/procore-photos-findings.md, question 5).
 import { config, HttpError, procoreId, queryOf, sendError, sendJson } from "../_procore.js";
 import { procoreSend } from "../_procoreWrite.js";
+import { firestore } from "../_firestore.js";
+
+// Photos SiteSnap filed from Report an issue: procoreProjects/{key}/photoLinks/{imageId} -> { type, id, number }.
+// Without the store the photos still list, just without badges.
+async function linksFor(key, ids) {
+  if (!ids.length) return {};
+  try {
+    const db = await firestore();
+    const col = db.collection("procoreProjects").doc(key).collection("photoLinks");
+    const snaps = await db.getAll(...ids.map((id) => col.doc(String(id))));
+    return Object.fromEntries(snaps.filter((s) => s.exists).map((s) => [s.id, { type: s.data().type, id: s.data().id, number: s.data().number ?? "" }]));
+  } catch (err) {
+    console.log("SiteSnap photos: links not read", err.message);
+    return {};
+  }
+}
 
 export const PER_PAGE = 48;
 
@@ -82,7 +98,9 @@ export default async function handler(req, res) {
       }
       const total = Number(r.headers?.total) || null;
       const nextPage = nextFromLink(r.headers?.link) ?? (total && page * PER_PAGE < total ? page + 1 : null);
-      return sendJson(res, 200, { photos: list.map((img) => photoOut(img, companyId, projectId)), page, nextPage, total, timeZone });
+      const links = await linksFor(`${companyId}_${projectId}`, list.map((img) => img.id).filter(Boolean));
+      const photos = list.map((img) => ({ ...photoOut(img, companyId, projectId), linked: links[String(img.id)] ?? null }));
+      return sendJson(res, 200, { photos, page, nextPage, total, timeZone });
     }
 
     throw new HttpError(400, "bad_view", "Ask for albums or photos.");

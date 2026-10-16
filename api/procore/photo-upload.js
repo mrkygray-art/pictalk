@@ -1,13 +1,15 @@
 // POST /api/procore/photo-upload : Snap (docs/sitesnap-project-home-and-photos-spec.md 2.2-2.4). Saves one photo
 // into a Procore Photos album with the signed-in person's own Procore sign-in.
 // Body (same-origin JSON): { companyId, projectId, captureId, takenAt (ISO), albumId? (else that day's album),
-//   description?, voicePath?, photo: { type, data (base64) } }
+//   description?, voicePath?, link? { type: punch_item | observation, id, number } (a Report an issue photo),
+//   photo: { type, data (base64) } }
 //  1. captureId already saved (procoreProjects/{key}/photoCaptures/{captureId})? Answer with that photo: a retry
 //     never makes a second copy in Procore.
 //  2. Album: the one picked (never a private one), else "Field photos YYYY-MM-DD" for the day it was taken (the
 //     project's own date, so a photo saved offline still files under its own day), made public if it doesn't exist yet. Standard on Photos can make albums (procore-photos-findings.md).
 //  3. Upload slot -> Create Image (upload_uuid, private: false, description).
-//  4. Remembers captureId -> image id (and the voice note's path in SiteSnap storage) for retries and links.
+//  4. Remembers captureId -> image id (and the voice note's path in SiteSnap storage) for retries, and
+//     photoLinks/{imageId} -> the record, for the "Linked to Punch Item #2" badge (spec section 3).
 // Answers { imageId, albumId, albumName, duplicate }.
 import { config, HttpError, procoreId, readBody, requireSameOriginJson, sendError, sendJson } from "../_procore.js";
 import { procoreSend, uploadFile } from "../_procoreWrite.js";
@@ -33,9 +35,18 @@ function refused(r, what) {
   return new HttpError(502, "procore_error", "Procore didn't save the photo. It will try again.");
 }
 
+const LINK_TYPES = new Set(["punch_item", "observation"]);
+function linkOf(v) {
+  if (!v || typeof v !== "object" || !LINK_TYPES.has(v.type)) return null;
+  const id = procoreId(String(v.id ?? ""));
+  return id ? { type: v.type, id: Number(id), number: String(v.number ?? "").slice(0, 20) } : null;
+}
+let db = null;
+const linkDocs = (key) => db?.collection("procoreProjects").doc(key).collection("photoLinks");
+
 // The capture log (firebase-admin). Without it the upload still works, just without the retry guard.
 async function captures(key) {
-  try { return (await firestore()).collection("procoreProjects").doc(key).collection("photoCaptures"); }
+  try { db = await firestore(); return db.collection("procoreProjects").doc(key).collection("photoCaptures"); }
   catch (err) { console.log("SiteSnap photo upload: no capture log", err.message); return null; }
 }
 
@@ -56,7 +67,10 @@ export default async function handler(req, res) {
     if (!bytes.length || bytes.length > MAX_PHOTO_BYTES) throw new HttpError(400, "bad_photo", "That photo is too big or empty. Take it again.");
     const description = String(body.description ?? "").trim().slice(0, MAX_DESCRIPTION);
     const key = `${companyId}_${projectId}`;
-    const voicePath = typeof body.voicePath === "string" && body.voicePath.startsWith(`messages/${key}/photos/${captureId}/voice.`) ? body.voicePath : null;
+    // The voice note in SiteSnap storage: this project's messages only (Snap's own, or the report / message it came with)
+    const vp = typeof body.voicePath === "string" ? body.voicePath : "";
+    const voicePath = vp.startsWith(`messages/${key}/`) && /^[A-Za-z0-9_\-/.]{1,300}$/.test(vp) && /\/voice\.[a-z0-9]{2,5}$/.test(vp) && !vp.includes("..") ? vp : null;
+    const link = linkOf(body.link);
     // When it was taken (a queued photo uploads later); anything odd counts as now
     const t = Date.parse(String(body.takenAt ?? ""));
     const takenAt = Number.isFinite(t) && t <= Date.now() + 3600_000 && t >= Date.now() - 30 * 86_400_000 ? new Date(t) : new Date();
@@ -101,7 +115,10 @@ export default async function handler(req, res) {
 
     // 4. Remember it
     const out = { imageId: made.json?.id, albumId: album.id, albumName: album.name };
-    if (log) await log.doc(captureId).set({ ...out, voicePath, savedAt: Date.now() }).catch((err) => console.log("SiteSnap photo upload: capture log not written", err.message));
+    if (log) {
+      await log.doc(captureId).set({ ...out, voicePath, link, savedAt: Date.now() }).catch((err) => console.log("SiteSnap photo upload: capture log not written", err.message));
+      if (link && out.imageId) await linkDocs(key)?.doc(String(out.imageId)).set({ ...link, captureId, savedAt: Date.now() }).catch((err) => console.log("SiteSnap photo upload: link not written", err.message));
+    }
     console.log("SiteSnap photo upload", JSON.stringify({ key, imageId: out.imageId, albumId: out.albumId, made: !albumWanted && !albums.some((a) => a.id === album.id) }));
     sendJson(res, 200, { ...out, duplicate: false });
   } catch (err) {

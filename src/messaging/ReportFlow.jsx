@@ -3,6 +3,7 @@ import { CameraIcon, MicIcon, StopIcon } from "./icons";
 import { formatTime, useRecorder } from "./useRecorder";
 import RecipientSearch from "./RecipientSearch";
 import { newId, queueMessage, splitRecipients, transcribeVoice, uploadFile, voicePathFor } from "./messagingStore";
+import { autoFilePhotos } from "./photoQueue";
 import { recipientOf } from "../directorySearch";
 import { cantGet, draftRecord, managersFor, MAX_PHOTOS, projectAccess, RECORD_HINT, RECORD_LABEL, RECORD_TOOL, recordOptions, sendRecord } from "./recordStore";
 
@@ -129,6 +130,11 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
         impactMentioned: card.impactMentioned,
         captureId: ids.current.cid,
       }, { photos: photos.map((p) => p.blob), voice: voice?.blob ?? null, link: window.location.origin });
+      // Spec section 4: also into the day's album, linked to the record (in the background; never blocks this)
+      autoFilePhotos({
+        project, captureBase: `r-${ids.current.mid}`, photos: photos.map((p) => p.blob), words: card.description || words, by: me.name,
+        link: { type: made.recordType, id: Number(made.id), number: made.number == null ? "" : String(made.number) }, voicePath: voice?.path ?? null,
+      });
       // The SiteSnap thread that follows it: the capture is its first message
       await queueMessage({
         key,

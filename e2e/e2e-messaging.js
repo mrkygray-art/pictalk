@@ -47,6 +47,7 @@ const USERS = { sam: ["201", "Sam Sender"], tia: ["202", "Tia Tagged"], uma: ["2
     args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"],
   });
 
+  const filedPhotos = []; // photos also filed in the day's album (spec section 4)
   async function open(who) {
     const [pid, name] = USERS[who];
     const ctx = await browser.createBrowserContext();
@@ -66,6 +67,11 @@ const USERS = { sam: ["201", "Sam Sender"], tia: ["202", "Tia Tagged"], uma: ["2
         return json(200, { token, me: { procoreUserId: pid, name }, projects: PROJECTS });
       }
       if (u.pathname === "/api/procore/directory") return json(200, { people: PEOPLE, canTag: false, labels: [], compact: false, rolesAvailable: true });
+      if (u.pathname === "/api/procore/photo-upload") {
+        const b = JSON.parse(r.postData() || "{}");
+        filedPhotos.push({ who, captureId: b.captureId, albumId: b.albumId, description: b.description });
+        return json(200, { imageId: 4000 + filedPhotos.length, albumId: 7, albumName: "Field photos", duplicate: false });
+      }
       return json(404, { error: "not_found" });
     });
     const shot = (n, full = false) => page.screenshot({ path: path.join(OUT, `${who}-${n}.png`), fullPage: full });
@@ -138,6 +144,8 @@ const USERS = { sam: ["201", "Sam Sender"], tia: ["202", "Tia Tagged"], uma: ["2
   await sam.page.waitForFunction(() => document.body.innerText.includes("To do:"), { timeout: 30000 });
   t = await sam.text();
   check("sent: the conversation shows the photo, the words and the note", t.includes("Please send the revised drawings") && /Test transcript/.test(t));
+  for (let i = 0; i < 40 && !filedPhotos.length; i++) await sleep(500);
+  check("auto-file: the message's photo also went to the day's album, with its words", filedPhotos.length === 1 && filedPhotos[0].who === "sam" && filedPhotos[0].captureId.startsWith("m-") && filedPhotos[0].albumId === null && /Please send the revised drawings/.test(filedPhotos[0].description) && /SiteSnap message/.test(filedPhotos[0].description), JSON.stringify(filedPhotos));
   check("after sending, the thread shows one Reply button, not the whole composer", !!(await sam.page.$(".msg-reply-btn")) && !(await sam.page.$(".composer")));
   check("no AI photo description or describe button on screen", !/Photo description|Describe photo/.test(t));
   check("the sender doesn't get quick replies on their own message", !(await sam.page.$(".qr-btn")));

@@ -52,3 +52,11 @@ Read 2026-10-15 with `/api/procore/test-permissions` as Edward (Photos is `image
 4. Photos load through a SiteSnap server endpoint with the person's own token; thumbnails are cached on the phone.
 5. Demo people: no change. Demo staging already gives each demo person the template for their role (PM → Project Manager - Internal, superintendents → Foreman / Superintendent - Internal, trade foremen → Subcontractor - External, owners → Owner/Client - External). For trade foremen to add photos, Ky raises Photos to Standard in Subcontractor - External (company Permissions → Project Permissions Templates).
 6. Daily albums stay as the spec says (`Field photos YYYY-MM-DD`): Standard can create them. By day uses `filters[created_at]` with the project's day and UTC offset, not `log_date`.
+
+## Built (2026-10-16)
+
+- Step 1: project home (three tiles) and read-only Project photos (By day / By area / By trade / Albums, full view), photos loaded through `/api/procore/photo-file`.
+- Step 2: Snap, the offline queue and `/api/procore/photo-upload` (daily album by the day the photo was taken, capture ids so retries never duplicate).
+- Step 3: photos from Report an issue and Message also filed in the day's album (setting on by default, per phone), and the "Linked to Punch Item / Observation" badge.
+- Not built: keeping a Snap voice note longer than Firebase Storage's rules allow (it lives with the project's messages, like other voice notes), and editing or deleting Procore photos (read-only by design in this version).
+

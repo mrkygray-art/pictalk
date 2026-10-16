@@ -21,6 +21,20 @@ Status 2026-10-15: **sandbox runs done as Edward Gray (admin) and Chloe Abara (n
 - `GET /projects/{id}/users` (38 people) didn't include Edward's `/me` id, so the check can't show an admin's template; harmless.
 - Demo-project people like Chloe have no permission template, so they can't use Photos at all until one is set.
 
+## Photos level in each sandbox template
+
+Read 2026-10-15 with `/api/procore/test-permissions` as Edward (Photos is `images` in `user_access_levels`; 1 None, 2 Read Only, 3 Standard, 4 Admin):
+
+| Template | Photos | Observations | Punch List |
+|---|---|---|---|
+| Project Manager - Internal | Admin | Admin | Admin |
+| Foreman / Superintendent - Internal | Standard | Admin | Admin |
+| Architect/Engineer - External | Standard | None | Standard |
+| Owner/Client - External | Read Only | None | None |
+| Subcontractor - External | **Read Only** | Standard | Standard |
+
+**Setup step for any company using Project photos:** subcontractor foremen are on Subcontractor - External, which has Photos at Read Only, so they can report issues but can't add photos. Raise Photos to Standard in that template first. SiteSnap should explain this plainly when Procore refuses.
+
 ## Findings that may change the design (Ky to decide)
 
 1. **Upload method.** The reference marks multipart `image[data]` as deprecated and recommends `upload_uuid` with `image_name`. SiteSnap already uses that upload path for Observation and Punch Item attachments (`uploadFile`). Plan: use `upload_uuid`, not `image[data]` as the spec suggested.

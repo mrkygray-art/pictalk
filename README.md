@@ -315,6 +315,10 @@ PicTalk is an actively developed demonstration application. Current functionalit
 
 The current demo limits a job to 10 stops. Voice recordings are designed to expire after five days.
 
+## SiteSnap AI: the Procore fork (in development)
+
+PicTalk's capture flow is also the base of **SiteSnap AI**, a fork on the [`sitesnap` branch](https://github.com/mrkygray-art/pictalk/tree/sitesnap) that works with Procore. A foreman takes a photo and says what's wrong. Claude drafts a Procore Observation or Punch Item from the project's own lists, and one tap creates it in Procore under the foreman's own Procore sign-in, with the photo and voice note attached. The crew then follows it up in project messages with To / CC tagging, AI-found to-dos, and one-tap replies. It is still in development and tested only in Procore's developer sandbox. See its [README](https://github.com/mrkygray-art/pictalk/blob/sitesnap/README.md) and the [portfolio case study](https://ky-gray-portfolio.vercel.app/#sitesnap).
+
 ## Run it locally
 
 Needs Node 24 and, for the emulators, the Firebase CLI and Java 11+.

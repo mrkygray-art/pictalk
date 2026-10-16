@@ -3016,8 +3016,7 @@ select.dir-input { appearance: auto; }
 .ph-autofile input { width: 22px; height: 22px; flex: none; accent-color: var(--brand); margin: 0; }
 
 /* Daily log by voice (src/messaging/DailyLogFlow.jsx, docs/closeout-and-daily-log-spec.md Feature B) */
-.home-tile.is-log svg { grid-row: 1 / 4; }
-.home-tile-status { grid-column: 2; justify-self: start; font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 10px; background: var(--surface-2); color: var(--text-2); }
+.home-tile-status { justify-self: start; margin-top: 2px; font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 10px; background: var(--surface-2); color: var(--text-2); }
 .home-tile-status.is-draft { background: var(--brand-soft); color: var(--brand-ink); }
 .home-tile-status.is-sent { background: var(--success-soft); color: var(--success-ink); }
 .dl-date-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }

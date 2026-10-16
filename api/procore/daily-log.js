@@ -12,7 +12,7 @@ import { config, HttpError, procoreId, queryOf, readBody, requireSameOriginJson,
 import { allPages } from "../_projects.js";
 import { procoreSend } from "../_procoreWrite.js";
 import { firestore } from "../_firestore.js";
-import { cleanEntry, delayTypePaths, friendlyError, ianaZone, manpowerLine, procoreFields, projectDay, requestFor, SECTIONS } from "../_dailyLog.js";
+import { cleanEntry, delayTypeName, delayTypePaths, friendlyError, ianaZone, manpowerLine, procoreFields, projectDay, requestFor, SECTIONS } from "../_dailyLog.js";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const ENTRY = /^[A-Za-z0-9_-]{8,64}$/;
@@ -53,7 +53,7 @@ async function options(req, res, cfg, companyId, projectId, askedDate) {
   for (const path of delayTypePaths(companyId, projectId)) {
     const r = await send(path, { project_id: projectId });
     if (r.ok && Array.isArray(r.json)) {
-      delayTypes = r.json.filter((t) => t.active !== false && t.visible !== false && (t.name || t.title)).map((t) => ({ id: t.id ?? null, name: t.name || t.title }));
+      delayTypes = r.json.filter((t) => t.active !== false && t.visible !== false && delayTypeName(t)).map((t) => ({ id: t.id ?? null, name: delayTypeName(t), key: t.translation_key ?? null }));
       break;
     }
   }

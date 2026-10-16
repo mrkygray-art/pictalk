@@ -29,7 +29,10 @@ const reply = (u, init) => {
   if (/\/projects\/373235\/vendors/.test(u)) return [200, [{ id: 11, name: "Summit Framing", is_active: true }, { id: 10, name: "Ironbridge Construction", is_active: true }, { id: 99, name: "Old Co", is_active: false }]];
   if (/\/projects\/373235\/locations/.test(u)) return [200, [{ id: 50, node_name: "Level 2" }]];
   if (/daily_logs\/delay_log_types/.test(u)) return [404, { errors: "Not found" }];
-  if (/\/projects\/373235\/delay_log_types/.test(u)) return [200, [{ id: 1, name: "Weather", active: true }, { id: 2, name: "Material", active: true }, { id: 3, name: "Hidden", active: false }]];
+  // Shaped like the sandbox's answer (2026-10-16): display_name, no name
+  if (/\/projects\/373235\/delay_log_types/.test(u)) return [200, [{ id: 1, display_name: "Weather", translation_key: "weather", visible: true }, { id: 2, english_or_display_name: "Material", translation_key: "material", visible: true }, { id: 3, display_name: "Hidden", visible: false }]];
+  if (/\/projects\/373235\/uploads/.test(u)) return [201, { uuid: "UP1", url: "https://storage.test/upload", fields: { key: "k" } }];
+  if (/storage\.test\/upload/.test(u)) return [204, null];
   const s = SECTION.exec(u);
   if (s) {
     const kind = s[1] ?? s[4];
@@ -39,7 +42,8 @@ const reply = (u, init) => {
     if (refuse === "write") return [403, { errors: "You do not have sufficient access to complete that action." }];
     if (refuse === "busy") return [429, { errors: "Too many requests" }, RL];
     if (refuse === "invalid") return [422, { errors: { num_workers: ["must be greater than 0"] } }];
-    const row = { id: 900 + created.length, kind, status: "pending", attachments: init.body instanceof FormData ? init.body.getAll(`${kind === "notes" ? "notes" : kind}_log[attachments][]`).map(() => ({ id: 1 })) : [] };
+    const sentType = init.body instanceof FormData ? init.body.get("delay_log[delay_type]") : JSON.parse(init.body ?? "{}").delay_log?.delay_type;
+    const row = { id: 900 + created.length, kind, status: "pending", delay_type: kind === "delay" ? sentType ?? "" : undefined, attachments: init.body instanceof FormData ? init.body.getAll(`${kind === "notes" ? "notes" : kind}_log[attachments][]`).map(() => ({ id: 1 })) : [] };
     created.push(row);
     return [201, row, RL];
   }
@@ -184,8 +188,13 @@ test("check page: reads every section, finds the delay types, adds one test entr
     assert.ok(named(`Add a test ${s}`).ok, s);
     assert.ok(named(`Read back the ${s}`).ok, s);
   }
-  assert.match(named("Read the project's delay types").detail, /2 type\(s\)|3 type\(s\)/);
-  assert.match(named("Add a test Delays entry with a photo").detail, /photos 1/);
+  assert.match(named("Add a test Manpower entry").detail, /sent Ironbridge Construction as contact_id/);
+  assert.match(named("Read the project's delay types").detail, /2 type\(s\) at .*: Weather, Material/);
+  assert.match(named("Add a test Delays entry").detail, /type "Weather"/);
+  assert.equal(named("Delay type: delay_type = the name").ok, true);
+  assert.equal(named("Delay type: delay_type_id = the id").ok, false, "only a type that comes back counts");
+  assert.ok(named("Photo stuck? Delays (as the app sends it)").ok);
+  assert.ok(b.steps.some((x) => x.name === "Photo stuck? Note photo: upload_ids"));
   assert.match(named("Rate-limit headers").detail, /limit 25/);
   assert.ok(!b.steps.some((s) => s.name.startsWith("Delete")), "nothing deleted unless asked");
   assert.equal(created.find((x) => x.kind === "delay").attachments.length, 1);
@@ -194,8 +203,9 @@ test("check page: reads every section, finds the delay types, adds one test entr
 test("check page: deletes the test entries when asked, and only runs against the sandbox", async () => {
   let out = res();
   await check({ method: "POST", url: "/api/procore/test-dailylog", body: { companyId: C, projectId: P, cleanup: true }, headers: { ...headers, cookie: `${SESSION_COOKIE}=${cookie()}` } }, out);
-  assert.equal(out.json().steps.filter((s) => s.name.startsWith("Delete") && s.ok).length, 4);
-  assert.equal(calls.filter((c) => c.method === "DELETE").length, 4);
+  const del = out.json().steps.find((s) => s.name === "Delete the test entries");
+  assert.ok(del.ok, del.detail);
+  assert.equal(calls.filter((c) => c.method === "DELETE").length, created.length, "every test entry it made");
   process.env.PROCORE_API_URL = "https://api.procore.com";
   out = res();
   await check({ method: "GET", url: "/api/procore/test-dailylog", headers }, out);

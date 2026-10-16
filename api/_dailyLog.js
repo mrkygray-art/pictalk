@@ -26,6 +26,10 @@ export const delayTypePaths = (companyId, projectId) => [
   `/rest/v1.0/companies/${companyId}/delay_log_types`,
 ];
 
+// A delay type's name: the sandbox answers display_name / english_or_display_name (no name), e.g.
+// { id, display_name: "Existing Conditions", translation_key: "existing_conditions", visible: true }
+export const delayTypeName = (t) => t?.name || t?.display_name || t?.english_or_display_name || t?.title || "";
+
 // Procore projects keep a Rails time zone name ("Pacific Time (US & Canada)"); the phone needs an IANA one
 const RAILS_ZONES = {
   "Pacific Time (US & Canada)": "America/Los_Angeles", "Mountain Time (US & Canada)": "America/Denver", Arizona: "America/Phoenix",

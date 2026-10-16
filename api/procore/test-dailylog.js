@@ -8,9 +8,9 @@
 // (Subcontractor - External) to see who gets a 403. Sandbox only. Same-origin JSON for the POST.
 import { config, HttpError, procoreId, requireSameOriginJson, readBody, sendError, sendJson } from "../_procore.js";
 import { listProjects } from "../_projects.js";
-import { procoreSend } from "../_procoreWrite.js";
+import { procoreSend, uploadFile } from "../_procoreWrite.js";
 import { TEST_PHOTO_JPEG_B64 } from "../_testPhoto.js";
-import { delayTypePaths, ianaZone, procoreFields, projectDay, requestFor, SECTIONS, SECTION_KEYS } from "../_dailyLog.js";
+import { delayTypeName, delayTypePaths, ianaZone, procoreFields, projectDay, requestFor, SECTIONS, SECTION_KEYS } from "../_dailyLog.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const pace = { gapMs: 450 }; // Procore allows about 25 calls per 10 seconds
@@ -105,64 +105,129 @@ export default async function handler(req, res) {
       step(`Read today's ${SECTIONS[s].label}`, r, r.ok ? `${list.length} entr${list.length === 1 ? "y" : "ies"} today` : r.status === 403 ? "Procore said no: this person can't see this part of the Daily Log" : r.status === 404 ? "Not found: is the Daily Log tool turned on for this project?" : `Procore answered ${r.status}: ${brief(r)}`);
     }
 
-    // 2. The project's delay types (B5: never created by SiteSnap)
-    let delayType = null;
+    // 2. The project's delay types (B5: never created by SiteSnap). The sandbox names them display_name.
+    let types = [];
     raw.delayTypes = [];
     for (const path of delayTypePaths(companyId, p)) {
       const r = await send("GET", path, { query: { project_id: p } });
-      const list = Array.isArray(r.json) ? r.json : [];
+      const list = Array.isArray(r.json) ? r.json.filter((t) => t.visible !== false && delayTypeName(t)) : [];
       raw.delayTypes.push({ path, status: r.status, count: list.length, first: shape(list[0]) ?? null });
       if (r.ok && list.length) {
-        delayType = list.find((t) => t.active !== false)?.name ?? list[0]?.name ?? null;
-        step("Read the project's delay types", r, `${list.length} type(s) at ${path}: ${list.slice(0, 10).map((t) => t.name ?? t.title).join(", ")}`);
+        types = list;
+        step("Read the project's delay types", r, `${list.length} type(s) at ${path}: ${list.map(delayTypeName).join(", ")}`);
         break;
       }
     }
-    if (!delayType) steps.push({ name: "Read the project's delay types", ok: false, status: raw.delayTypes.at(-1)?.status ?? 0, detail: `None of the known paths answered with a list (${raw.delayTypes.map((d) => d.status).join(", ")}). Delays will be sent without a type.` });
+    if (!types.length) steps.push({ name: "Read the project's delay types", ok: false, status: raw.delayTypes.at(-1)?.status ?? 0, detail: `None of the known paths answered with a list (${raw.delayTypes.map((d) => d.status).join(", ")}). Delays will be sent without a type.` });
+    const type = types[0] ?? null;
+
+    // A company to test the manpower company with: mine, else the project's first company
+    const vendors = await send("GET", `/rest/v1.0/projects/${p}/vendors`, { query: { per_page: 50 } });
+    const firstVendor = Array.isArray(vendors.json) ? vendors.json.find((v) => v.is_active !== false && v.name) : null;
+    const company = myCompany ?? (firstVendor ? { id: firstVendor.id, name: firstVendor.name } : null);
+    raw.company = { used: company, vendorsStatus: vendors.status };
 
     // 3. One test entry per section, exactly as the app sends it
     const photo = [{ type: "image/jpeg", bytes: Buffer.from(TEST_PHOTO_JPEG_B64, "base64") }];
     const tests = {
-      manpower: { entry: { workers: 1, hours: 1, company: myCompany?.id ?? null, comment: "SiteSnap test" }, photos: [] },
-      delays: { entry: { type: delayType ?? "", start: "07:00", end: "08:00", company: myCompany?.id ?? null, comment: "SiteSnap test delay" }, photos: photo },
-      deliveries: { entry: { what: "SiteSnap test delivery", time: "10:00", from: myCompany?.name ?? "SiteSnap test", comment: "SiteSnap test" }, photos: [] },
+      manpower: { entry: { workers: 1, hours: 1, company: company?.id ?? null, comment: "SiteSnap test" }, photos: [] },
+      delays: { entry: { type: type ? delayTypeName(type) : "", start: "07:00", end: "08:00", company: company?.id ?? null, comment: "SiteSnap test delay" }, photos: photo },
+      deliveries: { entry: { what: "SiteSnap test delivery", time: "10:00", from: company?.name ?? "SiteSnap test", comment: "SiteSnap test" }, photos: [] },
       notes: { entry: { text: "SiteSnap test note" }, photos: photo },
     };
-    const made = {};
+    const made = []; // [{ section, id, label }] for read-back and clean-up
+    const madeBy = {};
     raw.create = {};
     for (const s of SECTION_KEYS) {
       const t = tests[s];
       const fields = procoreFields(s, t.entry, { date: today });
       const r = await send("POST", `/rest/v1.0/projects/${p}/${SECTIONS[s].path}`, requestFor(s, fields, t.photos));
       raw.create[s] = { sent: { ...fields, attachments: t.photos.length }, status: r.status, answer: r.ok ? r.json : brief(r), headers: r.headers };
-      if (r.ok) made[s] = r.json?.id;
+      if (r.ok) { made.push({ section: s, id: r.json?.id, label: `${SECTIONS[s].label} (as the app sends it)` }); madeBy[s] = r.json?.id; }
       const a = r.json ?? {};
-      const kept = s === "manpower" ? `workers ${a.num_workers ?? "?"}, hours ${a.num_hours ?? "?"}, company ${a.contact?.name ?? a.vendor?.name ?? "BLANK"}`
-        : s === "delays" ? `type ${a.delay_type?.name ?? a.delay_type ?? "BLANK"}, ${a.start_time ?? "?"}–${a.end_time ?? "?"}, duration ${a.duration ?? "?"}, comments "${a.comments ?? a.notes ?? a.description ?? "BLANK"}", photos ${Array.isArray(a.attachments) ? a.attachments.length : "?"}`
+      const kept = s === "manpower" ? `workers ${a.num_workers ?? "?"}, hours ${a.num_hours ?? "?"}, company ${a.contact?.name ?? a.vendor?.name ?? "BLANK"}${company ? ` (sent ${company.name} as contact_id)` : " (no company to send)"}`
+        : s === "delays" ? `type "${a.delay_type?.name ?? a.delay_type ?? ""}" (sent "${fields.delay_type ?? ""}"), ${a.start_time_hour ?? "?"}:${String(a.start_time_minute ?? "?").padStart(2, "0")} to ${a.end_time ?? "?"}, company ${a.vendor?.name ?? "BLANK"}, comments "${a.comments ?? "BLANK"}"`
         : s === "deliveries" ? `from "${a.delivery_from ?? "BLANK"}", contents "${a.contents ?? "BLANK"}", time ${a.time_hour ?? "?"}:${a.time_minute ?? "?"}`
-        : `comment "${a.comment ?? "BLANK"}", photos ${Array.isArray(a.attachments) ? a.attachments.length : "?"}`;
-      step(`Add a test ${SECTIONS[s].label} entry${t.photos.length ? " with a photo" : ""}`, r, r.ok ? `Made id ${a.id} (status ${a.status ?? "not shown"}). Procore kept: ${kept}` : r.status === 403 ? "Procore said no: this person can't add this" : `Procore answered ${r.status}: ${brief(r)}`);
+        : `comment "${a.comment ?? "BLANK"}"`;
+      step(`Add a test ${SECTIONS[s].label} entry`, r, r.ok ? `Made id ${a.id} (status ${a.status ?? "not shown"}). Procore kept: ${kept}` : r.status === 403 ? "Procore said no: this person can't add this" : `Procore answered ${r.status}: ${brief(r)}`);
     }
 
-    // 4. Read back (B9 step 3)
+    // 4. How does a delay keep its type? One test delay per way of sending it.
+    raw.delayTypeTries = [];
+    if (type) {
+      const name = delayTypeName(type);
+      const tries = [
+        ["delay_type = the name", { delay_type: name }],
+        ["delay_type = the key", { delay_type: type.translation_key ?? "" }],
+        ["delay_type_id = the id", { delay_type_id: type.id }],
+        ["delay_log_type_id = the id", { delay_log_type_id: type.id }],
+      ];
+      for (const [label, extra] of tries) {
+        const r = await send("POST", `/rest/v1.0/projects/${p}/delay_logs`, { body: { delay_log: { date: today, comments: `SiteSnap test: ${label}`, ...extra } } });
+        const a = r.json ?? {};
+        const got = a.delay_type && typeof a.delay_type === "object" ? delayTypeName(a.delay_type) || JSON.stringify(a.delay_type) : a.delay_type ?? "";
+        const typeKeys = Object.fromEntries(Object.entries(a).filter(([k]) => /type/i.test(k)));
+        raw.delayTypeTries.push({ label, sent: extra, status: r.status, typeKeys });
+        if (r.ok) made.push({ section: "delays", id: a.id, label: `Delay (${label})` });
+        steps.push({ name: `Delay type: ${label}`, ok: r.ok && !!got, status: r.status, detail: r.ok ? (got ? `Kept: "${got}"` : "Made, but the type came back blank") : `Procore answered ${r.status}: ${brief(r)}` });
+      }
+    }
+
+    // 5. How do photos stick? Notes three more ways (the app's multipart way is the Notes entry above).
+    raw.photoTries = [];
+    const tryNote = async (label, opts) => {
+      const r = await send("POST", `/rest/v1.0/projects/${p}/notes_logs`, opts);
+      raw.photoTries.push({ label, status: r.status, attachmentsNow: Array.isArray(r.json?.attachments) ? r.json.attachments.length : null, error: brief(r) });
+      if (r.ok) made.push({ section: "notes", id: r.json?.id, label: `Note photo: ${label}` });
+      else steps.push({ name: `Note photo: ${label}`, ok: false, status: r.status, detail: `Procore answered ${r.status}: ${brief(r)}` });
+      return r;
+    };
+    const upload = await uploadFile(req, res, cfg, { companyId, projectId: p, name: "SiteSnap-test.jpg", type: "image/jpeg", bytes: photo[0].bytes });
+    raw.upload = upload.ok ? { ok: true } : upload;
+    if (upload.ok) {
+      await tryNote("upload_ids", { body: { notes_log: { date: today, comment: "SiteSnap test: photo by upload_ids", upload_ids: [upload.uuid] } } });
+      const up2 = await uploadFile(req, res, cfg, { companyId, projectId: p, name: "SiteSnap-test.jpg", type: "image/jpeg", bytes: photo[0].bytes });
+      if (up2.ok) await tryNote("attachments upload_uuid", { body: { notes_log: { date: today, comment: "SiteSnap test: photo by attachments upload_uuid", attachments: [{ upload_uuid: up2.uuid }] } } });
+    } else {
+      steps.push({ name: "Upload a test photo to Procore", ok: false, status: upload.status ?? 0, detail: `Procore's upload didn't work (${upload.step ?? "?"})` });
+    }
+    await tryNote("multipart attachments[] (top level)", { form: () => {
+      const f = new FormData();
+      f.append("notes_log[date]", today);
+      f.append("notes_log[comment]", "SiteSnap test: photo by top-level attachments[]");
+      f.append("attachments[]", new Blob([photo[0].bytes], { type: "image/jpeg" }), "SiteSnap-test.jpg");
+      return f;
+    } });
+
+    // 6. Read back after a few seconds (attachments can be processed after the answer)
+    if (pace.gapMs) await sleep(5000);
+    const lists = {};
     for (const s of SECTION_KEYS) {
-      if (!made[s]) continue;
       const r = await send("GET", `/rest/v1.0/projects/${p}/${SECTIONS[s].path}`, { query: { log_date: today } });
-      const found = Array.isArray(r.json) && r.json.some((x) => x.id === made[s]);
-      step(`Read back the ${SECTIONS[s].label} entry`, { ok: r.ok && found, status: r.status }, found ? "Found in today's list" : `Not in today's list (${r.status})`);
+      lists[s] = Array.isArray(r.json) ? r.json : [];
+      const found = lists[s].some((x) => x.id === madeBy[s]);
+      if (madeBy[s]) step(`Read back the ${SECTIONS[s].label} entry`, { ok: r.ok && found, status: r.status }, found ? "Found in today's list" : `Not in today's list (${r.status})`);
     }
+    const photosOn = (section, id) => { const x = lists[section].find((e) => e.id === id); return x ? (Array.isArray(x.attachments) ? x.attachments.length : 0) : null; };
+    for (const m of made.filter((x) => x.label.startsWith("Note photo") || (x.label.includes("as the app sends it") && ["delays", "notes"].includes(x.section)))) {
+      const n = photosOn(m.section, m.id);
+      steps.push({ name: `Photo stuck? ${m.label}`, ok: n > 0, status: 200, detail: n == null ? "Not found in today's list" : `${n} photo(s) on it in Procore` });
+    }
+    raw.photoReadBack = made.map((m) => ({ label: m.label, id: m.id, photos: photosOn(m.section, m.id) }));
 
-    // 5. Rate-limit headers (B9 step 7)
+    // 7. Rate-limit headers (B9 step 7)
     const rl = Object.values(raw.create).map((c) => c.headers).find((h) => h?.["x-rate-limit-limit"]) ?? {};
     steps.push({ name: "Rate-limit headers", ok: !!rl["x-rate-limit-limit"], status: 200, detail: rl["x-rate-limit-limit"] ? `limit ${rl["x-rate-limit-limit"]}, remaining ${rl["x-rate-limit-remaining"]}, reset ${rl["x-rate-limit-reset"]}` : "Not shown on these answers" });
 
-    // 6. Clean up (B9 step 8), only when asked
+    // 8. Clean up (B9 step 8), only when asked
     if (body.cleanup) {
-      for (const s of SECTION_KEYS) {
-        if (!made[s]) continue;
-        const r = await send("DELETE", `/rest/v1.0/projects/${p}/${SECTIONS[s].path}/${made[s]}`);
-        step(`Delete the test ${SECTIONS[s].label} entry`, r, r.ok ? "Deleted" : `Procore answered ${r.status}: ${brief(r)} (it stays, labeled "SiteSnap test")`);
+      let gone = 0;
+      const left = [];
+      for (const m of made) {
+        const r = await send("DELETE", `/rest/v1.0/projects/${p}/${SECTIONS[m.section].path}/${m.id}`);
+        if (r.ok) gone += 1; else left.push(`${m.label}: ${r.status}`);
       }
+      steps.push({ name: "Delete the test entries", ok: !left.length, status: 200, detail: `${gone} of ${made.length} deleted${left.length ? `; still there: ${left.join(", ")}` : ""}` });
     }
 
     sendJson(res, 200, { who, steps, raw });

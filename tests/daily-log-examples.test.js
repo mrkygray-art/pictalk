@@ -26,7 +26,7 @@ const USERS = [
   { id: 5, name: "Old Foreman", job_title: "Foreman", is_active: false },
 ];
 
-let calls, rows, probe, refuse, users, nextId, leftovers;
+let calls, rows, probe, refuse, users, nextId, leftovers, approved, pending;
 const reply = (u, init) => {
   const m = init.method ?? "GET";
   if (/\/projects\/373235\?/.test(u)) return [200, { id: 373235, name: "Westgate Distribution Center", time_zone: "Pacific Time (US & Canada)" }];
@@ -41,7 +41,8 @@ const reply = (u, init) => {
     const sent = JSON.parse(init.body ?? "{}");
     return [201, { id: nextId++, ...(s[1] === "delay" ? { delay_type: sent.delay_log?.delay_type === "material" ? "material" : "" } : {}) }];
   }
-  if (s && m === "DELETE") return s[2] === "404404" ? [404, { errors: "Not found" }] : [204, null];
+  if (s && m === "PATCH") { pending.add(s[2]); return [200, { id: Number(s[2]), status: "pending" }]; }
+  if (s && m === "DELETE") return s[2] === "404404" ? [404, { errors: "Not found" }] : approved.has(s[2]) && !pending.has(s[2]) ? [403, { errors: "You do not have sufficient access to complete that action." }] : [204, null];
   return [404, { errors: "Not found" }];
 };
 
@@ -67,6 +68,8 @@ beforeEach(() => {
   users = USERS;
   nextId = 5000;
   leftovers = {};
+  approved = new Set();
+  pending = new Set();
   saved = { fetch: globalThis.fetch, env: { ...process.env } };
   Object.assign(process.env, ENV);
   setStore(fakeDb);
@@ -331,4 +334,15 @@ test("extra foremen: in existing test companies, and the test-people cleanup alw
   const users = EXTRA_FOREMEN.map((f, i) => ({ id: 90 + i, name: `${f.user.first_name} ${f.user.last_name}`, email_address: f.user.email_address, is_active: true }));
   assert.ok(cleanupPlan({ users, vendors: [], meId: 1 }).users.every((r) => r.action === "keep" && !r.checked));
   assert.deepEqual(findForemen(users.map((u, i) => ({ ...u, job_title: EXTRA_FOREMEN[i].user.job_title }))).candidates.map((c) => c.trade), ["plumbing", "electrical"]);
+});
+
+test("delete: an approved entry Procore refuses (403) is set back to pending, then deleted", async () => {
+  await post({ action: "send", companyId: C, projectId: P, sample: { ...oneSample(), delivery: null, delay: null } });
+  approved.add("5000");
+  const out = (await post({ action: "delete", companyId: C, projectId: P })).json();
+  assert.ok(out.rows.every((r) => r.status === "deleted"), JSON.stringify(out.rows));
+  assert.match(out.rows.find((r) => r.procoreId === "5000").error, /Set back to pending, then deleted/);
+  const patch = calls.find((c) => c.method === "PATCH");
+  assert.deepEqual(JSON.parse(patch.body), { manpower_log: { status: "pending" } });
+  assert.equal(rows.get(KEY).size, 0);
 });

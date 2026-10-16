@@ -334,6 +334,19 @@ const refusal = (r) => {
   const plain = r.status === 403 ? "No Daily Log access for this part on this project. " : r.status === 404 ? "The Daily Log tool looks turned off on this project. " : r.status === 429 ? "Procore is busy; wait a minute and send again. " : "";
   return `${plain}Procore answered ${r.status}: ${said || "no details"}`;
 };
+// Delete one Daily Log entry. Procore answers 403 to deleting an approved entry, even for the admin who made it
+// (sandbox, 2026-10-16: every refused one was "approved"), so on a 403 the entry goes back to pending first.
+// { r, note }: Procore's last answer, and what was tried.
+async function deleteEntry(req, res, cfg, companyId, projectId, section, id) {
+  const path = `/rest/v1.0/projects/${projectId}/${SECTIONS[section].path}/${id}`;
+  const r = await api(req, res, cfg, "DELETE", path, { companyId });
+  if (r.status !== 403) return { r, note: "" };
+  const back = await api(req, res, cfg, "PATCH", path, { companyId, body: { [SECTIONS[section].root]: { status: "pending" } } });
+  if (!back.ok) return { r, note: ` Setting it back to pending was refused too (${back.status}: ${procoreMessage(back) || "no details"}).` };
+  const again = await api(req, res, cfg, "DELETE", path, { companyId });
+  return { r: again, note: again.ok ? "Set back to pending, then deleted" : ` Set back to pending (status now ${back.json?.status ?? "not shown"}), but the delete was still refused.` };
+}
+
 const ledgerRef = (db, key) => db.collection("procoreProjects").doc(key).collection(LEDGER);
 
 async function send(req, res, cfg, companyId, projectId, body) {
@@ -403,16 +416,16 @@ async function remove(req, res, cfg, companyId, projectId) {
     const section = SECTIONS[v?.section] ? v.section : null;
     const label = section ? SECTIONS[section].label : String(v?.section ?? "?");
     if (!section || !procoreId(String(v.procoreId ?? ""))) { await ref.doc(d.id).delete(); rows.push({ label, status: "skipped", error: "Bad ledger row, removed" }); continue; }
-    const r = await api(req, res, cfg, "DELETE", `/rest/v1.0/projects/${projectId}/${SECTIONS[section].path}/${v.procoreId}`, { companyId });
+    const { r, note } = await deleteEntry(req, res, cfg, companyId, projectId, section, v.procoreId);
     if (r.status === 401) throw new HttpError(401, "not_connected", "Your Procore sign-in ran out. Sign in with Procore again, then delete again.");
     if (r.ok || r.status === 404) {
       await ref.doc(d.id).delete();
-      rows.push({ label, date: v.date, status: r.ok ? "deleted" : "skipped", procoreId: v.procoreId, error: r.ok ? null : "Already gone from Procore" });
+      rows.push({ label, date: v.date, status: r.ok ? "deleted" : "skipped", procoreId: v.procoreId, error: r.ok ? note || null : "Already gone from Procore" });
     } else {
       // Say what the entry looks like in Procore (approval status, who made it), to see why a delete is refused
       const one = await api(req, res, cfg, "GET", `/rest/v1.0/projects/${projectId}/${SECTIONS[section].path}/${v.procoreId}`, { companyId });
       const seen = one.ok ? ` The entry in Procore: status ${one.json?.status ?? "not shown"}, made by ${one.json?.created_by?.name ?? "not shown"}, date ${one.json?.date ?? v.date}.` : ` (Reading the entry: ${one.status}.)`;
-      rows.push({ label, date: v.date, status: "failed", procoreId: v.procoreId, error: `Procore wouldn't delete it. Procore answered ${r.status}: ${procoreMessage(r) || "no details"}.${seen} It stays in the ledger; try again later.` });
+      rows.push({ label, date: v.date, status: "failed", procoreId: v.procoreId, error: `Procore wouldn't delete it. Procore answered ${r.status}: ${procoreMessage(r) || "no details"}${note}${seen} It stays in the ledger.` });
     }
   }
   return { rows };
@@ -440,8 +453,8 @@ async function checkEntries(req, res, cfg, companyId, projectId, dryRun) {
   if (dryRun) return { found };
   const rows = [];
   for (const f of found) {
-    const r = await api(req, res, cfg, "DELETE", `/rest/v1.0/projects/${projectId}/${SECTIONS[f.section].path}/${f.id}`, { companyId });
-    rows.push({ label: SECTIONS[f.section].label, date: f.date, procoreId: f.id, status: r.ok ? "deleted" : r.status === 404 ? "skipped" : "failed", error: r.ok ? null : refusal(r) });
+    const { r, note } = await deleteEntry(req, res, cfg, companyId, projectId, f.section, f.id);
+    rows.push({ label: SECTIONS[f.section].label, date: f.date, procoreId: f.id, status: r.ok ? "deleted" : r.status === 404 ? "skipped" : "failed", error: r.ok ? note || null : `${refusal(r)}${note}` });
   }
   return { rows };
 }

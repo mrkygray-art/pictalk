@@ -16,12 +16,16 @@
 // POST { action: "checkentries", companyId, projectId, dryRun } : the entries the Daily Log check page
 //      (api/procore/test-dailylog.js) left behind in the last 5 working days: text starting "SiteSnap test". Lists
 //      them (dryRun), else deletes them. Nothing else is touched.
+// POST { action: "addforemen", companyId, projectId } : adds the two extra foremen (api/_seedDirectory.js
+//      EXTRA_FOREMEN, in existing test companies) to the project with the test-people page's own steps: their
+//      company onto the project, the person created or updated, added, permission template. Safe to run again.
 // Entries are created as the signed-in person (Procore has no "on behalf of"): the foreman is named in the Notes
 // ("Reported by: …") and their company is the manpower / delay company. Every Notes entry ends with the marker.
 // Paced (about 2 calls a second); a 429 waits out Procore's window and tries once more. Same-origin JSON for POSTs.
 import { config, HttpError, procoreId, readBody, requireSameOriginJson, sendError, sendJson } from "../_procore.js";
 import { firestore } from "../_firestore.js";
-import { api, pages } from "../_seedSteps.js";
+import { addCompany, addPerson, api, pages } from "../_seedSteps.js";
+import { EXTRA_FOREMEN, permissionTemplateFor, SEED } from "../_seedDirectory.js";
 import { cleanEntry, delayTypeName, delayTypePaths, procoreFields, procoreMessage, projectDay, requestFor, SECTIONS } from "../_dailyLog.js";
 import { findForemen, guessStage, makeSamples, MARKER, STAGES, TRADES, workingDays } from "../_dailyLogExamples.js";
 
@@ -59,6 +63,7 @@ table{border-collapse:collapse;width:100%;font-size:14px;margin:8px 0}td,th{bord
 const $=(s)=>document.querySelector(s);
 const esc=(s)=>String(s??'').replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const STAGES=${JSON.stringify(STAGES)};
+const EXTRA=${JSON.stringify(EXTRA_FOREMEN.map((f) => `${f.user.first_name} ${f.user.last_name} (${f.user.job_title}, ${SEED[f.company].vendor.name})`))};
 const TRADES=${JSON.stringify(Object.fromEntries(Object.entries(TRADES).map(([k, t]) => [k, t.label])))};
 let P=[]; let ledger={}; let editing=null;
 const post=async(body)=>{ const r=await fetch('/api/procore/daily-log-examples',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const b=await r.json().catch(()=>({message:'No answer from the server'})); if(!r.ok) throw new Error(b.message||('Failed ('+r.status+')')); return b; };
@@ -129,11 +134,13 @@ function render(){
         +(c.candidates.length?'':'<p class="warn">No foreman found in this project\\'s directory. Pick someone from the directory below, or untick the project to skip it.</p>')
         +'<div>'+(p.picked.map((f,i)=>chip(p,f,i)).join('')||'<small>No one picked.</small>')+'</div>'
         +'<p><select data-act="pick" data-k="'+k+'"><option value="">Add someone…</option>'+(cands.length?'<optgroup label="Foreman candidates">'+cands.map(opt).join('')+'</optgroup>':'')+(others.length?'<optgroup label="Everyone else in the directory">'+others.map(opt).join('')+'</optgroup>':'')+'</select></p>';
-    } else body='<p><small>Foremen not loaded yet.</small></p>';
+    } else body='<p><small>Foremen not loaded yet: press Find Foremen.</small></p>';
+    const addBtn=(!c||!c.error)&&!(c&&['no_access','tool_off','no_project'].includes(c.access))?'<button class="small ghost" data-act="addforemen" data-k="'+k+'">Add 2 foremen</button>':'';
     const cards=p.samples.map((s,j)=>card(p,s,j)).join('');
     const btns=(c&&c.access==='ok'?'<button class="small ghost" data-act="regen" data-k="'+k+'">'+(p.samples.length?'Regenerate all 3':'Generate 3')+'</button>':'')
       +(p.samples.length?'<button class="small" data-act="send" data-k="'+k+'">Send this project\\'s samples</button>':'')
       +(made?'<button class="small danger" data-act="del" data-k="'+k+'">Delete samples I created here ('+made+')</button>':'')
+      +addBtn
       +(c&&c.access==='ok'?'<button class="small ghost" data-act="checkleft" data-k="'+k+'">Clear old "SiteSnap test" entries</button>':'');
     return '<div class="proj"><label class="row"><input type="checkbox" data-act="on" data-k="'+k+'"'+(p.on?' checked':'')+'><span><b>'+esc(p.name)+'</b> <small>ID '+esc(p.projectId)+'</small>'+(made?' <span class="tag">'+made+' entr'+(made===1?'y':'ies')+' made by this page</span>':'')+'</span></label>'
       +(p.on?body+cards+'<div>'+btns+'</div>'+results(p):'')+'</div>';
@@ -238,6 +245,13 @@ $('#list').addEventListener('click',async(e)=>{
       const todo=p.samples.filter(x=>!x.sent); if(!todo.length){ alert('Every sample here is already sent.'); return; }
       if(!confirm('Create '+todo.length+' sample Daily Logs ('+todo.reduce((a,x)=>a+entriesOf(x),0)+' entries) in Procore, in "'+p.name+'"?\\n\\nThey are created as you.')) return;
       t.disabled=true; status('Sending '+esc(p.name)+'…'); await sendProject(p); await refreshLedger(); render(); status('Done: '+esc(p.name)+'.');
+    }
+    if(act==='addforemen'){
+      if(!confirm('Add these 2 foremen to "'+p.name+'" in Procore?'+String.fromCharCode(10,10)+EXTRA.map(x=>'• '+x).join(String.fromCharCode(10))+String.fromCharCode(10,10)+'Their companies are added to the project if needed. Running it again never makes duplicates.')) return;
+      t.disabled=true; status('Adding 2 foremen to '+esc(p.name)+'… (about 30 seconds)');
+      const b=await post({action:'addforemen',companyId:p.companyId,projectId:p.projectId});
+      p.results=b.steps.map(s=>({n:'',label:s.name,status:s.ok?'created':'failed',error:s.ok?s.detail:s.detail}));
+      await loadCrew(p); render(); status('Done: '+esc(p.name)+'. Foremen reloaded.');
     }
     if(act==='checkleft'){
       t.disabled=true; const f=(await post({action:'checkentries',companyId:p.companyId,projectId:p.projectId,dryRun:true})).found;
@@ -427,6 +441,19 @@ async function checkEntries(req, res, cfg, companyId, projectId, dryRun) {
   return { rows };
 }
 
+// ---------- two extra foremen ----------
+
+async function addForemen(req, res, cfg, companyId, projectId) {
+  const steps = [];
+  for (const f of EXTRA_FOREMEN) {
+    const seed = SEED[f.company];
+    const co = await addCompany(req, res, cfg, companyId, projectId, seed);
+    steps.push(...co.steps);
+    if (co.vendorId) steps.push(...await addPerson(req, res, cfg, companyId, projectId, seed, f.user, co.vendorId, permissionTemplateFor));
+  }
+  return { steps };
+}
+
 export default async function handler(req, res) {
   try {
     const cfg = config();
@@ -449,6 +476,7 @@ export default async function handler(req, res) {
     if (body.action === "crew") return sendJson(res, 200, await crew(req, res, cfg, companyId, projectId, text(body.name, 200)));
     if (body.action === "send") return sendJson(res, 200, await send(req, res, cfg, companyId, projectId, body));
     if (body.action === "delete") return sendJson(res, 200, await remove(req, res, cfg, companyId, projectId));
+    if (body.action === "addforemen") return sendJson(res, 200, await addForemen(req, res, cfg, companyId, projectId));
     if (body.action === "checkentries") return sendJson(res, 200, await checkEntries(req, res, cfg, companyId, projectId, body.dryRun !== false));
     throw new HttpError(400, "bad_request", "Unknown action.");
   } catch (err) {

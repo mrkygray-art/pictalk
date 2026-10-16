@@ -76,6 +76,15 @@ export const SEED = [
   },
 ];
 
+// Two extra foremen in existing test companies, added per project by the Daily Log Examples page
+// (api/procore/daily-log-examples.js, Ky 2026-10-16) to projects that need someone to write sample logs as.
+// company = the index of their company in SEED. The cleanup below always keeps them.
+export const EXTRA_FOREMEN = [
+  { company: 2, user: person("Derek", "Lawson", "dlawson", "DL", "Plumbing Foreman", "Worker", "Foreman", "(424) 555-0155", 305) },
+  { company: 1, user: person("Maria", "Santos", "msantos", "MS", "Electrical Foreman", "Worker", "Foreman", "(310) 555-0135", 105) },
+];
+const extraEmails = new Set(EXTRA_FOREMEN.map((f) => f.user.email_address.toLowerCase()));
+
 // Permission templates (Ky's permission_template_matching.md, 2026-10-14). Ironbridge is the GC (Ky's company),
 // so its people are Internal: the PM gets Project Manager, everyone else Foreman / Superintendent (the laborer and
 // safety coordinator are a judgment call: closest Internal template). Every other company is a subcontractor, so all
@@ -154,6 +163,7 @@ export function cleanupPlan({ users, vendors, meId }) {
     if (vid && protectedVendorIds.has(vid)) return { ...row, action: "keep", reason: "Architect TEST Company" };
     if (isSeedEmail(u.email_address)) return { ...row, action: "reuse", reason: "new test person, updated" };
     if (isDemoEmail(u.email_address)) return { ...row, action: "keep", reason: "demo person (Demo staging page)" };
+    if (extraEmails.has(email(u))) return { ...row, action: "keep", reason: "sample foreman (Daily Log Examples page)" };
     if (!row.active) return { ...row, action: "keep", reason: "already inactive" };
     if (email(u).includes("mrkygray+") || /sonletric/i.test(row.detail)) return { ...row, action: "remove", checked: true, reason: "earlier test data" };
     return { ...row, action: "ask", reason: "not sure: tick to remove" };

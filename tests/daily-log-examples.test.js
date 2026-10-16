@@ -324,3 +324,11 @@ test("check entries: finds only the check page's 'SiteSnap test' entries, delete
   assert.ok(out.rows.every((r) => r.status === "deleted"));
   assert.deepEqual(calls.filter((c) => c.method === "DELETE").map((c) => c.url.replace(/^.*\/projects\/373235\//, "")).sort(), ["delay_logs/41", "delivery_logs/31", "manpower_logs/11", "notes_logs/21"]);
 });
+
+test("extra foremen: in existing test companies, and the test-people cleanup always keeps them", async () => {
+  const { EXTRA_FOREMEN, SEED, cleanupPlan } = await import("../api/_seedDirectory.js");
+  assert.deepEqual(EXTRA_FOREMEN.map((f) => [f.user.job_title, SEED[f.company].vendor.name]), [["Plumbing Foreman", "ClearFlow Plumbing & Mechanical"], ["Electrical Foreman", "VoltLine Electric Inc."]]);
+  const users = EXTRA_FOREMEN.map((f, i) => ({ id: 90 + i, name: `${f.user.first_name} ${f.user.last_name}`, email_address: f.user.email_address, is_active: true }));
+  assert.ok(cleanupPlan({ users, vendors: [], meId: 1 }).users.every((r) => r.action === "keep" && !r.checked));
+  assert.deepEqual(findForemen(users.map((u, i) => ({ ...u, job_title: EXTRA_FOREMEN[i].user.job_title }))).candidates.map((c) => c.trade), ["plumbing", "electrical"]);
+});

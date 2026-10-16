@@ -24,10 +24,16 @@ async function call(req, res, cfg, method, path, { companyId, query, body } = {}
   }
   let json = null;
   try { json = await resp.json(); } catch { /* empty or not JSON */ }
-  return { status: resp.status, ok: resp.ok, json };
+  // Paging and rate-limit headers only (Total, Per-Page, Link, X-Rate-Limit-*)
+  const headers = {};
+  for (const k of ["total", "per-page", "link", "x-rate-limit-limit", "x-rate-limit-remaining", "x-rate-limit-reset"]) {
+    const v = resp.headers?.get?.(k);
+    if (v) headers[k] = v;
+  }
+  return { status: resp.status, ok: resp.ok, json, headers };
 }
 
-/** A Procore API call; returns { status, ok, json } and never throws on a Procore error answer. */
+/** A Procore API call; returns { status, ok, json, headers } and never throws on a Procore error answer. */
 export const procoreSend = (req, res, cfg, method, path, opts) => call(req, res, cfg, method, path, opts);
 
 /**

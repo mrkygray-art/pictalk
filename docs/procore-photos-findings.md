@@ -11,7 +11,13 @@ Status 2026-10-15: **desk check done, sandbox run pending.** Ky has turned on th
 | 3 | Description | `image.description` can be sent on Create Image and changed later. The reference gives no length limit. | pending (the check sends 3,000 characters by update and reads back what's kept) |
 | 4 | Listing and paging | `GET /rest/v1.0/images?project_id=` with `image_category_id`, `page`, `per_page`, `sort` (`-created_at`, `taken_at`, …), and `filters[created_at]`, `filters[log_date]`, `filters[trade_ids][]`, `filters[location_id][]`, `filters[uploader_id][]`, `filters[query]`. | pending (the check reads the Total / Per-Page / Link headers) |
 | 5 | Thumbnails | Every image has `thumbnail_url` and `url`. | pending (whether they open without a sign-in and whether they expire) |
-| 6 | Rate limits | Procore's documented 3,600 calls an hour per token, plus the spike limit we already hit (~25 calls per 10 s; see `PROCORE_API_NOTES.md`). | pending (the check records the X-Rate-Limit headers) |
+| 6 | Rate limits | Procore's documented 3,600 calls an hour per token, plus the spike limit we already hit (~25 calls per 10 s; see `PROCORE_API_NOTES.md`). | Headers show the spike window: `X-Rate-Limit-Limit: 25`, remaining 17 after 8 calls. Offline sync must pace uploads (each photo = 3 calls: upload slot, storage, Create Image). |
+
+## Sandbox notes
+
+- Each project starts with one public album, **Unclassified** (Procore's default).
+- The album list returns `cover_photo` (not `album_cover_id`), plus `count`, `created_at`, `updated_at`, `links` and `position`, which covers the spec's album row (thumbnail, name, count, last updated).
+- The sandbox company has no trades and the project has no locations yet, so trade and location tagging is untested.
 
 ## Findings that may change the design (Ky to decide)
 

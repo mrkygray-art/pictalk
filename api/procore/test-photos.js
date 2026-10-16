@@ -105,12 +105,17 @@ export default async function handler(req, res) {
     const proj = await send("GET", `/rest/v1.0/projects/${p}`, { query: { company_id: companyId } });
     const today = projectDate(proj.json?.time_zone);
     raw.project = { timeZone: proj.json?.time_zone ?? null, today };
-    const who = `Signed in as ${me.json?.name ?? "?"}. Project date today: ${today} (${proj.json?.time_zone ?? "time zone not shown"})`;
+    // The person's permission template on this project (the Photos level inside it is admin-only to read)
+    const users = await send("GET", `/rest/v1.0/projects/${p}/users`, { query: { per_page: 200 } });
+    const mine = Array.isArray(users.json) ? users.json.find((u) => String(u.id) === String(me.json?.id)) : null;
+    const template = mine?.permission_template?.name ?? "none shown";
+    raw.template = template;
+    const who = `Signed in as ${me.json?.name ?? "?"} (template here: ${template}). Project date today: ${today} (${proj.json?.time_zone ?? "time zone not shown"})`;
 
     // 1. Albums: list, then find or create the test album (public)
     const cats = await send("GET", "/rest/v1.0/image_categories", { query: q({ per_page: 100 }) });
     const albums = Array.isArray(cats.json) ? cats.json : [];
-    raw.albums = { keys: albums[0] ? Object.keys(albums[0]) : [], list: albums.slice(0, 20).map((a) => ({ id: a.id, name: a.name, private: a.private, count: a.count, album_cover_id: a.album_cover_id ?? null })), headers: cats.headers };
+    raw.albums = { keys: albums[0] ? Object.keys(albums[0]) : [], list: albums.slice(0, 20).map((a) => ({ id: a.id, name: a.name, private: a.private, count: a.count, cover_photo: a.cover_photo && typeof a.cover_photo === "object" ? Object.keys(a.cover_photo) : a.cover_photo ?? null })), headers: cats.headers };
     step("List albums", cats, cats.ok ? `${albums.length} album(s); ${albums.filter((a) => a.private).length} private. ${albums.slice(0, 8).map((a) => `${a.name}${a.private ? " (private)" : ""}: ${a.count ?? "?"}`).join(", ")}`
       : cats.status === 403 ? "Procore said no: this person can't see Photos here (or the tool is off in this project)" : `Procore answered ${cats.status}: ${brief(cats)}`);
     let album = albums.find((a) => a.name === TEST_ALBUM);
@@ -121,6 +126,12 @@ export default async function handler(req, res) {
       if (made.ok) album = made.json;
       raw.createAlbum = made.ok ? { id: made.json?.id, private: made.json?.private, keys: Object.keys(made.json ?? {}) } : { error: brief(made) };
       step("Create an album (question 1)", made, made.ok ? `Yes: made "${made.json?.name}" (id ${made.json?.id}, private: ${made.json?.private})` : `No: Procore answered ${made.status}: ${brief(made)}`);
+    }
+    // Can't make one (the spec's fallback): try the upload into an existing public album instead
+    if (!album) {
+      album = albums.find((a) => !a.private);
+      if (album) steps.push({ name: "Fallback: use an existing album", ok: true, status: 200, detail: `uploading into "${album.name}" (id ${album.id}) instead` });
+      else steps.push({ name: "Fallback: use an existing album", ok: false, status: 0, detail: "no public album to upload into" });
     }
 
     // Native trade and location fields, if the project has any (Create Image takes trade_ids and location_id)

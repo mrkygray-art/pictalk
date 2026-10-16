@@ -9,7 +9,7 @@ const ENV = {
   PROCORE_CLIENT_ID: "id", PROCORE_CLIENT_SECRET: "secret-never-leak", PROCORE_LOGIN_URL: "https://login-sandbox.procore.test",
   PROCORE_API_URL: "https://sandbox.procore.test", SESSION_SECRET: "test-session-secret-32-bytes-long!!",
 };
-let calls, saved, albums, refuseImages, stored;
+let calls, saved, albums, refuseImages, refuseAlbums, stored;
 const RL = { "x-rate-limit-limit": "3600", "x-rate-limit-remaining": "3590", "x-rate-limit-reset": "1760000000" };
 const reply = (u, init) => {
   const m = init.method ?? "GET";
@@ -19,6 +19,8 @@ const reply = (u, init) => {
   if (/\/projects\/373235\?/.test(u)) return [200, { id: 373235, time_zone: "America/Los_Angeles" }];
   if (/\/projects\?|\/companies\?/.test(u)) return [200, /companies/.test(u) ? [{ id: 4291776, name: "Kyco", is_active: true }] : [{ id: 373235, name: "Sandbox Test Project" }]];
   if (/image_categories/.test(u) && m === "GET") return [200, albums, RL];
+  if (/\/projects\/373235\/users/.test(u)) return [200, [{ id: 481274, name: "Edward Gray", permission_template: { id: 2, name: "Subcontractor - External" } }]];
+  if (/image_categories/.test(u) && m === "POST" && refuseAlbums) return [403, { errors: "You do not have sufficient access to complete that action." }];
   if (/image_categories/.test(u) && m === "POST") { const a = { id: 77, name: JSON.parse(init.body).image_category.name, private: false, count: 0 }; albums.push(a); return [201, a]; }
   if (/\/companies\/4291776\/trades/.test(u)) return [200, [{ id: 5, name: "Electrical", active: true }]];
   if (/\/projects\/373235\/locations/.test(u)) return [200, [{ id: 9, name: "Level 2 East" }]];
@@ -40,6 +42,7 @@ beforeEach(() => {
   calls = [];
   albums = [{ id: 1, name: "Site Photos", private: false, count: 4 }, { id: 2, name: "Owner only", private: true, count: 1 }];
   refuseImages = false;
+  refuseAlbums = false;
   stored = null;
   pace.gapMs = 0;
   saved = { fetch: globalThis.fetch, env: { ...process.env }, log: console.log };
@@ -96,6 +99,17 @@ test("photos check: makes the test album once, uploads one public photo with des
   const again = (await run()).json();
   assert.match(stepNamed(again, "Create an album").detail, /already exists/);
   assert.ok(!calls.some((c) => c.method === "POST" && /image_categories/.test(c.url)));
+});
+
+test("photos check: someone who can't make albums still tries the upload into an existing public album", async () => {
+  refuseAlbums = true;
+  const b = (await run()).json();
+  assert.match(b.who, /template here: Subcontractor - External/);
+  assert.equal(stepNamed(b, "Create an album").ok, false);
+  assert.match(stepNamed(b, "Fallback").detail, /"Site Photos" \(id 1\)/);
+  const img = JSON.parse(calls.find((c) => c.method === "POST" && /\/images\?/.test(c.url)).body);
+  assert.equal(img.image.image_category_id, 1, "never the private album");
+  assert.ok(stepNamed(b, "Add a photo").ok);
 });
 
 test("photos check: a person without Standard on Photos gets the plain-language refusal", async () => {

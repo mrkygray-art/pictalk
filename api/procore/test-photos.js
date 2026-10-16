@@ -7,7 +7,7 @@
 //   public, reused on later runs) and ONE test photo into it; delete them in Procore afterwards if you like.
 // Run it as an admin, then as a test person with less than Standard on Photos, to see the refusal.
 // Sandbox only (PROCORE_API_URL must be Procore's sandbox). Same-origin JSON for the POST.
-import { config, HttpError, procoreId, requireSameOriginJson, readBody, sendError, sendJson } from "../_procore.js";
+import { config, HttpError, procoreId, requireSameOriginJson, readBody, sendError, sendJson, session } from "../_procore.js";
 import { listProjects } from "../_projects.js";
 import { procoreSend, uploadFile } from "../_procoreWrite.js";
 import { TEST_PHOTO_JPEG_B64 } from "../_testPhoto.js";
@@ -22,12 +22,20 @@ function projectDate(timeZone) {
   try { return new Intl.DateTimeFormat("en-CA", { timeZone: timeZone || "America/Los_Angeles" }).format(new Date()); }
   catch { return new Date().toISOString().slice(0, 10); }
 }
+// The project's UTC offset today, like "-07:00" (created_at filters are UTC unless given an offset)
+function projectOffset(timeZone) {
+  try {
+    const part = new Intl.DateTimeFormat("en-US", { timeZone: timeZone || "America/Los_Angeles", timeZoneName: "longOffset" }).formatToParts(new Date()).find((x) => x.type === "timeZoneName")?.value ?? "";
+    const m = /GMT([+-]\d{2}:\d{2})/.exec(part);
+    return m ? m[1] : "+00:00";
+  } catch { return "+00:00"; }
+}
 // What a link needs, never the link itself: host, whether it signs/expires, and the query names only
 function linkShape(u) {
   try {
     const url = new URL(u);
     const names = [...url.searchParams.keys()];
-    return { host: url.host, query: names, signed: names.some((n) => /signature|expires|token|policy|key-pair/i.test(n)) };
+    return { host: url.host, query: names, signed: names.some((n) => /^sig$|signature|expires|token|policy|key-pair/i.test(n)) };
   } catch { return { host: null, query: [], signed: false }; }
 }
 const brief = (r) => (r.ok ? null : typeof r.json === "object" ? JSON.stringify(r.json).slice(0, 300) : String(r.json ?? ""));
@@ -63,7 +71,7 @@ $('#run').onclick=async()=>{
   const b=await r.json().catch(()=>({message:'No answer'}));
   if(!r.ok){ $('#out').innerHTML='<p class="bad">'+esc(b.message||'Failed')+'</p>'; $('#run').disabled=false; return; }
   $('#out').innerHTML='<p><b>'+esc(b.who)+'</b></p>'+(b.steps||[]).map(s=>'<div class="step"><b class="'+(s.ok?'ok':s.status===404?'maybe':'bad')+'">'+(s.ok?'✓':'✗')+' '+esc(s.name)+'</b> <small>('+s.status+')</small><br><small>'+esc(s.detail)+'</small></div>').join('')
-    +(b.thumb?'<p><small>Thumbnail as the page loads it (no Procore sign-in sent):</small><br><img src="'+esc(b.thumb)+'" alt="test photo thumbnail"></p>':'')
+    +(b.thumb?'<p><small>Thumbnail as your browser loads it straight from Procore (a foreman&rsquo;s phone has no Procore sign-in, so this may only work for you):</small><br><img src="'+esc(b.thumb)+'" alt="test photo thumbnail"></p>':'')
     +'<p><small>Copy everything on this page (or take screenshots) and send it to Claude.</small></p><pre style="white-space:pre-wrap;font-size:12px;color:#b8ac9c">'+esc(JSON.stringify(b.raw,null,1))+'</pre>';
   $('#run').disabled=false;
 };
@@ -109,7 +117,7 @@ export default async function handler(req, res) {
     const users = await send("GET", `/rest/v1.0/projects/${p}/users`, { query: { per_page: 200 } });
     const mine = Array.isArray(users.json) ? users.json.find((u) => String(u.id) === String(me.json?.id)) : null;
     const template = mine?.permission_template?.name ?? "none shown";
-    raw.template = template;
+    raw.template = { name: template, usersStatus: users.status, usersCount: Array.isArray(users.json) ? users.json.length : null, meFound: !!mine };
     const who = `Signed in as ${me.json?.name ?? "?"} (template here: ${template}). Project date today: ${today} (${proj.json?.time_zone ?? "time zone not shown"})`;
 
     // 1. Albums: list, then find or create the test album (public)
@@ -190,7 +198,8 @@ export default async function handler(req, res) {
       raw.listByAlbum = { count: Array.isArray(byAlbum.json) ? byAlbum.json.length : null, headers: byAlbum.headers, keys: Array.isArray(byAlbum.json) && byAlbum.json[0] ? Object.keys(byAlbum.json[0]) : [] };
       step("List photos in an album, 1 per page (question 4)", byAlbum, byAlbum.ok ? `Total header: ${byAlbum.headers?.total ?? "none"}; Per-Page: ${byAlbum.headers?.["per-page"] ?? "none"}; Link: ${byAlbum.headers?.link ? "yes" : "none"}` : `Procore answered ${byAlbum.status}: ${brief(byAlbum)}`);
       const filters = [
-        ["created today", { "filters[created_at]": `${today}...${today}` }],
+        ["created today (date only, UTC)", { "filters[created_at]": `${today}...${today}` }],
+        ["created today (project day with its offset)", { "filters[created_at]": `${today}T00:00:00${projectOffset(proj.json?.time_zone)}...${today}T23:59:59${projectOffset(proj.json?.time_zone)}` }],
         ["log date today", { "filters[log_date]": today }],
         ...(trade ? [["this trade", { "filters[trade_ids][]": trade.id }]] : []),
       ];
@@ -201,19 +210,31 @@ export default async function handler(req, res) {
         step(`List photos ${label} (question 4)`, r, r.ok ? `${r.headers?.total ?? list.length} photo(s); test photo ${list.some((x) => x.id === image.id) ? "is" : "is NOT"} in the list` : `Procore answered ${r.status}: ${brief(r)}`);
       }
 
-      // 5. Thumbnails: which fields, and do they open without a Procore sign-in?
-      const shown = back.json ?? image;
-      const urlFields = Object.keys(shown).filter((k) => /url/i.test(k) && typeof shown[k] === "string");
+      // 5. Thumbnails: the list's link fields, opened without and with the person's Procore sign-in.
+      // The token is only sent to Procore's own host, never returned.
+      const listed = (Array.isArray(byAlbum.json) ? byAlbum.json.find((x) => x.id === image.id) ?? byAlbum.json[0] : null) ?? image;
+      const urlFields = Object.keys(listed).filter((k) => /url/i.test(k) && typeof listed[k] === "string");
+      const at = (await session(req, res, cfg))?.at;
+      const apiHost = new URL(cfg.apiUrl).host;
+      const open = async (u, auth) => {
+        try {
+          const t = await fetch(u, { method: "GET", redirect: "follow", headers: auth ? { Authorization: `Bearer ${at}`, "Procore-Company-Id": String(companyId) } : {} });
+          return { status: t.status, type: t.headers.get("content-type"), bytes: Number(t.headers.get("content-length")) || null };
+        } catch { return { status: "network error" }; }
+      };
       raw.thumbnails = {};
       for (const k of urlFields) {
-        let status = null, type = null;
-        try { const t = await fetch(shown[k], { method: "GET", redirect: "follow" }); status = t.status; type = t.headers.get("content-type"); } catch { status = "network error"; }
-        raw.thumbnails[k] = { ...linkShape(shown[k]), openWithoutSignIn: status, contentType: type };
+        const shape = linkShape(listed[k]);
+        const anon = await open(listed[k], false);
+        const signedIn = at && (shape.host === apiHost || /procore\.com$/.test(shape.host)) ? await open(listed[k], true) : null;
+        raw.thumbnails[k] = { ...shape, withoutSignIn: anon, withSignIn: signedIn };
       }
       const th = raw.thumbnails.thumbnail_url;
-      steps.push({ name: "Thumbnail link (question 5)", ok: th?.openWithoutSignIn === 200, status: typeof th?.openWithoutSignIn === "number" ? th.openWithoutSignIn : 0,
-        detail: th ? `thumbnail_url on ${th.host}; opens without a Procore sign-in: ${th.openWithoutSignIn}; ${th.contentType ?? "?"}; ${th.signed ? `signed link (expires; query: ${th.query.join(", ")})` : "not a signed link"}. Other link fields: ${urlFields.filter((k) => k !== "thumbnail_url").join(", ") || "none"}` : `no thumbnail_url; link fields: ${urlFields.join(", ") || "none"}` });
-      raw.thumbUrl = shown.thumbnail_url ?? null;
+      const fmt = (o) => (o ? `${o.status}${o.type ? ` ${o.type}` : ""}${o.bytes ? `, ${o.bytes} bytes` : ""}` : "not tried");
+      steps.push({ name: "Thumbnail link (question 5)", ok: !!th && (th.withoutSignIn.status === 200 || th.withSignIn?.status === 200), status: th?.withSignIn?.status ?? th?.withoutSignIn?.status ?? 0,
+        detail: th ? `thumbnail_url on ${th.host} (query: ${th.query.join(", ") || "none"}). Without a Procore sign-in: ${fmt(th.withoutSignIn)}. With the person's sign-in: ${fmt(th.withSignIn)}. Full photo (url): without ${fmt(raw.thumbnails.url?.withoutSignIn)}, with ${fmt(raw.thumbnails.url?.withSignIn)}`
+          : `no thumbnail_url in the list either; link fields: ${urlFields.join(", ") || "none"}` });
+      raw.thumbUrl = listed.thumbnail_url ?? null;
     }
 
     // 6. Rate limits, from the last answers' headers

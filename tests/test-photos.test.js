@@ -14,7 +14,7 @@ const RL = { "x-rate-limit-limit": "3600", "x-rate-limit-remaining": "3590", "x-
 const reply = (u, init) => {
   const m = init.method ?? "GET";
   if (/storage\.test\/upload/.test(u)) return [204, null];
-  if (/thumbs\.test/.test(u)) return [200, "jpeg", { "content-type": "image/jpeg" }];
+  if (/\/fas\//.test(u)) return init.headers?.Authorization === "Bearer access-1" ? [200, "jpeg", { "content-type": "image/jpeg" }] : [401, { errors: "unauthorized" }];
   if (/\/me\?/.test(u)) return [200, { id: 481274, name: "Edward Gray" }];
   if (/\/projects\/373235\?/.test(u)) return [200, { id: 373235, time_zone: "America/Los_Angeles" }];
   if (/\/projects\?|\/companies\?/.test(u)) return [200, /companies/.test(u) ? [{ id: 4291776, name: "Kyco", is_active: true }] : [{ id: 373235, name: "Sandbox Test Project" }]];
@@ -26,13 +26,13 @@ const reply = (u, init) => {
   if (/\/projects\/373235\/locations/.test(u)) return [200, [{ id: 9, name: "Level 2 East" }]];
   if (/\/projects\/373235\/uploads/.test(u)) return [201, { uuid: "UP1", url: "https://storage.test/upload", fields: { key: "k" } }];
   if (/\/images\/555/.test(u) && m === "PATCH") { stored.description = JSON.parse(init.body).image.description.slice(0, 2000); return [200, stored]; }
-  if (/\/images\/555/.test(u)) return [200, stored];
+  if (/\/images\/555/.test(u)) { const show = { ...stored }; delete show.thumbnail_url; return [200, show]; } // Show Image has no thumbnail_url
   if (/\/images\?/.test(u) && m === "POST") {
     if (refuseImages) return [403, { errors: "You do not have permission" }];
     const b = JSON.parse(init.body);
     stored = { id: 555, image_category_id: b.image.image_category_id, image_category_name: TEST_ALBUM, private: false, description: b.image.description,
       trades: [{ id: 5, name: "Electrical" }], location: { id: 9, name: "Level 2 East" }, uploader: { id: 481274, name: "Edward Gray", login: "e@example.com" },
-      url: "https://thumbs.test/full.jpg?X-Amz-Signature=abc&X-Amz-Expires=3600", thumbnail_url: "https://thumbs.test/t.jpg?X-Amz-Signature=abc&X-Amz-Expires=3600" };
+      url: "https://sandbox.procore.test/fas/full?companyId=1&sig=abc", thumbnail_url: "https://sandbox.procore.test/fas/thumb?companyId=1&sig=abc" };
     return [201, stored];
   }
   if (/\/images\?/.test(u)) return [200, [stored], { total: "1", "per-page": "1", ...RL }];
@@ -89,8 +89,8 @@ test("photos check: makes the test album once, uploads one public photo with des
   assert.match(stepNamed(b, "Trade and location").detail, /Electrical; location: Level 2 East/);
   assert.match(stepNamed(b, "Description changed later").detail, /read back 2000 characters/);
   assert.match(stepNamed(b, "List photos in an album").detail, /Total header: 1/);
-  assert.match(stepNamed(b, "List photos created today").detail, /is in the list/);
-  assert.match(stepNamed(b, "Thumbnail link").detail, /opens without a Procore sign-in: 200.*signed link/);
+  assert.match(stepNamed(b, "Thumbnail link").detail, /Without a Procore sign-in: 401.*With the person's sign-in: 200 image\/jpeg/);
+  assert.match(stepNamed(b, "List photos created today (project day").detail, /is in the list/);
   assert.match(stepNamed(b, "Rate limit").detail, /limit 3600/);
   assert.ok(!/e@example\.com|access-1|secret-never-leak/.test(out.body), out.body);
 

@@ -331,11 +331,12 @@ function entryOf(part, s) {
 }
 const refusal = (r) => {
   const said = procoreMessage(r) || (typeof r.json === "string" ? r.json : JSON.stringify(r.json ?? "")).slice(0, 300);
-  const plain = r.status === 403 ? "No Daily Log access for this part on this project. " : r.status === 404 ? "The Daily Log tool looks turned off on this project. " : r.status === 429 ? "Procore is busy; wait a minute and send again. " : "";
+  const plain = r.status === 403 ? "Procore said no: either no Daily Log access here, or that day is Completed (a completed day is locked; reopen it in Procore's Daily Log Calendar). " : r.status === 404 ? "The Daily Log tool looks turned off on this project. " : r.status === 429 ? "Procore is busy; wait a minute and send again. " : "";
   return `${plain}Procore answered ${r.status}: ${said || "no details"}`;
 };
-// Delete one Daily Log entry. Procore answers 403 to deleting an approved entry, even for the admin who made it
-// (sandbox, 2026-10-16: every refused one was "approved"), so on a 403 the entry goes back to pending first.
+// Delete one Daily Log entry. A Completed day is locked: delete and edit both answer 403, even for the admin who
+// made the entry (sandbox, 2026-10-16; after Ky reopened the days, all 12 deleted at once). On a 403 the entry is
+// set back to pending and deleted again, which helps only if approval is what blocks it.
 // { r, note }: Procore's last answer, and what was tried.
 async function deleteEntry(req, res, cfg, companyId, projectId, section, id) {
   const path = `/rest/v1.0/projects/${projectId}/${SECTIONS[section].path}/${id}`;
@@ -425,7 +426,7 @@ async function remove(req, res, cfg, companyId, projectId) {
       // Say what the entry looks like in Procore (approval status, who made it), to see why a delete is refused
       const one = await api(req, res, cfg, "GET", `/rest/v1.0/projects/${projectId}/${SECTIONS[section].path}/${v.procoreId}`, { companyId });
       const seen = one.ok ? ` The entry in Procore: status ${one.json?.status ?? "not shown"}, made by ${one.json?.created_by?.name ?? "not shown"}, date ${one.json?.date ?? v.date}.` : ` (Reading the entry: ${one.status}.)`;
-      rows.push({ label, date: v.date, status: "failed", procoreId: v.procoreId, error: `Procore wouldn't delete it. Procore answered ${r.status}: ${procoreMessage(r) || "no details"}${note}${seen} It stays in the ledger.` });
+      rows.push({ label, date: v.date, status: "failed", procoreId: v.procoreId, error: `Procore wouldn't delete it. Procore answered ${r.status}: ${procoreMessage(r) || "no details"}${note}${seen}${r.status === 403 ? " If that day is Completed in Procore, reopen it in the Daily Log Calendar and delete again." : ""} It stays in the ledger.` });
     }
   }
   return { rows };

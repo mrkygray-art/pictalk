@@ -1,13 +1,14 @@
 # SiteSnap AI
 
-**Report a jobsite issue by voice and photo, straight into Procore, then follow it up with the crew.**
+**Report a jobsite issue by voice and photo, straight into Procore, follow it up with the crew, and keep the project's photos in Procore.**
 
 > **In development.** SiteSnap AI has been tested only in Procore's developer sandbox, with fictional people, companies, and projects. No real crew uses it yet. It needs a Procore sign-in, so it isn't open to visitors. SiteSnap AI is an independent project. It isn't affiliated with, sponsored by, or endorsed by Procore Technologies, Inc.; Procore is a trademark of its owner.
 
-SiteSnap AI is a phone-first web app for construction crews that works with Procore. Everyone signs in with their own Procore account and picks a Procore project, and that project's directory is the team. It does two things:
+SiteSnap AI is a phone-first web app for construction crews that works with Procore. Everyone signs in with their own Procore account and picks a Procore project, and that project's directory is the team. The project home has three tiles: Report an issue, Message (with the count of messages waiting for you), and Project photos.
 
 1. **Report an Issue: voice + photo → a real Procore record.** A foreman takes a photo and says what's wrong. Claude drafts an **Observation** or a **Punch Item** using the project's own lists, and one tap creates it in Procore with the photo and the voice recording attached.
 2. **Project messaging, like Microsoft Teams for one jobsite.** A Procore project is the team and messages are threads. You tag who a message is for, CC people to keep them in the loop, and attach photos and a transcribed voice note. Claude pulls out the to-dos and who they're for.
+3. **Project photos, kept in Procore's own Photos tool.** Browse the project's photos by day, area, trade, or album, and snap new ones with an optional voice note. They file into that day's album, even when there's no signal at the time.
 
 **Portfolio case study, with a looping demo and a quick tour:** https://ky-gray-portfolio.vercel.app/#sitesnap
 **Built on:** [PicTalk](https://github.com/mrkygray-art/pictalk) (the `master` branch). This `sitesnap` branch is the SiteSnap fork, and every push to it deploys to the SiteSnap app on Vercel.
@@ -47,6 +48,18 @@ CC is SiteSnap-only: a CC'd person sees the thread in their CC tab but is never 
   <img src="docs/sitesnap/procore-punch-list.webp" alt="Procore Punch List with SiteSnap items in Initiated, Ready to Close, and Closed" width="760">
 </p>
 
+## Project photos
+
+Procore's Photos tool is the system of record: SiteSnap keeps no photo gallery of its own.
+
+- **Browse:** By day (grouped by the project's own day and time zone), By area (Procore locations) and By trade (Procore trades), which appear only once a photo carries one, and Albums (Procore albums with counts). The full view shows who took the photo, when, its album, area, trade, and description.
+- **Each person's own sign-in:** Procore's photo links need a Procore sign-in, so photos load through a SiteSnap server endpoint using the viewer's own Procore sign-in. People see only what Procore already shows them, and the phone caches the photos.
+- **Snap:** the camera opens straight away. Add an optional voice note (written down by speech-to-text) or typed words, and the photo goes into that day's `Field photos YYYY-MM-DD` album (created if missing, always public), or another album picked with one tap. Photos are shrunk to 2048 px before upload.
+- **No signal:** photos are saved on the phone first (an IndexedDB queue) and uploaded oldest first when signal returns, with backoff. Each capture has its own id, so a retry never creates a duplicate photo in Procore.
+- **Photos from reports and messages:** photos sent through Report an issue or a message are also filed in the day's album automatically (a per-phone setting, on by default), and filing never holds up the report or message. Photos from a report show "Linked to Punch Item #2" or the Observation they belong to.
+
+Before building, the Photos API was checked in Procore's sandbox: album creation, permissions per person, description limits, paging, thumbnail access, and rate limits. One finding: subcontractor accounts on Procore's default "Subcontractor - External" permission template have Photos at Read Only, so a company must raise it to Standard before subs can add photos.
+
 ## What Procore's API taught us
 
 - **Permissions are per person.** Each person can create only what their own permission template allows, and Procore answers 403 otherwise. SiteSnap reads the templates' levels while a company admin is signed in, saves them on the server, and warns before sending who can't receive Observations or Punch Items.
@@ -76,7 +89,7 @@ Phone (React + Vite PWA, works offline)
    │  Procore sign-in (OAuth) ─────────────► Vercel functions  api/procore/*
    │                                          • tokens in an AES-256-GCM sealed httpOnly cookie
    │                                          • each person writes to Procore with their own token
-   │                                          • Procore REST API: projects, directory, Observations, Punch Items
+   │                                          • Procore REST API: projects, directory, Observations, Punch Items, Photos
    │  Firebase custom token (uid procore_{id})
    ▼
 Firebase project sitesnap-procore
@@ -85,7 +98,7 @@ Firebase project sitesnap-procore
    • Cloud Functions: Deepgram transcription, Claude record drafts and to-dos, feed updates, web push
 ```
 
-- **Front end:** React 19 + Vite, an installable PWA with a hand-written service worker, and an offline send queue in IndexedDB.
+- **Front end:** React 19 + Vite, an installable PWA with a hand-written service worker (it never reuses stale server answers), and offline queues in IndexedDB for messages and photos.
 - **Procore:** OAuth runs entirely server-side in Vercel functions. Tokens never go into the browser's storage or a `VITE_` variable, and a test scans for that. Access tokens refresh shortly before they expire.
 - **AI:** the Claude API drafts records (strict JSON, checked against the project's lists) and finds to-dos. Deepgram nova-3 transcribes.
 - **Tests:** `node:test` suites against the Firebase emulators and a mocked Procore (rules, sessions, classifier, records, record status, permissions, demo staging, alerts), plus browser end-to-end tests in `e2e/`.

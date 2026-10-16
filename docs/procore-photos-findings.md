@@ -43,3 +43,12 @@ Read 2026-10-15 with `/api/procore/test-permissions` as Edward (Photos is `image
 4. **By day without date albums.** `log_date` and `filters[log_date]` make a By day view possible from any album, so a `Field photos YYYY-MM-DD` album each day is optional, not required.
 5. **Photos go through SiteSnap's server.** Procore's photo links need a Procore sign-in (401 without one), and foremen's phones don't have one. So the grid and full view load photos through a small SiteSnap endpoint that fetches them with the person's own token. That keeps "don't show what they can't see in Procore", and every thumbnail becomes a server fetch (whether those count against the rate limit is unknown), so thumbnails should be cached on the phone.
 6. **Album creation: settled.** Standard can create albums, so the spec's daily `Field photos YYYY-MM-DD` album works as written.
+
+## Ky's decisions (2026-10-16)
+
+1. By trade uses Procore's own trades (`trade_ids`), not a text pattern in the description.
+2. By area uses the project's Procore Locations (`location_id`); albums stay as the album list.
+3. Uploads use `upload_uuid` (Project Uploads), not multipart `image[data]`.
+4. Photos load through a SiteSnap server endpoint with the person's own token; thumbnails are cached on the phone.
+5. Demo people: no change. Demo staging already gives each demo person the template for their role (PM → Project Manager - Internal, superintendents → Foreman / Superintendent - Internal, trade foremen → Subcontractor - External, owners → Owner/Client - External). For trade foremen to add photos, Ky raises Photos to Standard in Subcontractor - External (company Permissions → Project Permissions Templates).
+6. Daily albums stay as the spec says (`Field photos YYYY-MM-DD`): Standard can create them. By day uses `filters[created_at]` with the project's day and UTC offset, not `log_date`.

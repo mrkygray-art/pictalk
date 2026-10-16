@@ -90,7 +90,7 @@ $('#load').onclick=async()=>{
   try{
     const r=await fetch('/api/procore/projects'); const b=await r.json().catch(()=>({}));
     if(r.status===401){ signedOut(); $('#load').disabled=false; return; }
-    if(!r.ok) throw new Error((b.message||'Procore did not answer')+' ('+r.status+'). Wait a minute and press Load Projects again.');
+    if(!r.ok) throw new Error(/wait a minute/i.test(b.message||'')?b.message:(b.message||'Procore did not answer')+' ('+r.status+'). Wait a minute and press Load Projects again.');
     P=(b.projects||[]).map(p=>({...p,on:true,crew:null,stage:null,picked:[],samples:[],results:[]}));
     await refreshLedger(); $('#tools').hidden=false; render();
     status(P.length?P.length+' project(s). Next: Find Foremen.':'<span class="warn">Procore listed no projects for you. Sign in again or check your Procore access, then press Load Projects.</span>');

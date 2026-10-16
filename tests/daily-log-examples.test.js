@@ -358,3 +358,23 @@ test("reads wait out Procore's 429 and try again; still busy -> a plain 429", as
   await assert.rejects(procoreGet(r, res(), config(), "/rest/v1.0/companies"), (e) => e.status === 429 && /Procore is busy/.test(e.message));
   rateLimitWait.maxMs = 12_000;
 });
+
+test("detail: Notes have 3 to 5 sentences after Reported by; Manpower says the work, the crew (adding up) and the hours on site", () => {
+  const drywall = { id: "9", name: "Carlos Mendez", title: "Drywall Foreman", company: "Clean Line Drywall", companyId: "30", trade: "drywall" };
+  for (let seed = 1; seed <= 80; seed++) {
+    for (const stage of Object.keys(STAGES)) {
+      for (const list of [foremen, [drywall]]) {
+        for (const s of makeSamples({ foremen: list, dates: workingDays("2026-10-16"), stage, rand: seeded(seed) })) {
+          const pre = `Reported by: ${[s.foreman.name, s.foreman.title, s.foreman.company].join(", ")}`.replace(/\.?$/, ".");
+          assert.ok(s.notes.text.startsWith(pre));
+          const n = s.notes.text.slice(pre.length).replace(MARKER, "").trim().split(/(?<=\.)\s+/).filter(Boolean).length;
+          assert.ok(n >= 3 && n <= 5, `${n}: ${s.notes.text}`);
+          const m = /^[^.]+\. 1 (?:foreman|super)((?:, \d+ [a-z]+)*)\. On site \d{1,2}(?::\d\d)? AM to \d{1,2}(?::\d\d)? [AP]M\.$/.exec(s.manpower.comment);
+          assert.ok(m, s.manpower.comment);
+          const crew = 1 + [...m[1].matchAll(/(\d+) [a-z]+/g)].reduce((a, x) => a + Number(x[1]), 0);
+          assert.equal(crew, s.manpower.workers, s.manpower.comment);
+        }
+      }
+    }
+  }
+});

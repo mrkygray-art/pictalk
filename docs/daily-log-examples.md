@@ -21,7 +21,7 @@ Built from Ky's spec `docs/daily-log-examples-spec.md`.
 
 `api/_dailyLogExamples.js` holds a content bank for 12 trades (GC superintendent, site work, concrete, framing, drywall, painting, electrical, low voltage, plumbing, HVAC, fire protection, roofing) x 4 stages (site work, structure, rough-in, finishes). A trade working outside its main phase (drywall during site work) gets a small crew and early tasks only (takeoff, stocking), never finish work.
 
-- Every sample: **Manpower** (the foreman's company, 4 to 12 workers, 6 to 10 hours, a short work description) and **Notes** (`Reported by: name, title, company.` + 2 to 5 sentences + `— [SiteSnap sample]`).
+- Every sample: **Manpower** (the foreman's company, 4 to 12 workers, 6 to 10 hours; the comment says the work, the crew adding up to the head count, and the hours on site: "Electrical · Unit rough-in. 1 foreman, 4 journeymen, 1 apprentice. On site 6:30 AM to 2 PM.") and **Notes** (`Reported by: name, title, company.` + 3 to 5 sentences + `— [SiteSnap sample]`). Short notes are topped up with a safety / cleanup line ("Toolbox talk at 7 on silica dust, everyone signed.") and the plan for tomorrow, each used once per project.
 - About 1 in 3: a **Delivery** (what, from a generic supplier like "Lumber yard", time, condition, "Signed by" the foreman).
 - About 1 in 3: an **issue** (material short, inspector pushed, RFI, another trade in the way, weather). Most issues lose time, so about 1 in 4 samples has a **Delay** (the project's matching delay type, start and end, cause and what it held up).
 - In a project, the 3 samples use different dates, different foremen when there are 2 or more (different trades first), and never the same sentence twice.

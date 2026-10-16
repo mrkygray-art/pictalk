@@ -552,6 +552,30 @@ export const TRADES = {
   },
 };
 
+// Any trade, any stage: what a foreman adds about the day itself (safety, cleanup), so Notes never stop at the work line
+const SITE_LINES = [
+  "Toolbox talk at 7 on {ladder safety|silica dust|heat stress|housekeeping|struck-by hazards}, everyone signed.",
+  "Cleaned up the work area and hauled our scrap to the dumpster before we left.",
+  "No injuries, no near misses.",
+  "Everyone in PPE all day, no safety issues.",
+  "Swept up and staged material for the morning.",
+  "Walked the area with the super at the end of the day, nothing open on our end.",
+  "Lift inspected and signed off before use.",
+].map((w, i) => ({ w, key: `site.${i}` }));
+
+// Who the crew was, adding up to the head count: the foreman plus the trade's usual mix
+const CREW_ROLES = { gc: ["laborers"], sitework: ["operators", "laborers"], concrete: ["finishers", "laborers"] };
+function crewMakeup(trade, workers, rand) {
+  if (workers <= 1) return "Foreman only";
+  const [a, b] = CREW_ROLES[trade] ?? ["journeymen", "apprentices"];
+  const lead = trade === "gc" ? "1 super" : "1 foreman";
+  const rest = workers - 1;
+  if (!b || rest < 2) return `${lead}, ${rest} ${rest === 1 ? a.replace(/men$/, "man").replace(/s$/, "") : a}`;
+  const first = between(rand, Math.ceil(rest / 2), rest - 1);
+  const one = (n, word) => `${n} ${n === 1 ? word.replace(/men$/, "man").replace(/s$/, "") : word}`;
+  return `${lead}, ${one(first, a)}, ${one(rest - first, b)}`;
+}
+
 const CONDITIONS = ["Good, no damage.", "All there, checked it against the ticket.", "One bundle wet, rest is fine.", "{1|2} pieces damaged, told the PM."];
 
 // The project's delay types (Procore names them); the bank's kinds match by words
@@ -647,30 +671,49 @@ export function buildSample({ foreman, date, stage, delayTypes = [], used = new 
     delivery = { what: fill(d.what, rand), from: d.from, time: hhmm(between(rand, 13, 28) * 30), comment: `${condition} Signed by ${foreman.name}.` };
     sentences.push(`${delivery.from} dropped off ${delivery.what.charAt(0).toLowerCase()}${delivery.what.slice(1)}.`);
   }
-  const t = sentences.join(" ").split(/(?<=\.)\s/).length < 4 && !/tomorrow/i.test(issueSaid) && rand() < 0.6 ? fresh(rand, listKeys(trade, "tomorrow", T.tomorrow, stage), used) : null;
+  // Enough detail: 3 to 5 sentences after "Reported by" (spec: 2 to 5). A safety / cleanup line, then the plan for
+  // tomorrow, are added while it's short; each only once per project.
+  const count = () => sentences.join(" ").split(/(?<=\.)\s+/).filter(Boolean).length;
+  const siteLines = [];
+  const addSite = () => {
+    const x = fresh(rand, SITE_LINES, used);
+    if (!x) return false;
+    keys.push(x.key);
+    used.add(x.key);
+    siteLines.push(fill(x.w, rand));
+    sentences.push(siteLines.at(-1));
+    return true;
+  };
+  if (count() < 4 && rand() < 0.5) addSite();
+  const t = count() < 5 && !/tomorrow/i.test(issueSaid) && (count() < 3 || rand() < 0.6) ? fresh(rand, listKeys(trade, "tomorrow", T.tomorrow, stage), used) : null;
   if (t) {
     keys.push(t.key);
     tomorrow = fill(t.w, rand);
     sentences.push(tomorrow);
   }
+  while (count() < 3 && addSite());
+  const start = between(rand, 13, 14) * 30; // 6:30 or 7:00 AM
+  const makeup = crewMakeup(trade, workers, rand);
+  const manpowerComment = `${manpowerText ?? T.label}. ${makeup}. On site ${spoken(hhmm(start))} to ${spoken(hhmm(start + hours * 60 + 30))}.`;
 
   const reportedBy = `Reported by: ${[foreman.name, foreman.title, foreman.company].filter(Boolean).join(", ")}`.replace(/\.?$/, ".");
   const notes = `${reportedBy} ${sentences.join(" ")} ${MARKER}`;
   const script = [
     `Daily log for ${weekday(date)}.`,
     `This is ${firstName(foreman.name)}${foreman.company ? ` with ${shortCompany(foreman.company)}` : ""}.`,
-    `Crew of ${workers} today, ${hours} hours.`,
+    `Crew of ${workers} today, ${makeup.toLowerCase()}, ${hours} hours, ${spoken(hhmm(start))} to ${spoken(hhmm(start + hours * 60 + 30))}.`,
     did,
     issueSaid,
     delay ? `Put that down as a delay${delay.type ? `, ${delay.type.toLowerCase()}` : ""}, about ${spoken(delay.start)} to ${spoken(delay.end)}.` : "",
     delivery ? `Delivery came in around ${spoken(delivery.time)} from the ${delivery.from.toLowerCase()}, ${delivery.what.charAt(0).toLowerCase()}${delivery.what.slice(1)}. ${delivery.comment.replace(/Signed by .*$/, "I signed for it.")}` : "",
+    ...siteLines,
     tomorrow,
   ].filter(Boolean).join(" ");
 
   return {
     date, trade, tradeLabel: T.label, stage,
     foreman: { id: foreman.id, name: foreman.name, title: foreman.title, company: foreman.company, companyId: foreman.companyId },
-    manpower: { workers, hours, company: foreman.companyId, trade: T.label, comment: manpowerText ?? T.label },
+    manpower: { workers, hours, company: foreman.companyId, trade: T.label, comment: manpowerComment },
     notes: { text: notes },
     ...(delivery ? { delivery: { what: delivery.what, from: delivery.from, time: delivery.time, comment: delivery.comment } } : {}),
     ...(delay ? { delay: { type: delay.type, start: delay.start, end: delay.end, company: delay.company, comment: delay.comment } } : {}),

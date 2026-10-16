@@ -52,6 +52,7 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   let signedIn = false;
   let sentToServer = null;
   const statusCalls = [];
+  const uploads = [];
   await page.setRequestInterception(true);
   page.on("request", async (r) => {
     const u = new URL(r.url());
@@ -64,6 +65,11 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
     if (u.pathname === "/api/procore/record-options") return json(200, OPTIONS);
     // Project photos (Procore's Photos tool): two albums, three photos, one with an area and a trade
     if (u.pathname === "/api/procore/photo-file") return r.respond({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==", "base64") });
+    if (u.pathname === "/api/procore/photo-upload") {
+      const b = JSON.parse(r.postData() || "{}");
+      uploads.push({ captureId: b.captureId, albumId: b.albumId, description: b.description, type: b.photo?.type, bytes: Buffer.from(b.photo?.data ?? "", "base64").length });
+      return json(200, { imageId: 3000 + uploads.length, albumId: b.albumId ?? 7, albumName: b.albumId ? "Unclassified" : "Field photos 2026-10-16", duplicate: false });
+    }
     if (u.pathname === "/api/procore/photos") {
       const f = (id) => `/api/procore/photo-file?companyId=4291776&projectId=373235&u=${encodeURIComponent(`https://sandbox.procore.com/fas/${id}`)}`;
       const ph = (id, ago, extra = {}) => ({ id, albumId: 7, albumName: "Field photos", albumPrivate: false, description: `Photo ${id}: rebar spacing at grid C`, by: "Chloe Abara", createdAt: new Date(Date.now() - ago).toISOString(), takenAt: null, location: null, trades: [], thumb: f(id), full: f(id), ...extra });
@@ -229,6 +235,39 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   await waitText("Unclassified");
   check("photos: albums with counts", (await text()).includes("3 photos") && (await text()).includes("0 photos"));
   await shot("9-albums");
+
+  // Snap: the camera opens straight away (file chooser here), optional words, today's album, Save Photo
+  await click(".ph-tabs button::-p-text(By day)");
+  const [snapChooser] = await Promise.all([page.waitForFileChooser(), click(".ph-snap")]);
+  await snapChooser.accept([photo]);
+  await waitText("Save Photo");
+  check("snap: today's album is picked for you", (await text()).includes("Today's album (Field photos"));
+  await page.waitForFunction(() => document.querySelector(".snap-preview")?.naturalWidth > 0, { timeout: 10000 }).catch(() => {});
+  check("snap: the photo shows before saving", await page.$eval(".snap-preview", (i) => i.naturalWidth > 0));
+  await page.type(".snap textarea", "Rebar spacing at grid C looks wide");
+  await shot("10-snap");
+  await click(".save-btn::-p-text(Save Photo)");
+  await waitText("Saved to Field photos 2026-10-16");
+  check("snap: saved to Procore's album, as JPEG, with the words and who took it", uploads.length === 1 && uploads[0].type === "image/jpeg" && uploads[0].albumId === null && /Rebar spacing at grid C looks wide\n\nPhoto by Edward Gray, /.test(uploads[0].description), JSON.stringify(uploads[0]));
+  await shot("11-saved");
+
+  // No signal: saved on the phone, "1 waiting to upload", then it goes up once when signal returns
+  const [chooser2] = await Promise.all([page.waitForFileChooser(), click("button::-p-text(Snap Another)")]);
+  await chooser2.accept([photo]);
+  await waitText("Save Photo");
+  await click(".snap-album .stop-more");
+  await click(".snap-albums button::-p-text(Unclassified)");
+  await page.setOfflineMode(true);
+  await page.evaluate(() => window.dispatchEvent(new Event("offline")));
+  await click(".save-btn::-p-text(Save Photo)");
+  await waitText("Saved on this phone");
+  await click("button::-p-text(Done)");
+  await waitText("1 waiting to upload");
+  check("offline: the photo waits on the phone", uploads.length === 1);
+  await shot("12-waiting");
+  await page.setOfflineMode(false);
+  await page.waitForFunction(() => !document.body.innerText.includes("waiting to upload"), { timeout: 30000 });
+  check("offline: it uploads once signal is back, to the album picked, with one capture id", uploads.length === 2 && uploads[1].albumId === 8 && uploads[1].captureId !== uploads[0].captureId, JSON.stringify(uploads.map((x) => [x.captureId.slice(0, 8), x.albumId])));
 
   await browser.close();
   const passed = results.filter(Boolean).length;

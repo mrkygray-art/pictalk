@@ -9,6 +9,7 @@ import AccessList from "./AccessList";
 import PushToggle from "./PushToggle";
 import ProjectHome from "./ProjectHome";
 import PhotosView from "./PhotosView";
+import { startPhotoSync } from "./photoQueue";
 import { BackIcon } from "./icons";
 import { readBeta } from "./beta";
 import { isUnread, onQueueChange, pendingMessages, startMessageSync, watchFeed, watchReads } from "./messagingStore";
@@ -36,6 +37,7 @@ export default function MessagingApp() {
   const key = project ? `${project.companyId}_${project.projectId}` : null;
 
   useEffect(() => (signedIn ? startMessageSync() : undefined), [signedIn]);
+  useEffect(() => (signedIn ? startPhotoSync() : undefined), [signedIn]); // Snap photos waiting on this phone
   // Keep the address bar plain: drop ?procore=… once its message has been read
   useEffect(() => {
     const url = new URL(window.location.href);

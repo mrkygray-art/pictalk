@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BackIcon } from "./icons";
+import { BackIcon, CameraIcon } from "./icons";
 import { groupPhotos, hasArea, hasTrade, loadAlbums, loadPhotos, timeLine } from "./photosStore";
+import { discardPhoto, lastSavedPhoto, onPhotoQueueChange, pendingPhotos, retryPhoto } from "./photoQueue";
+import SnapFlow from "./SnapFlow";
 
 // Project photos (docs/sitesnap-project-home-and-photos-spec.md, section 2): Procore's Photos tool, read-only.
 // By day (default) / By area / By trade group the project's photos, newest first; Albums lists Procore's albums.
-// Snap (taking photos) comes in the next step.
+// Snap (camera straight away) saves into that day's "Field photos" album through the upload queue (photoQueue.js).
 
 // A list of photos that loads more as you scroll (a button too, for when scrolling can't tell)
+const FIRST = { photos: [], nextPage: 1, timeZone: null, loading: false, error: "" };
 function usePhotoPages(project, albumId) {
-  const [state, setState] = useState({ photos: [], nextPage: 1, timeZone: null, loading: false, error: "" });
+  const [state, setState] = useState(FIRST);
   const busy = useRef(false);
   const more = useCallback(async () => {
     if (busy.current || !state.nextPage) return;
@@ -23,7 +26,35 @@ function usePhotoPages(project, albumId) {
       busy.current = false;
     }
   }, [project, albumId, state.nextPage]);
-  return [state, more];
+  const reload = useCallback(() => setState((s) => ({ ...FIRST, timeZone: s.timeZone })), []);
+  return [state, more, reload];
+}
+
+// Photos still on this phone: "2 waiting to upload", and any Procore refused, with Retry / Remove
+function Waiting({ projectKey }) {
+  const [list, setList] = useState([]);
+  useEffect(() => {
+    let live = true;
+    const load = () => pendingPhotos(projectKey).then((l) => live && setList(l)).catch(() => {});
+    load();
+    const off = onPhotoQueueChange(load);
+    return () => { live = false; off(); };
+  }, [projectKey]);
+  const waiting = list.filter((p) => p.status !== "failed");
+  const failed = list.filter((p) => p.status === "failed");
+  if (!list.length) return null;
+  return (
+    <div className="ph-waiting" role="status">
+      {waiting.length > 0 && <p><strong>{waiting.length} waiting to upload</strong>{navigator.onLine ? "" : " · no signal"}</p>}
+      {failed.map((p) => (
+        <div key={p.captureId} className="ph-failed">
+          <p>{p.error}</p>
+          <button type="button" className="stop-more" onClick={() => retryPhoto(p.captureId)}>Retry</button>
+          <button type="button" className="text-btn inline is-danger" onClick={() => { if (window.confirm("Remove this photo? It isn't in Procore, and it can't be brought back.")) discardPhoto(p.captureId); }}>Remove</button>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function MoreOnScroll({ state, onMore }) {
@@ -141,11 +172,35 @@ function AlbumView({ project, album, onBack, onOpen }) {
 
 export default function PhotosView({ session, onBack }) {
   const { project } = session;
+  const projectKey = `${project.companyId}_${project.projectId}`;
   const [tab, setTab] = useState("day"); // day | area | trade | albums
   const [album, setAlbum] = useState(null);
   const [open, setOpen] = useState(null); // { photo, timeZone }
-  const [state, more] = usePhotoPages(project, null);
+  const [snap, setSnap] = useState(null); // { photo: File, n } while saving one
+  const [albumsVersion, setAlbumsVersion] = useState(0);
+  const camera = useRef(null);
+  const [state, more, reload] = usePhotoPages(project, null);
   useEffect(() => { if (state.nextPage === 1 && !state.loading && !state.error) more(); }, [state.nextPage, state.loading, state.error, more]);
+  // A photo reached Procore: show it
+  const seen = useRef(lastSavedPhoto()?.at ?? 0);
+  useEffect(() => onPhotoQueueChange(() => {
+    const at = lastSavedPhoto()?.at ?? 0;
+    if (at > seen.current) { seen.current = at; reload(); setAlbumsVersion((v) => v + 1); }
+  }), [reload]);
+
+  const openCamera = () => camera.current?.click();
+  const cameraInput = (
+    <input ref={camera} type="file" accept="image/*" capture="environment" hidden
+      onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) setSnap((s) => ({ photo: f, n: (s?.n ?? 0) + 1 })); }} />
+  );
+  if (snap) {
+    return (
+      <div className="ph">
+        {cameraInput}
+        <SnapFlow key={snap.n} session={session} photo={snap.photo} timeZone={state.timeZone} onSnapAnother={openCamera} onDone={() => setSnap(null)} />
+      </div>
+    );
+  }
 
   // By area / By trade only once a photo carries one (spec 2.1: hide rather than fake)
   const tabs = [["day", "By day"], ...(hasArea(state.photos) ? [["area", "By area"]] : []), ...(hasTrade(state.photos) ? [["trade", "By trade"]] : []), ["albums", "Albums"]];
@@ -158,17 +213,20 @@ export default function PhotosView({ session, onBack }) {
         <AlbumView project={project} album={album} onBack={() => setAlbum(null)} onOpen={(photo, timeZone) => setOpen({ photo, timeZone })} />
       ) : (
         <>
+          {cameraInput}
           <div className="ph-head">
             <button type="button" className="link-btn" onClick={onBack}><BackIcon /> Home</button>
+            <button type="button" className="ph-snap" onClick={openCamera}><CameraIcon /> Snap</button>
           </div>
           <h2 className="page-title">Project photos</h2>
+          <Waiting projectKey={projectKey} />
           <div className="dir-filters ph-tabs" role="tablist" style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
             {tabs.map(([k, label]) => (
               <button key={k} type="button" role="tab" aria-selected={shown === k} className={shown === k ? "is-on" : ""} onClick={() => setTab(k)}>{label}</button>
             ))}
           </div>
           {shown === "albums"
-            ? <AlbumList project={project} onOpenAlbum={setAlbum} />
+            ? <AlbumList key={albumsVersion} project={project} onOpenAlbum={setAlbum} />
             : <Groups state={state} by={shown} onOpen={(photo) => setOpen({ photo, timeZone: state.timeZone })} onMore={more} />}
           <p className="msg-footnote">Photos live in Procore's Photos tool. You see the ones Procore shows you.</p>
         </>

@@ -41,16 +41,16 @@ export async function draftRecord(key, transcript, { project, options, people })
   return r.data;
 }
 
-/** A photo as a JPEG at most PHOTO_SIDE on its long side (keeps the upload small on weak signal) */
-export async function shrinkPhoto(blob) {
+/** A photo as a JPEG at most `side` px on its long side (keeps the upload small on weak signal) */
+export async function shrinkPhoto(blob, side = PHOTO_SIDE, quality = 0.72) {
   try {
     const img = await createImageBitmap(blob);
-    const scale = Math.min(1, PHOTO_SIDE / Math.max(img.width, img.height));
+    const scale = Math.min(1, side / Math.max(img.width, img.height));
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(img.width * scale);
     canvas.height = Math.round(img.height * scale);
     canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-    return await new Promise((ok) => canvas.toBlob((b) => ok(b ?? blob), "image/jpeg", 0.72));
+    return await new Promise((ok) => canvas.toBlob((b) => ok(b ?? blob), "image/jpeg", quality));
   } catch {
     return blob;
   }

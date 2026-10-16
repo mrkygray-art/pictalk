@@ -346,3 +346,15 @@ test("delete: an approved entry Procore refuses (403) is set back to pending, th
   assert.deepEqual(JSON.parse(patch.body), { manpower_log: { status: "pending" } });
   assert.equal(rows.get(KEY).size, 0);
 });
+
+test("reads wait out Procore's 429 and try again; still busy -> a plain 429", async () => {
+  const { procoreGet, rateLimitWait, config } = await import("../api/_procore.js");
+  rateLimitWait.maxMs = 0;
+  let n = 0;
+  globalThis.fetch = async () => new Response(JSON.stringify(++n < 3 ? { errors: "Too many" } : [{ id: 1 }]), { status: n < 3 ? 429 : 200, headers: { "content-type": "application/json" } });
+  const r = { headers: { ...headers, cookie: `${SESSION_COOKIE}=${cookie()}` } };
+  assert.deepEqual(await procoreGet(r, res(), config(), "/rest/v1.0/companies"), [{ id: 1 }]);
+  n = -10;
+  await assert.rejects(procoreGet(r, res(), config(), "/rest/v1.0/companies"), (e) => e.status === 429 && /Procore is busy/.test(e.message));
+  rateLimitWait.maxMs = 12_000;
+});

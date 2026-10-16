@@ -208,7 +208,16 @@ export async function session(req, res, cfg, { force = false } = {}) {
   return tokens;
 }
 
-// Read-only GET on the Procore API. Retries once with fresh tokens if Procore says the token is bad.
+// How long to wait after a 429: until Procore's X-Rate-Limit-Reset (epoch seconds), 2 to 12 s; tests set it to 0
+export const rateLimitWait = { maxMs: 12_000 };
+function waitFor429(resp, now = Date.now()) {
+  const reset = Number(resp.headers?.get?.("x-rate-limit-reset"));
+  const ms = Number.isFinite(reset) && reset > 0 ? reset * 1000 - now : 10_000;
+  return Math.min(rateLimitWait.maxMs, Math.max(Math.min(2000, rateLimitWait.maxMs), ms));
+}
+
+// Read-only GET on the Procore API. Retries once with fresh tokens if Procore says the token is bad, and up to
+// twice after a 429 (Procore allows about 25 calls per 10 seconds), waiting out the window first.
 export async function procoreGet(req, res, cfg, path, { companyId, query } = {}) {
   let tokens = await session(req, res, cfg);
   const url = `${cfg.apiUrl}${path}${query ? `?${new URLSearchParams(query)}` : ""}`;
@@ -221,6 +230,11 @@ export async function procoreGet(req, res, cfg, path, { companyId, query } = {})
     tokens = await session(req, res, cfg, { force: true });
     resp = await call(tokens);
   }
+  for (let tries = 0; resp.status === 429 && tries < 2; tries++) {
+    await new Promise((r) => setTimeout(r, waitFor429(resp)));
+    resp = await call(tokens);
+  }
+  if (resp.status === 429) throw new HttpError(429, "rate_limited", "Procore is busy (too many requests). Wait a minute and try again.");
   if (resp.status === 401) throw new HttpError(401, "not_connected", "Connect Procore again.");
   if (resp.status === 403) throw new HttpError(403, "no_access", "Your Procore account doesn't have access to this.");
   if (resp.status === 404) throw new HttpError(404, "not_found", "Procore couldn't find that company or project.");

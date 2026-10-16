@@ -66,7 +66,9 @@ const STAGES=${JSON.stringify(STAGES)};
 const EXTRA=${JSON.stringify(EXTRA_FOREMEN.map((f) => `${f.user.first_name} ${f.user.last_name} (${f.user.job_title}, ${SEED[f.company].vendor.name})`))};
 const TRADES=${JSON.stringify(Object.fromEntries(Object.entries(TRADES).map(([k, t]) => [k, t.label])))};
 let P=[]; let ledger={}; let editing=null;
-const post=async(body)=>{ const r=await fetch('/api/procore/daily-log-examples',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const b=await r.json().catch(()=>({message:'No answer from the server'})); if(!r.ok) throw new Error(b.message||('Failed ('+r.status+')')); return b; };
+const post=async(body)=>{ const r=await fetch('/api/procore/daily-log-examples',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const b=await r.json().catch(()=>({message:'No answer from the server'})); if(r.status===401) signedOut(); if(!r.ok) throw new Error(b.message||('Failed ('+r.status+')')); return b; };
+// Procore sign-ins run out: say so where it shows, with the link back
+function signedOut(){ const m='Your Procore sign-in ran out. <a href="/api/procore/login">Sign in with Procore</a>, come back to this page, and press Load Projects.'; $('#who').innerHTML='<span class="bad">'+m+'</span>'; status('<span class="bad">'+m+'</span>'); }
 const status=(s)=>{ $('#status').innerHTML='<small>'+s+'</small>'; };
 const day=(d)=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',timeZone:'UTC'});
 const keyOf=(p)=>p.companyId+'_'+p.projectId;
@@ -80,9 +82,12 @@ fetch('/api/procore/projects').then(async(r)=>{
 $('#load').onclick=async()=>{
   $('#load').disabled=true; status('Loading projects…');
   try{
-    const r=await fetch('/api/procore/projects'); const b=await r.json();
+    const r=await fetch('/api/procore/projects'); const b=await r.json().catch(()=>({}));
+    if(r.status===401){ signedOut(); $('#load').disabled=false; return; }
+    if(!r.ok) throw new Error((b.message||'Procore did not answer')+' ('+r.status+'). Wait a minute and press Load Projects again.');
     P=(b.projects||[]).map(p=>({...p,on:true,crew:null,stage:null,picked:[],samples:[],results:[]}));
-    await refreshLedger(); $('#tools').hidden=false; render(); status(P.length+' project(s). Next: Find Foremen.');
+    await refreshLedger(); $('#tools').hidden=false; render();
+    status(P.length?P.length+' project(s). Next: Find Foremen.':'<span class="warn">Procore listed no projects for you. Sign in again or check your Procore access, then press Load Projects.</span>');
   }catch(e){ status('<span class="bad">'+esc(e.message)+'</span>'); }
   $('#load').disabled=false;
 };
@@ -162,7 +167,9 @@ const ready=(p)=>p.on&&p.crew&&p.crew.access==='ok';
 $('#all').onclick=()=>{ P.forEach(p=>p.on=true); render(); };
 $('#none').onclick=()=>{ P.forEach(p=>p.on=false); render(); };
 $('#find').onclick=async()=>{
-  const list=P.filter(p=>p.on); $('#find').disabled=true;
+  const list=P.filter(p=>p.on);
+  if(!list.length){ status('<span class="warn">'+(P.length?'No project is ticked. Tick at least one (or Tick all).':'No projects loaded. Press Load Projects first.')+'</span>'); return; }
+  $('#find').disabled=true;
   for(const [n,p] of list.entries()){ status('Reading project '+(n+1)+' of '+list.length+': '+esc(p.name)+'…'); await loadCrew(p); render(); }
   const noAccess=list.filter(p=>p.crew&&(p.crew.error||p.crew.access!=='ok')).length; const noForeman=list.filter(p=>ready(p)&&!p.crew.candidates.length).length;
   status('Done. '+(noAccess?noAccess+' project(s) without Daily Log access. ':'')+(noForeman?noForeman+' project(s) with no foreman found: pick someone or untick them. ':'')+'Next: Generate Previews.');

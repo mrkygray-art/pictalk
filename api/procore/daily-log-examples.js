@@ -74,10 +74,16 @@ const day=(d)=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'sho
 const keyOf=(p)=>p.companyId+'_'+p.projectId;
 const entriesOf=(s)=>2+(s.delivery?1:0)+(s.delay?1:0);
 
-fetch('/api/procore/projects').then(async(r)=>{
-  if(r.status===401){ $('#who').innerHTML='Not signed in. <a href="/api/procore/login">Sign in with Procore</a>, then come back to this page.'; return; }
-  $('#who').innerHTML='<small>Signed in.</small>'; $('#load').disabled=false;
-});
+// Sign-in check: one small call (who am I), not the whole project list. If Procore is slow or busy, Load Projects
+// still works after a few seconds (it says what's wrong itself).
+let checked=false;
+const enableLoad=(msg)=>{ if(checked) return; checked=true; $('#who').innerHTML='<small>'+msg+'</small>'; $('#load').disabled=false; };
+setTimeout(()=>enableLoad('Procore is slow to answer right now. You can still press Load Projects.'),8000);
+fetch('/api/procore/me').then(async(r)=>{
+  if(r.status===401){ checked=true; $('#who').innerHTML='Not signed in. <a href="/api/procore/login">Sign in with Procore</a>, then come back to this page.'; $('#load').disabled=true; return; }
+  if(r.ok){ const b=await r.json().catch(()=>({})); enableLoad('Signed in'+(b.name?' as '+esc(b.name):'')+'.'); }
+  else enableLoad(r.status===429?'Procore is busy right now (too many requests). Wait a minute, then press Load Projects.':'Couldn\\'t check your Procore sign-in ('+r.status+'). You can still press Load Projects.');
+}).catch(()=>enableLoad('Couldn\\'t reach the server to check your sign-in. You can still press Load Projects.'));
 
 $('#load').onclick=async()=>{
   $('#load').disabled=true; status('Loading projects…');

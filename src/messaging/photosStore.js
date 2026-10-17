@@ -19,8 +19,8 @@ const ids = (project) => ({ companyId: project.companyId, projectId: project.pro
 export const loadAlbums = (project) =>
   getJson(`/api/procore/photos?${new URLSearchParams({ ...ids(project), view: "albums" })}`).then((b) => b.albums ?? []);
 
-export const loadPhotos = (project, { albumId, page = 1 } = {}) =>
-  getJson(`/api/procore/photos?${new URLSearchParams({ ...ids(project), view: "photos", page: String(page), ...(albumId ? { albumId: String(albumId) } : {}) })}`);
+export const loadPhotos = (project, { albumId, day, page = 1 } = {}) =>
+  getJson(`/api/procore/photos?${new URLSearchParams({ ...ids(project), view: "photos", page: String(page), ...(albumId ? { albumId: String(albumId) } : {}), ...(day ? { day } : {}) })}`);
 
 // ---- grouping (By day / By area / By trade), all on the photos already loaded ----
 
@@ -44,7 +44,14 @@ export function dayLabel(day, timeZone, now = new Date()) {
   return date.toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
 }
 
-/** Groups in first-seen order (photos come newest first). A photo with several trades shows under each. */
+/** When the photo was taken (the camera's time Procore keeps), else when it reached Procore */
+export const photoTime = (p) => p.takenAt || p.createdAt || null;
+/** The project day a photo belongs to: the day it was taken, else the day it was added */
+export const photoDay = (p, timeZone) => dayOf(photoTime(p), timeZone);
+const newestFirst = (a, b) => String(photoTime(b) ?? "").localeCompare(String(photoTime(a) ?? ""));
+
+/** By day: newest day first, newest photo first in each day. Else groups in first-seen order (photos come newest
+ *  first). A photo with several trades shows under each. */
 export function groupPhotos(photos, by, timeZone) {
   const groups = new Map();
   const add = (key, label, p) => {
@@ -53,7 +60,7 @@ export function groupPhotos(photos, by, timeZone) {
   };
   for (const p of photos) {
     if (by === "day") {
-      const day = dayOf(p.createdAt, timeZone);
+      const day = photoDay(p, timeZone);
       add(day, dayLabel(day, timeZone), p);
     } else if (by === "area") {
       if (p.location) add(`l${p.location.id}`, p.location.name, p);
@@ -62,6 +69,11 @@ export function groupPhotos(photos, by, timeZone) {
       if (p.trades.length) for (const t of p.trades) add(`t${t.id}`, t.name, p);
       else add("none", "No trade set", p);
     }
+  }
+  if (by === "day") {
+    const days = [...groups.values()].sort((a, b) => (a.key === "" ? 1 : b.key === "" ? -1 : b.key.localeCompare(a.key)));
+    for (const g of days) g.photos.sort(newestFirst);
+    return days;
   }
   // "No area / trade set" goes last
   const list = [...groups.values()];

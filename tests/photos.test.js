@@ -143,3 +143,23 @@ test("grouping: by the project's own day, by area, by trade; area and trade chip
   assert.equal(hasArea(list), true);
   assert.equal(hasTrade([list[1]]), false);
 });
+
+test("grouping by day uses when a photo was taken, else when it was added; newest day and photo first", async () => {
+  const { photoDay } = await import("../src/messaging/photosStore.js");
+  const list = [
+    { id: 5, createdAt: "2026-10-16T18:00:00Z", takenAt: "2026-10-12T15:00:00Z", location: null, trades: [] }, // old camera-roll photo added today
+    { id: 4, createdAt: "2026-10-16T17:00:00Z", takenAt: null, location: null, trades: [] },
+    { id: 6, createdAt: "2026-10-16T16:00:00Z", takenAt: "2026-10-16T16:30:00Z", location: null, trades: [] },
+  ];
+  assert.equal(photoDay(list[0], "America/Los_Angeles"), "2026-10-12");
+  assert.deepEqual(groupPhotos(list, "day", "America/Los_Angeles").map((g) => [g.key, g.photos.map((p) => p.id)]), [["2026-10-16", [4, 6]], ["2026-10-12", [5]]]);
+});
+
+test("photos for one day: Procore's created_at filter with the project's offset, that day and the next; Rails zone names become IANA", async () => {
+  const out = await get(photos, { ...P, view: "photos", day: "2026-10-14", page: "2" });
+  assert.equal(out.statusCode, 200, out.body);
+  const q = new URL(calls.find((c) => /\/images\?/.test(c.url)).url).searchParams;
+  assert.equal(q.get("filters[created_at]"), "2026-10-14T00:00:00-07:00...2026-10-15T23:59:59-07:00");
+  assert.equal(out.json().timeZone, "US/Pacific", "a name phones know is passed through");
+  assert.equal((await get(photos, { ...P, view: "photos", day: "Oct 14" })).statusCode, 400);
+});

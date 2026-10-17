@@ -51,6 +51,7 @@ Read 2026-10-15 with `/api/procore/test-permissions` as Edward (Photos is `image
 3. Uploads use `upload_uuid` (Project Uploads), not multipart `image[data]`.
 4. Photos load through a SiteSnap server endpoint with the person's own token; thumbnails are cached on the phone.
 5. Demo people: no change. Demo staging already gives each demo person the template for their role (PM → Project Manager - Internal, superintendents → Foreman / Superintendent - Internal, trade foremen → Subcontractor - External, owners → Owner/Client - External). For trade foremen to add photos, Ky raises Photos to Standard in Subcontractor - External (company Permissions → Project Permissions Templates).
+6. (2026-10-16, Ky) By day now groups by `taken_at` when Procore has it, else `created_at`. Go to a day / See all read `filters[created_at]` for that project day and the next (late uploads after a night offline); the sort stays `-created_at`. Not yet seen in the sandbox: what `taken_at` holds for a photo taken in the app (camera time vs upload time).
 6. Daily albums stay as the spec says (`Field photos YYYY-MM-DD`): Standard can create them. By day uses `filters[created_at]` with the project's day and UTC offset, not `log_date`.
 
 ## Built (2026-10-16)

@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BackIcon, CameraIcon } from "./icons";
-import { groupPhotos, hasArea, hasTrade, loadAlbums, loadPhotos, timeLine } from "./photosStore";
+import { dayLabel, dayOf, groupPhotos, hasArea, hasTrade, loadAlbums, loadPhotos, photoDay, photoTime, timeLine } from "./photosStore";
 import { autoFileOn, discardPhoto, lastSavedPhoto, linkLabel, onPhotoQueueChange, pendingPhotos, retryPhoto, setAutoFile } from "./photoQueue";
 import SnapFlow from "./SnapFlow";
 
 // Project photos (docs/sitesnap-project-home-and-photos-spec.md, section 2): Procore's Photos tool, read-only.
 // By day (default) / By area / By trade group the project's photos, newest first; Albums lists Procore's albums.
 // Snap (camera straight away) saves into that day's "Field photos" album through the upload queue (photoQueue.js).
+// Built for 100+ photos on a phone: the tabs + Snap bar and each day's header stay pinned while scrolling, a day
+// shows at most DAY_PREVIEW photos with "See all N" (DayView), and Go to a day opens any date. By day uses the
+// day a photo was taken (Procore's taken_at), else the day it reached Procore.
+
+const DAY_PREVIEW = 9; // 3 rows
 
 // A list of photos that loads more as you scroll (a button too, for when scrolling can't tell)
 const FIRST = { photos: [], nextPage: 1, timeZone: null, loading: false, error: "" };
-function usePhotoPages(project, albumId) {
+function usePhotoPages(project, albumId, day) {
   const [state, setState] = useState(FIRST);
   const busy = useRef(false);
   const more = useCallback(async () => {
@@ -18,14 +23,14 @@ function usePhotoPages(project, albumId) {
     busy.current = true;
     setState((s) => ({ ...s, loading: true, error: "" }));
     try {
-      const b = await loadPhotos(project, { albumId, page: state.nextPage });
+      const b = await loadPhotos(project, { albumId, day, page: state.nextPage });
       setState((s) => ({ photos: [...s.photos, ...b.photos.filter((p) => !s.photos.some((x) => x.id === p.id))], nextPage: b.nextPage, timeZone: s.timeZone ?? b.timeZone, loading: false, error: "" }));
     } catch (err) {
       setState((s) => ({ ...s, loading: false, error: err.message }));
     } finally {
       busy.current = false;
     }
-  }, [project, albumId, state.nextPage]);
+  }, [project, albumId, day, state.nextPage]);
   const reload = useCallback(() => setState((s) => ({ ...FIRST, timeZone: s.timeZone })), []);
   return [state, more, reload];
 }
@@ -100,7 +105,8 @@ function FullPhoto({ photo, timeZone, onClose }) {
       {failed && <p className="procore-note">Showing a smaller copy. The full photo couldn't load here; it's in Procore.</p>}
       <div className="ph-full-info">
         {photo.linked && <p className="ph-linked">Linked to {linkLabel(photo.linked)}</p>}
-        <p className="ph-full-who"><strong>{photo.by || "Someone"}</strong> · {timeLine(photo.createdAt, timeZone)}</p>
+        <p className="ph-full-who"><strong>{photo.by || "Someone"}</strong> · {photo.takenAt ? `taken ${timeLine(photo.takenAt, timeZone)}` : timeLine(photo.createdAt, timeZone)}</p>
+        {photo.takenAt && photo.createdAt && dayOf(photo.takenAt, timeZone) !== dayOf(photo.createdAt, timeZone) && <p className="ph-muted">Added to Procore {timeLine(photo.createdAt, timeZone)}</p>}
         <p className="ph-muted">{photo.albumName ? `Album: ${photo.albumName}` : ""}{photo.albumPrivate ? " (private)" : ""}</p>
         {where && <p className="ph-muted">{where}</p>}
         {photo.description && <p className="msg-words">{photo.description}</p>}
@@ -109,20 +115,29 @@ function FullPhoto({ photo, timeZone, onClose }) {
   );
 }
 
-function Groups({ state, by, onOpen, onMore }) {
+function Groups({ state, by, onOpen, onMore, onDay }) {
   if (!state.photos.length) {
     if (state.error) return <MoreOnScroll state={state} onMore={onMore} />;
     if (state.loading || state.nextPage === 1) return <p className="ph-muted">Loading photos…</p>;
     return <p className="empty">No photos on this project yet.</p>;
   }
+  const groups = groupPhotos(state.photos, by, state.timeZone);
+  // Photos come newest-added first, so with more pages to come, any day on or before the oldest day added so far
+  // may still get photos (By area / By trade: the last group)
+  const oldestAdded = state.photos.reduce((m, p) => { const d = dayOf(p.createdAt, state.timeZone); return d && (!m || d < m) ? d : m; }, "");
   return (
     <>
-      {groupPhotos(state.photos, by, state.timeZone).map((g) => (
-        <section key={g.key} className="ph-group">
-          <h3>{g.label} <small>{g.photos.length} photo{g.photos.length === 1 ? "" : "s"}{state.nextPage ? " so far" : ""}</small></h3>
-          <Grid photos={g.photos} onOpen={onOpen} />
-        </section>
-      ))}
+      {groups.map((g, i) => {
+        const partial = !!state.nextPage && (by === "day" ? !g.key || g.key <= oldestAdded : i === groups.length - 1);
+        const cut = by === "day" && g.key && (g.photos.length > DAY_PREVIEW || partial);
+        return (
+          <section key={g.key} className="ph-group">
+            <h3>{g.label} <small>{g.photos.length}{partial ? "+" : ""} photo{g.photos.length === 1 && !partial ? "" : "s"}</small></h3>
+            <Grid photos={by === "day" ? g.photos.slice(0, DAY_PREVIEW) : g.photos} onOpen={onOpen} />
+            {cut && <button type="button" className="ph-all" onClick={() => onDay(g.key, g.photos)}>{g.photos.length > DAY_PREVIEW ? `See all ${g.photos.length}${partial ? "+" : ""} photos` : "See all photos"} ›</button>}
+          </section>
+        );
+      })}
       <MoreOnScroll state={state} onMore={onMore} />
     </>
   );
@@ -172,6 +187,31 @@ function AlbumView({ project, album, onBack, onOpen }) {
   );
 }
 
+// One day's photos: the ones already loaded for it (seed) plus Procore's photos added that day or the next, kept
+// when they were taken (else added) on that day. Opened from "See all" or Go to a day.
+function DayView({ project, day, seed, timeZone, onBack, onOpen, snapButton }) {
+  const [state, more] = usePhotoPages(project, null, day);
+  useEffect(() => { if (state.nextPage === 1 && !state.loading && !state.error) more(); }, [state.nextPage, state.loading, state.error, more]);
+  const tz = state.timeZone ?? timeZone;
+  const seen = new Set();
+  const photos = [...(seed ?? []), ...state.photos]
+    .filter((p) => !seen.has(p.id) && seen.add(p.id) && photoDay(p, tz) === day)
+    .sort((a, b) => String(photoTime(b) ?? "").localeCompare(String(photoTime(a) ?? "")));
+  const loading = state.loading || state.nextPage === 1;
+  return (
+    <>
+      <div className="ph-head">
+        <button type="button" className="link-btn" onClick={onBack}><BackIcon /> Photos</button>
+        {snapButton}
+      </div>
+      <h2 className="page-title">{dayLabel(day, tz)}</h2>
+      <p className="ph-muted">{photos.length ? `${photos.length} photo${photos.length === 1 ? "" : "s"}${state.nextPage ? " so far" : ""}` : loading ? "Loading photos…" : "No photos for this day."}</p>
+      {photos.length > 0 && <Grid photos={photos} onOpen={(p) => onOpen(p, tz)} />}
+      <MoreOnScroll state={state} onMore={more} />
+    </>
+  );
+}
+
 // Spec section 4's setting, kept on this phone (on unless turned off)
 function AutoFileSwitch() {
   const [on, setOn] = useState(autoFileOn);
@@ -188,6 +228,8 @@ export default function PhotosView({ session, onBack }) {
   const projectKey = `${project.companyId}_${project.projectId}`;
   const [tab, setTab] = useState("day"); // day | area | trade | albums
   const [album, setAlbum] = useState(null);
+  const [dayOpen, setDayOpen] = useState(null); // { day, seed } from See all / Go to a day
+  const [jump, setJump] = useState("");
   const [open, setOpen] = useState(null); // { photo, timeZone }
   const [snap, setSnap] = useState(null); // { photo: File, n } while saving one
   const [albumsVersion, setAlbumsVersion] = useState(0);
@@ -219,28 +261,42 @@ export default function PhotosView({ session, onBack }) {
   const tabs = [["day", "By day"], ...(hasArea(state.photos) ? [["area", "By area"]] : []), ...(hasTrade(state.photos) ? [["trade", "By trade"]] : []), ["albums", "Albums"]];
   const shown = tabs.some(([k]) => k === tab) ? tab : "day";
 
+  const today = dayOf(new Date().toISOString(), state.timeZone);
+  const openPhoto = (photo, timeZone) => setOpen({ photo, timeZone: timeZone ?? state.timeZone });
+  const snapButton = <button type="button" className="ph-snap" onClick={openCamera}><CameraIcon /> Snap</button>;
   return (
     <div className="ph">
       {open && <FullPhoto photo={open.photo} timeZone={open.timeZone} onClose={() => setOpen(null)} />}
+      {cameraInput}
       {album ? (
-        <AlbumView project={project} album={album} onBack={() => setAlbum(null)} onOpen={(photo, timeZone) => setOpen({ photo, timeZone })} />
+        <AlbumView project={project} album={album} onBack={() => setAlbum(null)} onOpen={openPhoto} />
+      ) : dayOpen ? (
+        <DayView key={dayOpen.day} project={project} day={dayOpen.day} seed={dayOpen.seed} timeZone={state.timeZone} onBack={() => { setDayOpen(null); setJump(""); }} onOpen={openPhoto} snapButton={snapButton} />
       ) : (
         <>
-          {cameraInput}
           <div className="ph-head">
             <button type="button" className="link-btn" onClick={onBack}><BackIcon /> Home</button>
-            <button type="button" className="ph-snap" onClick={openCamera}><CameraIcon /> Snap</button>
           </div>
           <h2 className="page-title">Project photos</h2>
           <Waiting projectKey={projectKey} />
-          <div className="dir-filters ph-tabs" role="tablist" style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
-            {tabs.map(([k, label]) => (
-              <button key={k} type="button" role="tab" aria-selected={shown === k} className={shown === k ? "is-on" : ""} onClick={() => setTab(k)}>{label}</button>
-            ))}
+          {/* Pinned while scrolling: the tabs and Snap */}
+          <div className="ph-bar">
+            <div className="dir-filters ph-tabs" role="tablist" style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
+              {tabs.map(([k, label]) => (
+                <button key={k} type="button" role="tab" aria-selected={shown === k} className={shown === k ? "is-on" : ""} onClick={() => setTab(k)}>{label}</button>
+              ))}
+            </div>
+            <button type="button" className="ph-snap is-compact" onClick={openCamera} aria-label="Snap a photo"><CameraIcon /> Snap</button>
           </div>
+          {shown === "day" && (
+            <label className="msg-field ph-jump"><span>Go to a day</span>
+              <input type="date" className="dir-input" max={today} value={jump}
+                onChange={(e) => { setJump(e.target.value); if (e.target.value >= "2000-01-01") setDayOpen({ day: e.target.value, seed: state.photos }); }} />
+            </label>
+          )}
           {shown === "albums"
             ? <AlbumList key={albumsVersion} project={project} onOpenAlbum={setAlbum} />
-            : <Groups state={state} by={shown} onOpen={(photo) => setOpen({ photo, timeZone: state.timeZone })} onMore={more} />}
+            : <Groups state={state} by={shown} onOpen={(photo) => openPhoto(photo)} onMore={more} onDay={(day, seed) => { setDayOpen({ day, seed }); window.scrollTo(0, 0); }} />}
           <AutoFileSwitch />
           <p className="msg-footnote">Photos live in Procore's Photos tool. You see the ones Procore shows you.</p>
         </>

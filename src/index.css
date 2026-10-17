@@ -2957,6 +2957,14 @@ select.dir-input { appearance: auto; }
 .ph-muted { color: var(--muted); font-size: 15px; }
 .ph-group { display: grid; gap: 8px; }
 .ph-group h3 { font-size: 18px; display: flex; align-items: baseline; gap: 8px; }
+/* 100+ photos on a phone: the tabs + Snap bar pins to the top, each day's header pins just under it */
+.ph { --ph-bar-h: 64px; }
+.ph-bar { position: sticky; top: 0; z-index: 4; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; margin: 0 -4px; padding: 8px 4px; background: var(--bg); }
+.ph-bar .ph-tabs { margin: 0; min-width: 0; }
+.ph-snap.is-compact { min-height: 44px; padding: 0 14px; font-size: 16px; }
+.ph-group h3 { position: sticky; top: var(--ph-bar-h); z-index: 3; margin: 0 -4px; padding: 6px 4px; background: var(--bg); }
+.ph-all { justify-self: start; min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--brand-ink); font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+.ph-jump .dir-input { width: 100%; box-sizing: border-box; }
 .ph-group h3 small { color: var(--muted); font-size: 14px; font-weight: 500; }
 .ph-grid { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
 .ph-grid button { display: block; width: 100%; padding: 0; border: none; background: var(--fill); border-radius: 8px; overflow: hidden; cursor: pointer; }

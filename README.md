@@ -64,7 +64,8 @@ The foreman never opens Procore's Daily Log. Nothing is written until they tap S
 
 Procore's Photos tool is the system of record: SiteSnap keeps no photo gallery of its own.
 
-- **Browse:** By day (grouped by the project's own day and time zone), By area (Procore locations) and By trade (Procore trades), which appear only once a photo carries one, and Albums (Procore albums with counts). The full view shows who took the photo, when, its album, area, trade, and description.
+- **Browse:** By day (grouped by the day each photo was taken, from the camera's time Procore keeps, else the day it reached Procore, in the project's time zone), By area (Procore locations) and By trade (Procore trades), which appear only once a photo carries one, and Albums (Procore albums with counts). The full view shows who took the photo, when, its album, area, trade, and description.
+- **Built for a long list on a phone:** photos load 48 at a time as you scroll, and thumbnails download only as they come into view. The tabs and the Snap button stay pinned at the top, and each day's header pins under them. A day shows 3 rows (9 photos) with **See all N photos**, and **Go to a day** opens any date.
 - **Each person's own sign-in:** Procore's photo links need a Procore sign-in, so photos load through a SiteSnap server endpoint using the viewer's own Procore sign-in. People see only what Procore already shows them, and the phone caches the photos.
 - **Snap:** the camera opens straight away. Add an optional voice note (written down by speech-to-text) or typed words, and the photo goes into that day's `Field photos YYYY-MM-DD` album (created if missing, always public), or another album picked with one tap. Photos are shrunk to 2048 px before upload.
 - **No signal:** photos are saved on the phone first (an IndexedDB queue) and uploaded oldest first when signal returns, with backoff. Each capture has its own id, so a retry never creates a duplicate photo in Procore.

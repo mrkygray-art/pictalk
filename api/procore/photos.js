@@ -5,11 +5,31 @@
 //   -> { albums: [{ id, name, count, private, updatedAt, cover }] }
 // GET /api/procore/photos?companyId=&projectId=&view=photos[&albumId=][&page=1]
 //   -> { photos: [...newest first], page, nextPage, total, timeZone }
+// GET /api/procore/photos?companyId=&projectId=&view=photos&day=YYYY-MM-DD[&page=1]
+//   -> the same, but only photos added to Procore on that project day or the next (a phone that was offline
+//      overnight uploads late). filters[created_at] with the day and the project's UTC offset is the filter the
+//      sandbox confirmed (docs/procore-photos-findings.md, question 4); the phone then keeps the photos taken
+//      (else added) on that day.
 // Image links (cover, thumb, full) point at /api/procore/photo-file, because Procore's own links need a
 // Procore sign-in that a foreman's phone doesn't have (docs/procore-photos-findings.md, question 5).
 import { config, HttpError, procoreId, queryOf, sendError, sendJson } from "../_procore.js";
 import { procoreSend } from "../_procoreWrite.js";
 import { firestore } from "../_firestore.js";
+import { ianaZone } from "../_dailyLog.js";
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const nextDay = (iso) => { const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
+/** The project's UTC offset ("-07:00") on a given day (so daylight saving is right for that day) */
+export function offsetOn(timeZone, iso) {
+  try {
+    const part = new Intl.DateTimeFormat("en-US", { timeZone: ianaZone(timeZone), timeZoneName: "longOffset" })
+      .formatToParts(new Date(`${iso}T12:00:00Z`)).find((x) => x.type === "timeZoneName")?.value ?? "";
+    const m = /GMT([+-]\d{2}:\d{2})/.exec(part);
+    return m ? m[1] : "+00:00";
+  } catch { return "+00:00"; }
+}
+/** filters[created_at] for a project day and the day after */
+export const createdOnDay = (timeZone, day) => `${day}T00:00:00${offsetOn(timeZone, day)}...${nextDay(day)}T23:59:59${offsetOn(timeZone, nextDay(day))}`;
 
 // Photos SiteSnap filed from Report an issue: procoreProjects/{key}/photoLinks/{imageId} -> { type, id, number }.
 // Without the store the photos still list, just without badges.
@@ -86,16 +106,22 @@ export default async function handler(req, res) {
       const page = Math.max(1, Math.min(500, Number(q.get("page")) || 1));
       const albumId = q.get("albumId") ? procoreId(q.get("albumId")) : null;
       if (q.get("albumId") && !albumId) throw new HttpError(400, "bad_album", "That album isn't valid.");
-      const query = { project_id: projectId, per_page: PER_PAGE, page, sort: "-created_at", ...(albumId ? { image_category_id: albumId } : {}) };
+      const day = q.get("day");
+      if (day && !DATE.test(day)) throw new HttpError(400, "bad_day", "Pick a day.");
+      // The project's time zone groups photos by the project's own day (Procore's dates are UTC)
+      let timeZone = null;
+      if (page === 1 || day) {
+        const p = await procoreSend(req, res, cfg, "GET", `/rest/v1.0/projects/${projectId}`, { companyId, query: { company_id: companyId } });
+        timeZone = p.ok && p.json?.time_zone ? ianaZone(p.json.time_zone) : null; // "Pacific Time (US & Canada)" -> "America/Los_Angeles": phones only know the second
+      }
+      const query = {
+        project_id: projectId, per_page: PER_PAGE, page, sort: "-created_at",
+        ...(albumId ? { image_category_id: albumId } : {}),
+        ...(day ? { "filters[created_at]": createdOnDay(timeZone, day) } : {}),
+      };
       const r = await procoreSend(req, res, cfg, "GET", "/rest/v1.0/images", { companyId, query });
       if (!r.ok) throw refused(r);
       const list = Array.isArray(r.json) ? r.json : [];
-      // The project's time zone groups photos by the project's own day (Procore's dates are UTC)
-      let timeZone = null;
-      if (page === 1) {
-        const p = await procoreSend(req, res, cfg, "GET", `/rest/v1.0/projects/${projectId}`, { companyId, query: { company_id: companyId } });
-        timeZone = p.ok ? p.json?.time_zone ?? null : null;
-      }
       const total = Number(r.headers?.total) || null;
       const nextPage = nextFromLink(r.headers?.link) ?? (total && page * PER_PAGE < total ? page + 1 : null);
       const links = await linksFor(`${companyId}_${projectId}`, list.map((img) => img.id).filter(Boolean));

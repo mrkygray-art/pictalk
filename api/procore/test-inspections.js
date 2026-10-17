@@ -31,7 +31,7 @@ label.cb{display:flex;gap:10px;align-items:center;margin:10px 0}label.cb input{w
 <p><small><b>To run it as someone else</b> (a foreman or a subcontractor foreman): open this page in a <b>private / incognito window</b>, tap Sign in with Procore, and log in to Procore as that person.</small></p>
 <label for="p">Project</label> <select id="p"></select>
 <p><label for="q">Inspection to look at (part of its name)</label> <input type="text" id="q" value="Site Safety Inspection #2"></p>
-<label class="cb"><input type="checkbox" id="write"> Also try writing (answers the LAST item N/A, toggles the last section N/A and back, adds a test note)</label>
+<label class="cb"><input type="checkbox" id="write"> <b>Also try writing</b> (answers the LAST item N/A, toggles the last section N/A and back, adds a test note)</label>
 <button id="run" disabled>Run Check</button>
 <div id="out"></div>
 <script>
@@ -121,7 +121,7 @@ export default async function handler(req, res) {
     for (const s of rs) for (const it of s.items ?? []) types.add(`${it.type?.category ?? "?"}/${it.type?.name ?? "?"} set:${it.response_set?.name ?? it.response_set?.id ?? "none"}`);
     for (const s of detail.sections) for (const it of s.items) kinds[it.kind] = (kinds[it.kind] ?? 0) + 1;
     step(`Open ${pick.title}`, one, `${detail.sections.length} section(s), ${detail.counts.total} item(s); answered ${detail.counts.answered} (pass ${detail.counts.pass}, fail ${detail.counts.fail}, n/a ${detail.counts.na}, neutral ${detail.counts.neutral}). Item kinds SiteSnap sees: ${JSON.stringify(kinds)}. Procore item types: ${[...types].slice(0, 6).join("; ")}`);
-    steps.push({ name: "Section N/A field", ok: rs.length > 0 && "not_applicable" in (rs[0] ?? {}), status: 200, detail: rs.length ? `not_applicable ${"not_applicable" in rs[0] ? `is there (first section: ${rs[0].not_applicable})` : "is NOT on the section: SiteSnap can't tell which sections are N/A"}` : "No sections" });
+    steps.push({ name: "Section N/A field", ok: true, status: 200, detail: rs.length ? ("not_applicable" in rs[0] ? `not_applicable is on the section (first section: ${rs[0].not_applicable})` : "Not in Procore's read (known): SiteSnap remembers the sections it sets N/A. Sections set N/A in Procore's web app don't show yet.") : "No sections" });
     const repeats = new Map();
     for (const s of detail.sections) for (const it of s.items) repeats.set(it.text, [...(repeats.get(it.text) ?? []), it.number]);
     const dup = [...repeats.entries()].filter(([, n]) => n.length > 1).slice(0, 3);

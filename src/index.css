@@ -3122,3 +3122,89 @@ select.dir-input { appearance: auto; }
 .dl-edit-sheet { display: grid; gap: 12px; }
 .dl-edit-sheet p { margin: 0; }
 .save-btn.is-danger { background: var(--danger); color: #fff; }
+
+/* Inspections (sitesnap-inspections-spec.md): list, sections, one question at a time, failed item, summary */
+.insp { display: grid; gap: 12px; }
+.insp .page-title { margin: 0; }
+.insp-rows, .insp-sections, .insp-failed-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.insp-row-wrap { display: grid; gap: 2px; }
+.insp-row { width: 100%; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; min-height: 64px; padding: 12px 16px; border: 0; border-radius: 16px; background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.insp-row:active { transform: scale(0.98); }
+.insp-row-name { display: grid; gap: 3px; min-width: 0; }
+.insp-row-name strong { font-size: 17px; line-height: 1.25; overflow-wrap: anywhere; }
+.insp-row-name small, .insp-row-side small { color: var(--text-2); font-size: 14px; }
+.insp-row-side { display: grid; justify-items: end; gap: 4px; }
+.insp-status { font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 10px; background: var(--surface-2); color: var(--text-2); white-space: nowrap; }
+.insp-status.is-inprogress { background: var(--brand-soft); color: var(--brand-ink); }
+.insp-status.is-complete { background: var(--success-soft); color: var(--success-ink); }
+.insp-details-link { justify-self: end; margin: 0 6px 0 0; font-size: 14px; }
+.insp-details { white-space: pre-wrap; max-height: 50vh; overflow-y: auto; color: var(--text-2); font-size: 14px; }
+.insp-group { margin: 8px 0 0; font-size: 15px; color: var(--text-2); font-weight: 700; }
+.insp-btn-sub { font-weight: 600; opacity: 0.75; margin-left: 6px; }
+.insp-saved { margin: 0; justify-self: start; font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 10px; background: var(--success-soft); color: var(--success-ink); }
+.insp-saved.is-waiting { background: var(--warning-soft); color: var(--warning-ink); }
+.insp-sync-issues { display: grid; gap: 8px; }
+.insp-conflict { display: grid; gap: 8px; padding: 12px; border-radius: 14px; background: var(--warning-soft); color: var(--text); }
+.insp-conflict.is-failed { background: var(--danger-soft); }
+.insp-conflict p { margin: 0; }
+.insp-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.insp-two > button { min-height: 52px; font-size: 16px; }
+.insp-section { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: stretch; }
+.insp-section-main { display: grid; gap: 3px; min-height: 60px; padding: 10px 14px; border: 0; border-radius: 14px; background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.insp-section-main strong { font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; }
+.insp-section-main small { color: var(--text-2); font-size: 14px; }
+.insp-section.is-na .insp-section-main { opacity: 0.6; }
+.insp-na-btn { min-width: 84px; padding: 0 10px; border: 0; border-radius: 14px; background: var(--surface-2); color: var(--text); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.insp-counts { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; font-weight: 700; }
+.insp-counts span { padding: 1px 8px; border-radius: 8px; }
+.insp-counts .is-pass, .insp-summary .is-pass { --tone: var(--success-ink); --tone-bg: var(--success-soft); }
+.insp-counts .is-fail, .insp-summary .is-fail { --tone: var(--danger); --tone-bg: var(--danger-soft); }
+.insp-counts .is-pass, .insp-counts .is-fail { background: var(--tone-bg); color: var(--tone); }
+.insp-counts .is-na { background: var(--surface-2); color: var(--text-2); }
+.insp-top { display: flex; justify-content: space-between; align-items: center; }
+.insp-top .text-btn { margin: 0; }
+.insp-where { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-2); }
+.insp-title { margin: 0; font-size: 20px; line-height: 1.25; }
+.insp-progress-line { display: flex; justify-content: space-between; font-size: 15px; font-weight: 600; }
+.insp-bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.insp-bar span { display: block; height: 100%; background: var(--brand); transition: width 0.2s; }
+.insp-card { display: grid; gap: 8px; padding: 18px 16px 16px; border-radius: 20px; background: var(--surface); }
+.insp-num { justify-self: start; font-size: 14px; font-weight: 800; padding: 2px 10px; border-radius: 8px; background: var(--brand-soft); color: var(--brand-ink); }
+.insp-q { margin: 0; font-size: 22px; line-height: 1.35; font-weight: 600; overflow-wrap: anywhere; }
+.insp-q-details { margin: 0; color: var(--text-2); font-size: 15px; }
+.insp-required { margin: 0; font-size: 14px; font-weight: 700; color: var(--warning-ink); }
+.insp-already { margin: 0; padding: 8px 12px; border-radius: 12px; background: var(--warning-soft); color: var(--text); font-size: 15px; }
+.insp-already.is-mine { background: var(--surface-2); }
+.insp-answers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.insp-answers.is-many { grid-template-columns: 1fr 1fr; }
+.insp-ans { min-height: 64px; border: 3px solid transparent; border-radius: 16px; font: inherit; font-size: 20px; font-weight: 800; cursor: pointer; color: #fff; background: #3a332b; }
+.insp-ans:active { transform: scale(0.97); }
+.insp-ans.is-pass { background: #1f6b34; }
+.insp-ans.is-fail { background: #8f2320; }
+.insp-ans.is-na, .insp-ans.is-neutral { background: #4a4239; }
+.insp-ans.is-on { border-color: var(--brand); }
+.insp-phrasing { margin: -4px 0 0; font-size: 13px; }
+.insp-value { display: grid; gap: 8px; }
+.insp-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.insp-tool { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px; border: 0; border-radius: 14px; background: var(--brand-soft); color: var(--brand-ink); font: inherit; font-size: 18px; font-weight: 700; cursor: pointer; }
+.insp-tool svg { width: 24px; height: 24px; }
+.insp-tool.is-recording { background: var(--record); color: #fff; }
+.insp-help { margin: -2px 0 0; text-align: center; color: var(--text-2); font-size: 15px; }
+.insp-failed-label { margin: 0; color: var(--danger); font-weight: 800; font-size: 15px; text-transform: uppercase; letter-spacing: 0.04em; }
+.insp-becomes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.insp-becomes > span:first-child { color: var(--text-2); font-size: 14px; font-weight: 600; }
+.insp-chip { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 0; border-radius: 20px; background: var(--surface-2); color: var(--text); font: inherit; font-size: 15px; font-weight: 700; }
+.insp-chip.is-obs { background: var(--brand-soft); color: var(--brand-ink); }
+.insp-chip.is-pick { border: 2px dashed var(--brand); background: none; color: var(--brand-ink); cursor: pointer; }
+.insp-create { font-size: 20px; }
+.insp-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.insp-summary > div { display: grid; justify-items: center; padding: 12px 6px; border-radius: 16px; background: var(--surface); }
+.insp-summary strong { font-size: 30px; }
+.insp-summary .is-pass strong, .insp-summary .is-fail strong { color: var(--tone); }
+.insp-summary span { color: var(--text-2); font-size: 14px; font-weight: 600; }
+.insp-failed-list li { padding: 10px 14px; border-radius: 14px; background: var(--surface); line-height: 1.4; }
+.insp-failed-list .text-btn.inline { margin: 0; font-weight: 800; }
+.insp-flag { color: var(--warning-ink); font-weight: 700; font-size: 14px; }
+.insp-toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 40; margin: 0; max-width: calc(100vw - 32px); padding: 10px 18px; border-radius: 20px; background: var(--text); color: var(--bg); font-weight: 700; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4); }
+.insp a { color: var(--brand-ink); font-weight: 600; }
+.insp > div > .text-btn.inline { margin: 2px 0 0; }

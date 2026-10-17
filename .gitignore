@@ -41,3 +41,5 @@ functions/.env
 # e2e screenshots
 e2e/report-shots/
 e2e/dailylog-shots/
+e2e/inspections-shots/
+e2e/photos-shots/

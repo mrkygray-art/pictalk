@@ -112,7 +112,7 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   await click("button::-p-text(Sign in with Procore)");
   await waitText("Project photos");
   const tiles = await page.$$eval(".home-tile strong", (b) => b.map((x) => x.textContent.trim()));
-  check("home: Report an issue | Message | Project photos | Daily log, in that order", tiles.join("|") === "Report an issue|Message|Project photos|Daily log", tiles.join("|"));
+  check("home: Report an issue | Message | Inspection | Daily log | Project photos, in that order", tiles.join("|") === "Report an issue|Message|Inspection|Daily log|Project photos", tiles.join("|"));
   check("the Report tile says what it does", (await text()).includes("Becomes a Procore Observation or Punch Item"));
   await shot("0-home");
   await click(".home-tile:nth-child(1)");
@@ -217,7 +217,7 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
 
   // Project photos: By day (Today / Yesterday), By area and By trade appear once a photo has one, Albums, full view
   await click(".msg-home-back");
-  await click(".home-tile:nth-child(3)");
+  await click(".home-tile::-p-text(Project photos)");
   await waitText("Today");
   const chips = await page.$$eval(".ph-tabs button", (b) => b.map((x) => x.textContent.trim()));
   check("photos: By day | By area | By trade | Albums", chips.join("|") === "By day|By area|By trade|Albums", chips.join("|"));

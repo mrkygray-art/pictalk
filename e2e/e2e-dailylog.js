@@ -102,7 +102,7 @@ const OPTIONS = {
   await click("button::-p-text(Sign in with Procore)");
   await waitText("Daily log");
   const tiles = await page.$$eval(".home-tile strong", (b) => b.map((x) => x.textContent.trim()));
-  check("home: Report an issue | Message | Project photos | Daily log", tiles.join("|") === "Report an issue|Message|Project photos|Daily log", tiles.join("|"));
+  check("home: Report an issue | Message | Inspection | Daily log | Project photos", tiles.join("|") === "Report an issue|Message|Inspection|Daily log|Project photos", tiles.join("|"));
   check("the Daily log tile says nothing was sent today", (await text()).includes("Not sent today"));
   await shot("0-home");
 

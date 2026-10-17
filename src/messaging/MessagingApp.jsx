@@ -10,6 +10,8 @@ import PushToggle from "./PushToggle";
 import ProjectHome from "./ProjectHome";
 import PhotosView from "./PhotosView";
 import DailyLogFlow from "./DailyLogFlow";
+import InspectionsFlow from "./InspectionsFlow";
+import { startInspectionSync } from "./inspectionStore";
 import { hasDraft, lastSent } from "./dailyLogStore";
 import { startPhotoSync } from "./photoQueue";
 import { BackIcon } from "./icons";
@@ -30,7 +32,7 @@ export default function MessagingApp() {
   const [view, setView] = useState(() => {
     const cid = new URLSearchParams(window.location.search).get("cid");
     return cid && /^[A-Za-z0-9_-]{1,64}$/.test(cid) ? { name: "conversation", cid } : { name: "home" };
-  }); // home | feed | conversation {cid} | compose | report | photos | dailylog | access
+  }); // home | feed | conversation {cid} | compose | report | photos | dailylog | inspections | access
   const [choosing, setChoosing] = useState(false);
   const [reads, setReads] = useState(new Map());
   const [pending, setPending] = useState([]);
@@ -40,6 +42,7 @@ export default function MessagingApp() {
 
   useEffect(() => (signedIn ? startMessageSync() : undefined), [signedIn]);
   useEffect(() => (signedIn ? startPhotoSync() : undefined), [signedIn]); // Snap photos waiting on this phone
+  useEffect(() => (signedIn ? startInspectionSync() : undefined), [signedIn]); // inspection answers waiting on this phone
   // Keep the address bar plain: drop ?procore=… once its message has been read
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -141,6 +144,7 @@ export default function MessagingApp() {
             unread={forMe.filter((c) => isUnread(c, me.procoreUserId, reads)).length}
             onReport={() => setView({ name: "report" })}
             onMessages={() => setView({ name: "feed" })}
+            onInspections={() => setView({ name: "inspections" })}
             onPhotos={() => setView({ name: "photos" })}
             onDailyLog={() => setView({ name: "dailylog" })}
             dailyStatus={dailyStatusFor(key)}
@@ -150,6 +154,7 @@ export default function MessagingApp() {
         </>
       )}
       {view.name === "photos" && <PhotosView session={session} onBack={() => setView({ name: "home" })} />}
+      {view.name === "inspections" && <InspectionsFlow key={key} session={session} onClose={() => setView({ name: "home" })} />}
       {view.name === "dailylog" && <DailyLogFlow key={key} session={session} onClose={() => setView({ name: "home" })} />}
       {view.name === "feed" && (
         <>

@@ -26,13 +26,14 @@ select,input[type=text]{font:inherit;font-size:17px;width:100%;box-sizing:border
 label.cb{display:flex;gap:10px;align-items:center;margin:10px 0}label.cb input{width:22px;height:22px}
 .step{background:#221d18;border-radius:12px;padding:10px 14px;margin:8px 0}.ok{color:#30d158}.bad{color:#ff5f57}.maybe{color:#ffc24d}a{color:#ffc24d}small{color:#b8ac9c}</style></head>
 <body><h1>Inspections check</h1>
-<p>Checks what SiteSnap can do with Procore's <b>Inspections</b> before foremen use it, with your own Procore sign-in. It <b>only reads</b> unless you tick "Also try writing".</p>
+<p>Checks what SiteSnap can do with Procore's <b>Inspections</b> before foremen use it, with your own Procore sign-in. <b>Run Check</b> only reads. <b>Run Write Check</b> also tries saving.</p>
 <p id="who"><small>Checking your Procore sign-in…</small></p>
 <p><small><b>To run it as someone else</b> (a foreman or a subcontractor foreman): open this page in a <b>private / incognito window</b>, tap Sign in with Procore, and log in to Procore as that person.</small></p>
 <label for="p">Project</label> <select id="p"></select>
 <p><label for="q">Inspection to look at (part of its name)</label> <input type="text" id="q" value="Site Safety Inspection #2"></p>
-<label class="cb"><input type="checkbox" id="write"> <b>Also try writing</b> (answers the LAST item N/A, toggles the last section N/A and back, adds a test note)</label>
-<button id="run" disabled>Run Check</button>
+<button id="run" disabled>Run Check (read only)</button>
+<button id="runw" disabled style="background:#3a332b;color:#ffc24d">Run Write Check</button>
+<p><small>Write Check answers the LAST item N/A and tries to clear it, sets the last section N/A and back, and adds a test note.</small></p>
 <div id="out"></div>
 <script>
 const $=(s)=>document.querySelector(s);
@@ -42,18 +43,20 @@ fetch('/api/procore/projects').then(async(r)=>{
   const b=await r.json(); const list=b.projects||[];
   $('#who').innerHTML='<small>Signed in. '+list.length+' project(s).</small>';
   for(const p of list){ const o=document.createElement('option'); o.value=p.companyId+'_'+p.projectId; o.textContent=p.name; if(/westgate/i.test(p.name)) o.selected=true; $('#p').append(o); }
-  $('#run').disabled=!list.length;
+  $('#run').disabled=!list.length; $('#runw').disabled=!list.length;
 });
-$('#run').onclick=async()=>{
-  $('#run').disabled=true; $('#out').innerHTML='<p>Checking… (about 15 seconds)</p>';
+const go=async(write)=>{
+  $('#run').disabled=true; $('#runw').disabled=true; $('#out').innerHTML='<p>Checking… (about 15 seconds)</p>';
   const [companyId,projectId]=$('#p').value.split('_');
-  const r=await fetch('/api/procore/test-inspections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({companyId,projectId,match:$('#q').value,write:$('#write').checked})});
+  const r=await fetch('/api/procore/test-inspections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({companyId,projectId,match:$('#q').value,write})});
   const b=await r.json().catch(()=>({message:'No answer'}));
-  if(!r.ok){ $('#out').innerHTML='<p class="bad">'+esc(b.message||'Failed')+'</p>'; $('#run').disabled=false; return; }
-  $('#out').innerHTML='<p><b>'+esc(b.who)+'</b></p>'+(b.steps||[]).map(s=>'<div class="step"><b class="'+(s.ok?'ok':s.status===404?'maybe':'bad')+'">'+(s.ok?'✓':'✗')+' '+esc(s.name)+'</b> <small>('+s.status+')</small><br><small>'+esc(s.detail)+'</small></div>').join('')
+  if(!r.ok){ $('#out').innerHTML='<p class="bad">'+esc(b.message||'Failed')+'</p>'; $('#run').disabled=false; $('#runw').disabled=false; return; }
+  $('#out').innerHTML='<p><b>'+esc(b.who)+'</b> · '+(write?'WRITE check':'read-only check')+'</p>'+(b.steps||[]).map(s=>'<div class="step"><b class="'+(s.ok?'ok':s.status===404?'maybe':'bad')+'">'+(s.ok?'✓':'✗')+' '+esc(s.name)+'</b> <small>('+s.status+')</small><br><small>'+esc(s.detail)+'</small></div>').join('')
     +'<p><small>Copy everything on this page (or take screenshots) and send it to Claude.</small></p><pre style="white-space:pre-wrap;font-size:12px;color:#b8ac9c">'+esc(JSON.stringify(b.raw,null,1))+'</pre>';
-  $('#run').disabled=false;
+  $('#run').disabled=false; $('#runw').disabled=false;
 };
+$('#run').onclick=()=>go(false);
+$('#runw').onclick=()=>go(true);
 </script></body></html>`;
 
 export default async function handler(req, res) {

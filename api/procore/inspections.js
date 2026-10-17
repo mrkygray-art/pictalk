@@ -34,6 +34,22 @@ const fail = (r, doing) => { const e = friendlyRefusal(r, doing); return new Htt
 const log = (what, data) => console.log(`SiteSnap inspections ${what}`, JSON.stringify(data));
 
 let db = null;
+// Procore's inspection read doesn't say which sections are N/A (sandbox, 2026-10-16), and its N/A call is a toggle.
+// So SiteSnap remembers what it set: procoreProjects/{key}/inspectionSections/{listId}_{sectionId} = { na, at }.
+async function naLog(key) {
+  try { db = await firestore(); return db.collection("procoreProjects").doc(key).collection("inspectionSections"); }
+  catch (err) { log("no section log", { error: err.message }); return null; }
+}
+async function withSavedNa(key, inspection) {
+  const unknown = inspection.sections.filter((s) => !s.naKnown);
+  if (!unknown.length) return inspection;
+  const store = await naLog(key);
+  if (!store) return inspection;
+  const docs = await Promise.all(unknown.map((s) => store.doc(`${inspection.id}_${s.id}`).get().catch(() => null)));
+  unknown.forEach((s, i) => { if (docs[i]?.exists) s.na = docs[i].data()?.na === true; });
+  return inspection;
+}
+
 async function opsLog(key) {
   try { db = await firestore(); return db.collection("procoreProjects").doc(key).collection("inspectionOps"); }
   catch (err) { log("no op log", { error: err.message }); return null; }
@@ -131,8 +147,8 @@ async function photo(req, res, cfg, companyId, projectId, listId, body, send) {
   return { ok: true, photos: Array.isArray(r.json?.attachments) ? r.json.attachments.length : hit.item.photos + 1 };
 }
 
-async function sectionNa(send, projectId, listId, body) {
-  const inspection = await mustRead(send, projectId, listId);
+async function sectionNa(send, key, projectId, listId, body) {
+  const inspection = await withSavedNa(key, await mustRead(send, projectId, listId));
   const s = inspection.sections.find((x) => x.id === String(body.sectionId));
   if (!s) throw new HttpError(404, "gone", "This section isn't on the inspection anymore.");
   const want = body.na !== false;
@@ -140,7 +156,11 @@ async function sectionNa(send, projectId, listId, body) {
   let r = await send("PATCH", PATHS.sectionToggle(listId, s.id), { body: { project_id: Number(projectId) } });
   if (r.status === 404 || r.status === 405) r = await send("PATCH", PATHS.section(listId, s.id), { body: { project_id: Number(projectId), section: { name: s.name, position: s.position, not_applicable: want } } });
   if (!r.ok) { log("section refused", { status: r.status }); throw fail(r, "set sections N/A"); }
-  return { ok: true, na: want, changed: true };
+  // Procore's answer says where it landed, when it says; else it's what was asked for
+  const now = typeof r.json?.not_applicable === "boolean" ? r.json.not_applicable : want;
+  const store = await naLog(key);
+  if (store) await store.doc(`${listId}_${s.id}`).set({ na: now, at: Date.now() }).catch(() => {});
+  return { ok: true, na: now, changed: true };
 }
 
 async function failItem(req, res, cfg, companyId, projectId, listId, body, send) {
@@ -197,6 +217,7 @@ export default async function handler(req, res) {
         const listId = procoreId(id);
         if (!listId) throw new HttpError(400, "bad_id", "That inspection can't be found.");
         const one = await readOne(send, projectId, listId);
+        if (one.access) await withSavedNa(`${companyId}_${projectId}`, one.inspection);
         if (one.access) { const who = await send("GET", "/rest/v1.0/me", { query: { company_id: companyId } }); one.myId = who.json?.id != null ? String(who.json.id) : null; }
         return sendJson(res, 200, one);
       }
@@ -223,7 +244,7 @@ export default async function handler(req, res) {
       return sendJson(res, r.status, r.out);
     }
     if (action === "note") return sendJson(res, 200, await note(send, projectId, listId, body));
-    if (action === "section_na") return sendJson(res, 200, await sectionNa(send, projectId, listId, body));
+    if (action === "section_na") return sendJson(res, 200, await sectionNa(send, `${companyId}_${projectId}`, projectId, listId, body));
     if (action === "close") return sendJson(res, 200, await close(send, projectId, listId));
     if (action !== "photo" && action !== "fail") throw new HttpError(400, "bad_action", "Unknown action.");
 

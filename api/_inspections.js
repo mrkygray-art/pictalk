@@ -86,7 +86,7 @@ export function inspectionDetail(raw) {
         observations: (Array.isArray(it.observations) ? it.observations : []).map((o) => ({ id: String(o.id), number: o.number ?? null, title: text(o.title ?? o.name, 120), status: o.status ?? null })),
       };
     });
-    return { id: String(s.id), number: si + 1, name: text(s.name, 200) || `Section ${si + 1}`, position: Number(s.position) || si, na: !!s.not_applicable, items };
+    return { id: String(s.id), number: si + 1, name: text(s.name, 200) || `Section ${si + 1}`, position: Number(s.position) || si, na: s.not_applicable === true, naKnown: typeof s.not_applicable === "boolean", items }; // the sandbox's show call has no not_applicable (2026-10-16)
   });
   return { ...inspectionSummary(raw), sections, ...countsOf(sections) };
 }

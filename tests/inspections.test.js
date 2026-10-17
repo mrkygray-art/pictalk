@@ -23,7 +23,7 @@ const DANA = 222;
 const SUB = 30; // Ironbridge? no: a sub vendor
 
 const item = (id, name, position, extra = {}) => ({ id, name, position, status: "none", item_response: null, type: { id: 1, category: "default", name: "default" }, attachments: [], comments: [], observations: [], ...extra });
-let lists, refuse, calls, ops, made;
+let lists, refuse, calls, ops, made, hideNa;
 function freshLists() {
   return {
     9001: {
@@ -58,7 +58,11 @@ const reply = (u, init) => {
     return [200, Object.values(lists).map(({ sections, ...rest }) => rest)]; // eslint-disable-line no-unused-vars
   }
   let x = /\/rest\/v1\.0\/checklist\/lists\/(\d+)\?project_id=/.exec(u);
-  if (x && m === "GET") return lists[x[1]] ? [200, lists[x[1]]] : [404, { errors: "Not found" }];
+  if (x && m === "GET") {
+    if (!lists[x[1]]) return [404, { errors: "Not found" }];
+    // The sandbox's read has no not_applicable on sections
+    return [200, hideNa ? { ...lists[x[1]], sections: lists[x[1]].sections.map(({ not_applicable, ...sec }) => sec) } : lists[x[1]]]; // eslint-disable-line no-unused-vars
+  }
   x = /\/projects\/373716\/checklist\/items\/(\d+)\/item_response$/.exec(u);
   if (x && m === "POST") {
     if (refuse === "answer") return [403, { errors: "You do not have sufficient access" }];
@@ -101,6 +105,7 @@ let saved;
 beforeEach(() => {
   lists = freshLists();
   refuse = null;
+  hideNa = false;
   calls = [];
   ops = new Map();
   made = [];
@@ -350,4 +355,19 @@ test("check page: reads the list and the picked inspection; writes only when ask
   assert.equal(write.statusCode, 200, write.body);
   assert.ok(calls.some((c) => /item_response$/.test(c.url)));
   assert.equal(calls.filter((c) => /toggle_not_applicable/.test(c.url)).length, 2, "on and back");
+});
+
+test("section N/A when Procore's read doesn't say (the sandbox): SiteSnap remembers what it set, so a retry never flips it back", async () => {
+  hideNa = true;
+  const on = await post({ listId: "9001", action: "section_na", sectionId: "50", na: true });
+  assert.equal(on.json().changed, true);
+  const again = await post({ listId: "9001", action: "section_na", sectionId: "50", na: true });
+  assert.equal(again.json().changed, false);
+  assert.equal(calls.filter((c) => /toggle_not_applicable/.test(c.url)).length, 1);
+  const secs = (await get("&id=9001")).json().inspection.sections;
+  assert.equal(secs.find((s) => s.id === "50").na, true, "shown as N/A from SiteSnap's record");
+  assert.equal(secs.find((s) => s.id === "51").na, false);
+  const off = await post({ listId: "9001", action: "section_na", sectionId: "50", na: false });
+  assert.equal(off.json().changed, true);
+  assert.equal(calls.filter((c) => /toggle_not_applicable/.test(c.url)).length, 2);
 });

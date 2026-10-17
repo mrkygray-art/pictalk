@@ -2,7 +2,7 @@
 
 Discovery for `sitesnap-inspections-spec.md`, section 2. Branch `feature/inspections`.
 
-**Status (2026-10-16): desk check done, sandbox check not run yet.** Procore's own developer reference does not load outside a browser, so everything here is from Procore's support pages and a third-party mirror of Procore's API reference (withone.ai, updated 2026-02-25). Treat field names as best known until `/api/procore/test-inspections` has run against the sandbox. Every Procore path and field name is in one file, `api/_inspections.js`, so a mismatch is a one-line fix.
+**Status (2026-10-16): desk check done; sandbox read check run by Edward (admin) on Westgate, all reads confirmed (below). Write check not run yet.** Procore's own developer reference does not load outside a browser, so everything here is from Procore's support pages and a third-party mirror of Procore's API reference (withone.ai, updated 2026-02-25). Treat field names as best known until `/api/procore/test-inspections` has run against the sandbox. Every Procore path and field name is in one file, `api/_inspections.js`, so a mismatch is a one-line fix.
 
 **Verdict: the API looks able to run an inspection end to end** (read, answer each item, set a section N/A, attach a photo, create an Observation linked to the failed item, close). The section 8 fallback (answers kept only in SiteSnap plus a PDF) is not needed unless the sandbox check shows that writing answers is refused.
 
@@ -74,6 +74,13 @@ A 401/403 on the list read → "Your Procore role can't see Inspections on this 
 - `item_response` on Pass / Fail / N/A items: the docs' example sends every field at once, but the text says to send only the one for the item's type. SiteSnap sends only one.
 - `number_value` is documented as an integer but the example uses 7.54: the check page tries a decimal.
 - Multiple inspectors: `item_response.responder` says who answered. Before saving, SiteSnap re-reads the item and, if someone else answered since the screen loaded, answers 409 with their name ("Already answered by Dana Whitfield"); the foreman keeps theirs or overwrites.
+
+## Sandbox results (Edward, admin, Westgate, 2026-10-16, read only)
+
+- List: both inspections; `number`, `inspectors[]` (3 on #1, Edward only on #2), `inspected_item_count`, `item_count` 87, `not_applicable_item_count` all there. Responsible contractor, location, due date blank on both (not set in Procore yet). Also present: `identifier` ("1"), `respondable_item_count`, `amber_item_count`, `inspection_date`.
+- Show: 17 sections, 87 items. Items are `type: { category: "multiple_choice", name: "default" }` with `response_set: null`: SiteSnap reads them as Pass / Fail / N/A (correct). Unanswered items: `status "none"`, `responded_with "No Response"`, `item_response null`. Section 1 is "Housekeeping and Sanitation" (6 items); 2.1 and 2.5 have the same text.
+- **Sections have no `not_applicable` field.** Since Procore's N/A call is a toggle, SiteSnap remembers what it set (`procoreProjects/{key}/inspectionSections/{listId}_{sectionId}`) and only toggles when that differs. A section set N/A in Procore's web app won't show as N/A in SiteSnap until we find where Procore keeps it (the write check now prints the section and its items after the toggle).
+- `list_items` works (total 87). Rate limit 25, as before.
 
 ## 7. To confirm in the sandbox (`/api/procore/test-inspections`)
 

@@ -163,7 +163,13 @@ export default async function handler(req, res) {
           let r = await send("PATCH", PATHS.sectionToggle(pick.id, lastSection.id), { body: { project_id: Number(p) } });
           let way = "toggle_not_applicable";
           if (r.status === 404 || r.status === 405) { r = await send("PATCH", PATHS.section(pick.id, lastSection.id), { body: { project_id: Number(p), section: { name: lastSection.name, position: lastSection.position, not_applicable: label.endsWith("on") ? !lastSection.na : lastSection.na } } }); way = "section PATCH (deprecated)"; }
-          step(`${label}: ${lastSection.name}`, r, r.ok ? `Worked via ${way}: not_applicable ${r.json?.not_applicable ?? "?"}` : `Procore answered ${r.status} via ${way}: ${brief(r)}`);
+          raw[label] = { way, status: r.status, answer: r.ok ? r.json : brief(r) };
+          step(`${label}: ${lastSection.name}`, r, r.ok ? `Worked via ${way}. Procore answered: ${JSON.stringify(shape(r.json)).slice(0, 300)}` : `Procore answered ${r.status} via ${way}: ${brief(r)}`);
+          // The read has no not_applicable on sections: what changes when a section is N/A?
+          const look = await send("GET", PATHS.list(pick.id), { query: { project_id: p } });
+          const sec = (look.json?.sections ?? []).find((x) => String(x.id) === lastSection.id);
+          raw[`${label} read`] = { section: sec ? shape(sec) : null, items: (sec?.items ?? []).map((i) => ({ status: i.status, responded_with: i.responded_with, item_response: i.item_response?.status ?? null })), counts: { na: look.json?.na_item_count, not_inspected: look.json?.not_inspected_item_count } };
+          steps.push({ name: `${label}: what the read shows`, ok: look.ok, status: look.status, detail: sec ? `section keys: ${Object.keys(sec).join(", ")}; items: ${(sec.items ?? []).map((i) => `${i.status}/${i.responded_with}`).join(", ")}; inspection n/a count ${look.json?.na_item_count ?? "?"}, not inspected ${look.json?.not_inspected_item_count ?? "?"}` : "section not found" });
         }
       }
     }

@@ -8,6 +8,8 @@
 //  3. Returns a Firebase custom token for uid procore_{procoreUserId} with claim procoreUserId, which
 //     the app signs in with. The rules then let them read only their projects' conversations.
 // Same-origin JSON only. No email is returned or stored for other users to see.
+// Guest demo (docs/guest-demo.md): the same, as the stored demo guest, named only "Guest", for the allowlisted
+// projects only, and the Firebase sign-in carries demo: true (the rules and functions refuse its writes).
 import { config, HttpError, procoreGet, requireSameOriginJson, sendError, sendJson } from "../_procore.js";
 import { listProjects, projectKey } from "../_projects.js";
 import { firebaseAuth, firestore } from "../_firestore.js";
@@ -17,16 +19,17 @@ export const uidFor = (procoreUserId) => `procore_${procoreUserId}`;
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") throw new HttpError(405, "bad_request", "Use POST.");
-    requireSameOriginJson(req);
+    requireSameOriginJson(req, { demoOk: true });
     const cfg = config();
     const me = await procoreGet(req, res, cfg, "/rest/v1.0/me");
     if (me?.id == null) throw new HttpError(502, "procore_failed", "Procore didn't say who you are. Try again.");
     const procoreUserId = String(me.id);
     const { projects } = await listProjects(req, res, cfg);
+    const demo = !!req.demoGuest;
     // Procore only fills in the name when a company is given
     const clean = (u) => String(u?.name ?? "").trim() || [u?.first_name, u?.last_name].map((x) => String(x ?? "").trim()).filter(Boolean).join(" ");
-    let name = clean(me);
-    let from = "me";
+    let name = demo ? "Guest" : clean(me);
+    let from = demo ? "demo" : "me";
     if (!name && projects[0]) {
       const named = await procoreGet(req, res, cfg, "/rest/v1.0/me", { companyId: projects[0].companyId, query: { company_id: projects[0].companyId } }).catch(() => null);
       name = clean(named);
@@ -56,8 +59,8 @@ export default async function handler(req, res) {
     await batch.commit();
 
     step = "token";
-    const token = await (await firebaseAuth()).createCustomToken(uidFor(procoreUserId), { procoreUserId });
-    sendJson(res, 200, { token, me: { procoreUserId, name }, projects });
+    const token = await (await firebaseAuth()).createCustomToken(uidFor(procoreUserId), { procoreUserId, ...(demo ? { demo: true } : {}) });
+    sendJson(res, 200, { token, me: { procoreUserId, name, ...(demo ? { demo: true } : {}) }, projects, ...(demo ? { demo: true } : {}) });
     } catch (err) {
       fail(err);
     }

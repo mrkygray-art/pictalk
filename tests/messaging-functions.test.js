@@ -169,3 +169,8 @@ test("a Closed line updates the card and flags no tasks", async () => {
   await new Promise((r) => setTimeout(r, 1000));
   assert.equal((await conv("/messages/e1").get()).data().tasksStatus, undefined, "nothing flagged");
 });
+
+test("guest demo: the callables (AI, transcription, to-dos) refuse a demo sign-in before reading anything", async () => {
+  const { requireMember } = fnRequire("./messaging.js");
+  await assert.rejects(requireMember({ auth: { uid: "procore_777", token: { procoreUserId: "777", demo: true } } }, "4291776_373235"), (e) => e.code === "permission-denied" && /view-only demo/.test(e.message));
+});

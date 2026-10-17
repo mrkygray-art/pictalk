@@ -16,11 +16,15 @@ import { hasDraft, lastSent } from "./dailyLogStore";
 import { startPhotoSync } from "./photoQueue";
 import { BackIcon } from "./icons";
 import { readBeta } from "./beta";
+import { DemoContext } from "./demo";
+import { DemoBanner, DemoSheet } from "./DemoBanner";
 import { isUnread, onQueueChange, pendingMessages, startMessageSync, watchFeed, watchReads } from "./messagingStore";
 
 // SiteSnap AI (SPEC-messaging-pivot, then docs/sitesnap-project-home-and-photos-spec.md): sign in with
 // Procore, pick a project, and land on the project home: Report an issue, Message (the conversation feed;
 // New Message: tag people, take photos, talk, send) and Project photos (Procore's Photos tool). The old job / stop screens are kept in the code behind VITE_FEATURE_JOBS=1 (src/features.js).
+// Guest demo (/demo, docs/guest-demo.md): the visitor arrives at /?demo=1 signed in as the view-only guest, sees the
+// project picker first, a "Demo mode: view only" banner on every screen, and a friendly note for anything that writes.
 const RESULT = { denied: "Procore sign-in was cancelled.", error: "Procore sign-in didn't work. Try again." };
 
 export default function MessagingApp() {
@@ -38,16 +42,22 @@ export default function MessagingApp() {
   const [pending, setPending] = useState([]);
   const [forMe, setForMe] = useState([]); // for the Message tile's count
   const [result] = useState(() => RESULT[new URLSearchParams(window.location.search).get("procore")] ?? "");
+  // Coming in from /demo: the picker first (three demo projects), until one is picked
+  const [demoPick, setDemoPick] = useState(() => new URLSearchParams(window.location.search).get("demo") === "1" && !embed.projectId);
+  const [explaining, setExplaining] = useState(""); // what a demo visitor tried to do
   const key = project ? `${project.companyId}_${project.projectId}` : null;
+  const { demo } = session;
+  const explain = (what) => setExplaining(what);
 
   useEffect(() => (signedIn ? startMessageSync() : undefined), [signedIn]);
   useEffect(() => (signedIn ? startPhotoSync() : undefined), [signedIn]); // Snap photos waiting on this phone
   useEffect(() => (signedIn ? startInspectionSync() : undefined), [signedIn]); // inspection answers waiting on this phone
-  // Keep the address bar plain: drop ?procore=… once its message has been read
+  // Keep the address bar plain: drop ?procore=… once its message has been read (and ?demo=1)
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (!url.searchParams.has("procore")) return;
+    if (!url.searchParams.has("procore") && !url.searchParams.has("demo")) return;
     url.searchParams.delete("procore");
+    url.searchParams.delete("demo");
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
   }, []);
   useEffect(() => {
@@ -79,12 +89,14 @@ export default function MessagingApp() {
         {result && <p className="procore-note">{result}</p>}
         {state.step === "loading" && <p className="procore-note">Checking Procore…</p>}
         {state.step === "unavailable" && <p className="procore-note">Procore sign-in isn't available on this site.</p>}
-        {state.step === "failed" && <p className="procore-note">{state.message}</p>}
+        {(state.step === "failed" || (state.step === "signin" && state.message)) && <p className="procore-note">{state.message}</p>}
         {(state.step === "signin" || state.step === "failed") && (
           <>
             <button type="button" className="big-btn photo-btn" onClick={() => session.connect()}>Sign in with Procore</button>
             <button type="button" className="text-btn" onClick={session.switchAccount}>Use a different Procore account</button>
             <p className="procore-note">That signs you out of Procore too, then asks for the other person's Procore email and password.</p>
+            <a className="text-btn demo-guest-link" href="/demo">Explore as a guest</a>
+            <p className="procore-note">A view-only demo with sample Procore projects. No sign-in needed.</p>
           </>
         )}
         {state.step === "ready" && <p className="procore-note">Signing in…</p>}
@@ -97,10 +109,22 @@ export default function MessagingApp() {
   // Who's signed in, from their Procore project directory entry: name · company · title (only what exists)
   const mine = session.dir?.people?.find((p) => String(p.id) === String(me.procoreUserId));
   const whoLine = [String(me.name ?? "").trim() || mine?.name || "Signed in", mine?.company, mine?.title || mine?.role].filter(Boolean).join(" · ");
-  if (!project || choosing) {
-    return (
+  // In the demo: the banner on every screen, and the friendly note for anything that writes
+  const wrap = (children) => (
+    <DemoContext.Provider value={{ demo, explain }}>
+      {demo && <DemoBanner onExit={session.exitDemo} />}
+      {children}
+      {explaining && <DemoSheet what={explaining} onClose={() => setExplaining("")} />}
+    </DemoContext.Provider>
+  );
+  const signOutButton = demo
+    ? <button type="button" className="text-btn" onClick={session.exitDemo}>Exit demo</button>
+    : <button type="button" className="text-btn" onClick={session.signOut}>Sign out</button>;
+  if (!project || choosing || (demo && demoPick)) {
+    return wrap(
       <main className="app msg-app">
         <h1 className="page-title">Pick a project</h1>
+        {demo && <p className="msg-status">These are sample projects in Procore's sandbox. Pick one to look around.</p>}
         {projects.length === 0 ? (
           <p className="empty">You're not on any Procore projects yet. Ask your project manager to add you in Procore.</p>
         ) : (
@@ -108,7 +132,7 @@ export default function MessagingApp() {
             <ul>
               {projects.map((p) => (
                 <li key={`${p.companyId}_${p.projectId}`}>
-                  <button type="button" className={`dir-project-btn${p.projectId === project?.projectId && p.companyId === project?.companyId ? " is-on" : ""}`} onClick={() => { choose(p); setChoosing(false); setView({ name: "home" }); }}>
+                  <button type="button" className={`dir-project-btn${p.projectId === project?.projectId && p.companyId === project?.companyId ? " is-on" : ""}`} onClick={() => { choose(p); setChoosing(false); setDemoPick(false); setView({ name: "home" }); }}>
                     <strong>{p.name}</strong>
                     {multiCompany && p.companyName && <span>{p.companyName}</span>}
                   </button>
@@ -117,13 +141,13 @@ export default function MessagingApp() {
             </ul>
           </div>
         )}
-        {project && <button type="button" className="text-btn" onClick={() => { setChoosing(false); setView({ name: "home" }); }}>Keep {project.name}</button>}
-        <button type="button" className="text-btn" onClick={session.signOut}>Sign out</button>
+        {project && !(demo && demoPick) && <button type="button" className="text-btn" onClick={() => { setChoosing(false); setView({ name: "home" }); }}>Keep {project.name}</button>}
+        {signOutButton}
       </main>
     );
   }
 
-  return (
+  return wrap(
     <main className="app msg-app">
       <header className="msg-header">
         <div className="dir-project">
@@ -134,7 +158,7 @@ export default function MessagingApp() {
           {projects.length > 1 && <button type="button" className="stop-more" onClick={() => setChoosing(true)}>Switch Project</button>}
         </div>
         <p className="msg-who">
-          {state.offline ? "Offline · " : ""}<strong>{whoLine}</strong> · <button type="button" className="text-btn inline" onClick={session.signOut}>Sign out</button>
+          {state.offline ? "Offline · " : ""}<strong>{whoLine}</strong> · <button type="button" className="text-btn inline" onClick={demo ? session.exitDemo : session.signOut}>{demo ? "Exit demo" : "Sign out"}</button>
         </p>
       </header>
 
@@ -142,15 +166,15 @@ export default function MessagingApp() {
         <>
           <ProjectHome
             unread={forMe.filter((c) => isUnread(c, me.procoreUserId, reads)).length}
-            onReport={() => setView({ name: "report" })}
+            onReport={() => (demo ? explain("Reporting an issue (a photo and voice note that becomes a Procore Observation or Punch Item)") : setView({ name: "report" }))}
             onMessages={() => setView({ name: "feed" })}
             onInspections={() => setView({ name: "inspections" })}
             onPhotos={() => setView({ name: "photos" })}
             onDailyLog={() => setView({ name: "dailylog" })}
             dailyStatus={dailyStatusFor(key)}
           />
-          <PushToggle myId={me.procoreUserId} />
-          {beta && <button type="button" className="text-btn" onClick={() => setView({ name: "access" })}>Who can't get Punch Items or Observations?</button>}
+          {!demo && <PushToggle myId={me.procoreUserId} />}
+          {beta && !demo && <button type="button" className="text-btn" onClick={() => setView({ name: "access" })}>Who can't get Punch Items or Observations?</button>}
         </>
       )}
       {view.name === "photos" && <PhotosView session={session} onBack={() => setView({ name: "home" })} />}
@@ -162,7 +186,7 @@ export default function MessagingApp() {
           <div className="msg-title-row">
             <h2 className="page-title">Messages</h2>
           </div>
-          <button type="button" className="big-btn photo-btn msg-new" onClick={() => setView({ name: "compose" })}>New Message</button>
+          <button type="button" className="big-btn photo-btn msg-new" onClick={() => (demo ? explain("Sending a new message") : setView({ name: "compose" }))}>New Message</button>
           <p className="msg-new-hint">Stays in SiteSnap. Nothing goes to Procore.</p>
           <Feed projectKey={key} me={me.procoreUserId} reads={reads} pending={pending} onOpen={(cid) => setView({ name: "conversation", cid })} />
           <p className="msg-footnote">Only people on this Procore project can see its messages. Everyone on a message can see when it was sent, seen and answered.</p>

@@ -7,7 +7,7 @@
 //     user does not have full company admin permissions, the request will only return the projects that
 //     the user has been added to." Default 100 per page, max 300; view=compact returns id and name.
 // Calls run one after another: a token refresh replaces the refresh token, so two at once could clash.
-import { procoreGet } from "./_procore.js";
+import { demoCookie, procoreGet, session } from "./_procore.js";
 
 const PER_PAGE = 100;
 const MAX_PAGES = 10;
@@ -24,7 +24,14 @@ export async function allPages(req, res, cfg, path, opts) {
 }
 
 // { projects: [{ companyId, companyName, projectId, name }], companies, refused }
+// A guest demo session (docs/guest-demo.md) gets only the allowlisted projects saved when Ky authorized the guest,
+// with no Procore calls (every demo visitor shares the guest's rate limit).
 export async function listProjects(req, res, cfg) {
+  if (demoCookie(req, cfg.sessionSecret)) {
+    await session(req, res, cfg); // checks the demo session, fills req.demoGuest
+    const projects = req.demoGuest.projects.map((p) => ({ companyId: String(p.companyId), companyName: p.companyName ?? null, projectId: String(p.projectId), name: p.name }));
+    return { projects, companies: new Set(projects.map((p) => p.companyId)).size, refused: 0 };
+  }
   const companies = await allPages(req, res, cfg, "/rest/v1.0/companies", { query: {} });
   const projects = [];
   let refused = 0;

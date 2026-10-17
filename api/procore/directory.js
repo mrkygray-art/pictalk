@@ -70,7 +70,8 @@ export default async function handler(req, res) {
       console.error("Responsibility tags unavailable:", err?.code ?? err?.name ?? "Error");
     }
     sendJson(res, 200, {
-      people: users.map((u) => person(u, roles, tags)),
+      // a demo visitor never sees the demo guest's own entry (name, email)
+      people: users.filter((u) => !req.demoGuest || String(u?.id) !== req.demoGuest.userId).map((u) => person(u, roles, tags)),
       rolesAvailable,
       tagsAvailable,
       compact,

@@ -58,7 +58,8 @@ service firebase.storage {
     }
     match /messages/{key}/{conversationId}/{messageId}/{file} {
       allow read: if procoreMember(key);
-      allow create: if procoreMember(key)
+      // the guest demo (token claim demo: true, docs/guest-demo.md) is view only
+      allow create: if procoreMember(key) && request.auth.token.get('demo', false) != true
         && ((file.matches('photo-.*') && request.resource.size < 15 * 1024 * 1024 && request.resource.contentType.matches('image/.*'))
             || (file.matches('voice[.].*') && request.resource.size < 20 * 1024 * 1024 && request.resource.contentType.matches('audio/.*')));
     }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ccOf, discardPending, fileUrl, isUnread, myTasks, pendingLine, pendingReason, watchFeed } from "./messagingStore";
 import { namesLine, summaryLine, timeAgo } from "./format";
+import { useDemo } from "./demo";
 
 // The project feed: conversations, newest activity first. For Me = I'm tagged and it's open (these
 // are highlighted, with an unread dot); CC = I'm CC'd (kept in the loop: calm cards, no count, no alerts);
@@ -24,7 +25,8 @@ function Thumb({ path }) {
 }
 
 export default function Feed({ projectKey, me, reads, pending, onOpen }) {
-  const [tab, setTab] = useState("forMe");
+  const { demo } = useDemo();
+  const [tab, setTab] = useState(demo ? "all" : "forMe"); // the demo guest is never tagged, so its For Me is empty
   const [lists, setLists] = useState({}); // tab -> list
   const [error, setError] = useState("");
 

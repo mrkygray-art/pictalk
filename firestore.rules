@@ -77,6 +77,10 @@ service cloud.firestore {
     function procoreMe() {
       return request.auth != null ? request.auth.token.get('procoreUserId', null) : null;
     }
+    // The guest demo (docs/guest-demo.md) signs in with demo: true and is view only: it reads, never writes
+    function procoreWriter() {
+      return procoreMe() is string && request.auth.token.get('demo', false) != true;
+    }
     function memberOf(key) {
       return procoreMe() is string
         && exists(/databases/$(database)/documents/procoreProjects/$(key)/members/$(procoreMe()));
@@ -88,7 +92,7 @@ service cloud.firestore {
     // Phone alerts: each person adds or removes their own phones' push addresses (src/messaging/pushStore.js);
     // only the server reads them (functions/messaging.js sends the alerts)
     match /procoreUsers/{procoreUserId}/pushTokens/{token} {
-      allow create, update: if procoreMe() is string && procoreUserId == procoreMe()
+      allow create, update: if procoreWriter() && procoreUserId == procoreMe()
         && request.resource.data.keys().hasOnly(['token', 'at', 'ua'])
         && request.resource.data.token == token && token.size() < 600
         && request.resource.data.at is number && request.resource.data.ua is string && request.resource.data.ua.size() <= 120;
@@ -99,14 +103,14 @@ service cloud.firestore {
       // What this person has read, for For Me unread dots (theirs only)
       match /reads/{conversationId} {
         allow read, delete: if memberId == procoreMe() && memberOf(key);
-        allow create, update: if memberId == procoreMe() && memberOf(key)
+        allow create, update: if procoreWriter() && memberId == procoreMe() && memberOf(key)
           && request.resource.data.keys().hasOnly(['lastReadAt']);
       }
     }
     match /procoreProjects/{key}/conversations/{conversationId} {
       allow read: if memberOf(key);
       // Started by a member, as themselves; the summary fields (last message, counts, tasks) are server-only
-      allow create: if memberOf(key)
+      allow create: if procoreWriter() && memberOf(key)
         && request.resource.data.keys().hasOnly(['createdBy', 'tagged', 'taggedIds', 'cc', 'ccIds', 'status', 'createdAt', 'lastActivityAt', 'procore'])
         && request.resource.data.createdBy.procoreUserId == procoreMe()
         && request.resource.data.status == 'open'
@@ -115,7 +119,7 @@ service cloud.firestore {
         // a message needs someone tagged (To; CC alone isn't enough); a thread that follows a Procore record may have no one yet
         && (request.resource.data.taggedIds.size() > 0 || okProcoreLink(request.resource.data.get('procore', null)));
       // Any member can tag (To) or CC more people; only the sender or someone tagged closes or reopens it
-      allow update: if memberOf(key)
+      allow update: if procoreWriter() && memberOf(key)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tagged', 'taggedIds', 'cc', 'ccIds', 'status', 'statusBy', 'statusAt'])
         && request.resource.data.status in ['open', 'closed']
         && okPeople(request.resource.data.tagged) && okPeople(request.resource.data.taggedIds)
@@ -129,7 +133,7 @@ service cloud.firestore {
         // Written once by its author; transcripts, AI descriptions and tasks are added by the server.
         // A closed conversation takes no new messages except the "closed" line written as it closes
         // (the conversation as it will be after this write, so close + line can go in one batch).
-        allow create: if memberOf(key)
+        allow create: if procoreWriter() && memberOf(key)
           && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'text', 'transcript', 'transcriptStatus',
                                                    'photos', 'voicePath', 'voiceType', 'aiDescription', 'status', 'event',
                                                    'clientCreatedAt', 'createdAt'])

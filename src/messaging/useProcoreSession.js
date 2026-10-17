@@ -9,6 +9,7 @@ import {
 // POST /api/procore/session answers with a Firebase sign-in for this Procore user (claim procoreUserId)
 // and records their project memberships, which the Firestore rules check.
 // Offline, a phone that signed in before keeps its Firebase sign-in and its saved projects and directory.
+// Guest demo (/demo, docs/guest-demo.md): the same answer with demo: true and the name "Guest"; me.demo remembers it.
 
 async function api(url, init) {
   const resp = await fetch(url, { headers: { Accept: "application/json", ...(init?.body ? { "Content-Type": "application/json" } : {}) }, ...init });
@@ -79,7 +80,7 @@ export function useProcoreSession({ linkCompanyId, linkProjectId } = {}) {
         return;
       }
       if (r.status === 0) return setState({ step: "unavailable" });
-      if (r.status === 401) return setState({ step: "signin" });
+      if (r.status === 401) return setState({ step: "signin", message: r.body?.error === "demo_expired" ? r.body.message : "" });
       if (r.status !== 200) return setState({ step: "failed", message: r.body?.message ?? "Couldn't reach Procore. Try again." });
       try {
         await signInWithCustomToken(auth, r.body.token);
@@ -87,8 +88,9 @@ export function useProcoreSession({ linkCompanyId, linkProjectId } = {}) {
         return setState({ step: "failed", message: "Couldn't sign in to SiteSnap. Try again." });
       }
       if (!live) return;
-      writeMe(r.body.me);
-      setMe(r.body.me);
+      const who = { ...r.body.me, demo: !!r.body.demo };
+      writeMe(who);
+      setMe(who);
       writeProjectsCache(r.body.projects);
       setProjects(r.body.projects);
       setState({ step: "ready" });
@@ -139,6 +141,13 @@ export function useProcoreSession({ linkCompanyId, linkProjectId } = {}) {
     setState({ step: "signin" });
   };
 
+  // Exit demo: forget the demo session here and on the server, then the normal sign-in screen
+  const exitDemo = async () => {
+    await signOut();
+    window.location.assign("/");
+  };
+
   const signedIn = state.step === "ready" && !!fbUser && !!me;
-  return { state, me, projects, project, choose, dir, dirError, loadingDir, refreshDirectory: () => project && loadDirectory(project), connect, signOut, switchAccount, signedIn };
+  const demo = !!me?.demo;
+  return { state, me, projects, project, choose, dir, dirError, loadingDir, refreshDirectory: () => project && loadDirectory(project), connect, signOut, switchAccount, exitDemo, signedIn, demo };
 }

@@ -3,6 +3,7 @@ import { BackIcon, CameraIcon } from "./icons";
 import { dayLabel, dayOf, groupPhotos, hasArea, hasTrade, loadAlbums, loadPhotos, photoDay, photoTime, timeLine } from "./photosStore";
 import { autoFileOn, discardPhoto, lastSavedPhoto, linkLabel, onPhotoQueueChange, pendingPhotos, retryPhoto, setAutoFile } from "./photoQueue";
 import SnapFlow from "./SnapFlow";
+import { useDemo } from "./demo";
 
 // Project photos (docs/sitesnap-project-home-and-photos-spec.md, section 2): Procore's Photos tool, read-only.
 // By day (default) / By area / By trade group the project's photos, newest first; Albums lists Procore's albums.
@@ -243,7 +244,8 @@ export default function PhotosView({ session, onBack }) {
     if (at > seen.current) { seen.current = at; reload(); setAlbumsVersion((v) => v + 1); }
   }), [reload]);
 
-  const openCamera = () => camera.current?.click();
+  const { demo, explain } = useDemo();
+  const openCamera = () => (demo ? explain("Snapping a photo into Procore") : camera.current?.click());
   const cameraInput = (
     <input ref={camera} type="file" accept="image/*" capture="environment" hidden
       onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) setSnap((s) => ({ photo: f, n: (s?.n ?? 0) + 1 })); }} />

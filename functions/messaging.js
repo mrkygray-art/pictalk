@@ -37,6 +37,8 @@ const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 async function requireMember(request, key) {
   const pid = request.auth?.token?.procoreUserId;
   if (!pid) throw new HttpsError("unauthenticated", "Sign in with Procore first.");
+  // The guest demo (docs/guest-demo.md) is view only: no AI, transcription or task changes on its behalf
+  if (request.auth.token.demo === true) throw new HttpsError("permission-denied", "This is a view-only demo.");
   if (!KEY_RE.test(String(key ?? ""))) throw new HttpsError("invalid-argument", "Unknown project.");
   const member = await db().doc(`procoreProjects/${key}/members/${pid}`).get();
   if (!member.exists) throw new HttpsError("permission-denied", "You're not on this Procore project.");

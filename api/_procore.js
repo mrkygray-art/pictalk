@@ -109,7 +109,10 @@ export function redirect(res, location) {
 }
 
 export function sendError(res, err) {
-  if (err instanceof HttpError) return sendJson(res, err.status, { error: err.code, message: err.message });
+  if (err instanceof HttpError) {
+    // Guest demo refusals carry demo: true so the app shows its friendly view-only note, not an error
+    return sendJson(res, err.status, { error: err.code, message: err.message, ...(String(err.code).startsWith("demo") ? { demo: true } : {}) });
+  }
   console.error("Procore request failed:", err?.name ?? "Error"); // no message: it could hold a token
   return sendJson(res, 502, { error: "procore_failed", message: "Couldn't reach Procore. Try again." });
 }
@@ -133,12 +136,60 @@ export async function readBody(req) {
   throw new HttpError(400, "bad_request", "Couldn't read the sign-in answer.");
 }
 
-// POSTs from our own page only: JSON (a cross-site form can't send it) and, when sent, our own Origin
-export function requireSameOriginJson(req) {
+// POSTs from our own page only: JSON (a cross-site form can't send it) and, when sent, our own Origin.
+// A guest demo session (docs/guest-demo.md) is view only, so its POSTs stop here before anything is read or
+// written, except the few that change nothing in Procore (opts.demoOk: SiteSnap sign-in, sign-out, the callback).
+export function requireSameOriginJson(req, { demoOk = false } = {}) {
   if (!String(req.headers["content-type"] ?? "").startsWith("application/json")) throw new HttpError(415, "bad_request", "Expected JSON.");
   const origin = req.headers.origin;
   if (origin && new URL(origin).host !== req.headers.host) throw new HttpError(403, "bad_origin", "Not allowed.");
+  if (demoOk) req.demoPostOk = true;
+  else if (demoCookie(req)) throw demoReadOnly();
 }
+
+// ---------- guest demo (docs/guest-demo.md; the rest lives in api/_demo.js) ----------
+
+export const demoReadOnly = () => new HttpError(403, "demo_read_only", "This is a view-only demo.");
+
+// The demo session cookie ({ role: "demo", last }) when this browser has one, else null. It holds no tokens.
+export function demoCookie(req, secret = process.env.SESSION_SECRET) {
+  if (!secret) return null;
+  const v = unseal(readCookies(req)[SESSION_COOKIE], secret, SESSION_COOKIE);
+  return v?.role === "demo" ? v : null;
+}
+
+// A demo session may only read, and only the allowlisted projects (any /projects/{id} in the path or project_id)
+function guardDemo(tokens, method, path, query) {
+  if (!tokens?.demo) return;
+  if (method !== "GET") throw demoReadOnly();
+  const ids = [...String(path).matchAll(/\/projects\/(\d+)/g)].map((m) => m[1]);
+  if (query?.project_id != null) ids.push(String(query.project_id));
+  if (ids.some((id) => !tokens.allowed.includes(id))) throw new HttpError(403, "demo_project", "That project isn't part of the demo.");
+}
+
+// Every demo visitor shares one Procore sign-in (and its rate limit), so a warm server answers the same read from
+// memory for DEMO_CACHE_MS and spends at most demoBudget.perMinute Procore calls a minute on the demo.
+const DEMO_CACHE_MS = 45_000;
+const demoCache = new Map();
+export const demoBudget = { perMinute: 100 };
+let spent = { minute: 0, used: 0 };
+function demoCached(key) {
+  const hit = demoCache.get(key);
+  if (hit && Date.now() - hit.at < DEMO_CACHE_MS) return hit.value;
+  demoCache.delete(key);
+  return undefined;
+}
+function demoRemember(key, value) {
+  if (demoCache.size > 500) demoCache.delete(demoCache.keys().next().value);
+  demoCache.set(key, { at: Date.now(), value });
+}
+function demoSpend() {
+  const minute = Math.floor(Date.now() / 60_000);
+  if (spent.minute !== minute) spent = { minute, used: 0 };
+  if (++spent.used > demoBudget.perMinute) throw new HttpError(429, "demo_busy", "The demo is busy right now. Wait a minute and try again.");
+}
+export const forgetDemoCache = () => { demoCache.clear(); spent = { minute: 0, used: 0 }; };
+export const demoRead = { guard: guardDemo, cached: demoCached, remember: demoRemember, spend: demoSpend };
 
 // Back to the app (same company / project), always a path on this site, never an outside URL
 export function appUrl({ companyId, projectId }, status) {
@@ -168,7 +219,7 @@ export function checkState(cfg, cookieValue, returned, now = Date.now()) {
   if (a.length !== b.length || !timingSafeEqual(a, b)) {
     throw new HttpError(400, "bad_state", "This sign-in didn't come from this browser. Start again.");
   }
-  return { companyId: procoreId(saved.companyId), projectId: procoreId(saved.projectId) };
+  return { companyId: procoreId(saved.companyId), projectId: procoreId(saved.projectId), ...(saved.purpose ? { purpose: saved.purpose } : {}) };
 }
 
 // ---------- tokens ----------
@@ -176,6 +227,7 @@ export function checkState(cfg, cookieValue, returned, now = Date.now()) {
 async function tokenRequest(cfg, fields) {
   const resp = await fetch(`${cfg.loginUrl}/oauth/token`, {
     method: "POST",
+    signal: AbortSignal.timeout(20_000),
     headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
     body: new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, redirect_uri: cfg.redirectUri, ...fields }),
   });
@@ -196,6 +248,11 @@ export const saveSession = (res, cfg, tokens) => setCookie(res, SESSION_COOKIE, 
 export async function session(req, res, cfg, { force = false } = {}) {
   let tokens = unseal(readCookies(req)[SESSION_COOKIE], cfg.sessionSecret, SESSION_COOKIE);
   if (!tokens) throw new HttpError(401, "not_connected", "Connect Procore first.");
+  if (tokens.role === "demo") {
+    // Guest demo: the cookie holds no tokens; the guest's stored sign-in is used, server side only
+    const { demoTokens } = await import("./_demo.js");
+    return demoTokens(req, res, cfg, tokens, { force });
+  }
   if (force || Date.now() / 1000 > tokens.exp - REFRESH_EARLY_SECONDS) {
     try {
       tokens = await refreshTokens(cfg, tokens.rt);
@@ -220,7 +277,14 @@ function waitFor429(resp, now = Date.now()) {
 // twice after a 429 (Procore allows about 25 calls per 10 seconds), waiting out the window first.
 export async function procoreGet(req, res, cfg, path, { companyId, query } = {}) {
   let tokens = await session(req, res, cfg);
+  guardDemo(tokens, "GET", path, query);
   const url = `${cfg.apiUrl}${path}${query ? `?${new URLSearchParams(query)}` : ""}`;
+  const cacheKey = tokens.demo ? `get ${companyId ?? ""} ${url}` : null;
+  if (cacheKey) {
+    const hit = demoCached(cacheKey);
+    if (hit !== undefined) return structuredClone(hit);
+    demoSpend();
+  }
   const call = (t) => fetch(url, {
     method: "GET",
     headers: { Authorization: `Bearer ${t.at}`, Accept: "application/json", ...(companyId ? { "Procore-Company-Id": companyId } : {}) },
@@ -239,5 +303,7 @@ export async function procoreGet(req, res, cfg, path, { companyId, query } = {})
   if (resp.status === 403) throw new HttpError(403, "no_access", "Your Procore account doesn't have access to this.");
   if (resp.status === 404) throw new HttpError(404, "not_found", "Procore couldn't find that company or project.");
   if (!resp.ok) throw new HttpError(502, "procore_failed", `Procore answered ${resp.status}. Try again.`);
-  return resp.json();
+  const json = await resp.json();
+  if (cacheKey) demoRemember(cacheKey, structuredClone(json));
+  return json;
 }

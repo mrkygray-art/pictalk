@@ -1,0 +1,11 @@
+{
+  "rewrites": [
+    { "source": "/demo", "destination": "/api/procore/demo" }
+  ],
+  "redirects": [
+    { "source": "/admin/demo-authorize", "destination": "/api/procore/demo-authorize", "permanent": false }
+  ],
+  "headers": [
+    { "source": "/demo", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }
+  ]
+}

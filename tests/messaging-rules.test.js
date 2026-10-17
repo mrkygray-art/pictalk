@@ -132,6 +132,10 @@ test("message files: members of that project upload and read photos and voice no
   await assertFails(uploadBytes(ref(st("104"), `messages/${KEY}/c1/m9/photo-1.jpg`), new Uint8Array([1]), { contentType: "image/jpeg" }));
   await assertFails(uploadBytes(ref(st("102"), `messages/${KEY}/c1/m9/photo-1.jpg`), new Uint8Array([1]), { contentType: "text/html" }), "photos must be images");
   await assertFails(uploadBytes(ref(st("102"), `messages/${KEY}/c1/m9/notes.txt`), new Uint8Array([1]), { contentType: "text/plain" }), "only photo-* and voice.*");
+  // The guest demo (claim demo: true) reads the files but uploads nothing
+  const demoSt = senv.authenticatedContext("procore_103", { procoreUserId: "103", demo: true }).storage();
+  await assertSucceeds(getBytes(ref(demoSt, photo)));
+  await assertFails(uploadBytes(ref(demoSt, `messages/${KEY}/c1/m8/photo-1.jpg`), new Uint8Array([1]), { contentType: "image/jpeg" }), "demo is view only");
   await senv.cleanup();
 });
 
@@ -201,4 +205,17 @@ test("phone alerts: each person adds or removes only their own push addresses; n
   await assertFails(setDoc(doc(fs("101"), `procoreUsers/101/pushTokens/tok-q`), { token: "tok-q", at: 1, ua: "x", projectKey: "a" }), "only known fields");
   await assertFails(deleteDoc(doc(fs("102"), mine)));
   await assertSucceeds(deleteDoc(doc(fs("101"), mine)));
+});
+
+test("guest demo (claim demo: true): reads its projects' conversations and messages, writes nothing", async () => {
+  const demo = env.authenticatedContext("procore_103", { procoreUserId: "103", demo: true }).firestore();
+  await assertSucceeds(getDoc(doc(demo, `procoreProjects/${KEY}/conversations/c1`)));
+  await assertSucceeds(getDocs(collection(demo, `procoreProjects/${KEY}/conversations/c1/messages`)));
+  await assertFails(setDoc(doc(demo, `procoreProjects/${KEY}/conversations/d1`), conv("103", ["101"])), "new message");
+  await assertFails(setDoc(doc(demo, `procoreProjects/${KEY}/conversations/c1/messages/d2`), msg("103")), "reply");
+  await assertFails(updateDoc(doc(demo, `procoreProjects/${KEY}/conversations/c1`), { tagged: arrayUnion(P("103", "User 103")), taggedIds: arrayUnion("103") }), "add people");
+  await assertFails(setDoc(doc(demo, `procoreProjects/${KEY}/members/103/reads/c1`), { lastReadAt: 5 }), "read marks");
+  await assertFails(setDoc(doc(demo, `procoreUsers/103/pushTokens/tok-d`), { token: "tok-d", at: 1, ua: "x" }), "phone alerts");
+  // the same person without the demo claim still can (so the rule is the claim, not the person)
+  await assertSucceeds(setDoc(doc(fs("103"), `procoreProjects/${KEY}/members/103/reads/c1`), { lastReadAt: 5 }));
 });

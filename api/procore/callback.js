@@ -5,7 +5,10 @@
 // GET with nothing in the query: Procore may put the code after '#' (its iframe-helper docs say
 //   so), which never reaches a server. A small page reads it, removes it from the address bar, and
 //   POSTs it here (JSON, same origin); the POST runs the same checks and answers { location }.
+// A sign-in started by /api/procore/demo-authorize (state purpose "demo-authorize") stores the guest demo's tokens
+// (finishDemoAuthorize) and leaves this browser's own sign-in cookie alone.
 import { randomBytes } from "node:crypto";
+import { finishDemoAuthorize, PURPOSE as DEMO_AUTHORIZE } from "./demo-authorize.js";
 import {
   appUrl, checkState, clearCookie, config, exchangeCode, HttpError, queryOf, readBody, readCookies, requireSameOriginJson, redirect, saveSession, sendError, sendJson, STATE_COOKIE,
 } from "../_procore.js";
@@ -15,8 +18,19 @@ async function finish(req, res, cfg, { code, state, error }) {
   const stateCookie = readCookies(req)[STATE_COOKIE];
   clearCookie(res, STATE_COOKIE); // single use, whatever happens next
   const context = checkState(cfg, stateCookie, state);
-  if (error) return appUrl(context, "denied"); // e.g. the user said no
+  const demo = context.purpose === DEMO_AUTHORIZE;
+  if (error) return demo ? "/api/procore/demo-authorize?error=failed" : appUrl(context, "denied"); // e.g. the user said no
   if (!code) throw new HttpError(400, "no_code", "Procore didn't send a sign-in code. Start again.");
+  if (demo) {
+    let tokens;
+    try {
+      tokens = await exchangeCode(cfg, String(code));
+    } catch (err) {
+      console.error("Procore token exchange failed (demo authorize):", err?.status ?? err?.name ?? "Error");
+      return "/api/procore/demo-authorize?error=failed";
+    }
+    return finishDemoAuthorize(cfg, tokens);
+  }
   try {
     saveSession(res, cfg, await exchangeCode(cfg, String(code)));
   } catch (err) {
@@ -68,7 +82,7 @@ export default async function handler(req, res) {
     const cfg = config();
     if (req.method === "POST") {
       // Same-origin JSON only: a cross-site form can't send JSON, and the Lax state cookie isn't sent cross-site anyway
-      requireSameOriginJson(req);
+      requireSameOriginJson(req, { demoOk: true }); // a demo visitor signing in for real lands here too
       const body = await readBody(req);
       console.log("Procore callback: code arrived after '#'"); // which way Procore sends it (no values logged)
       return sendJson(res, 200, { location: await finish(req, res, cfg, body) });

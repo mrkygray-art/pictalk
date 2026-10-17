@@ -2,11 +2,20 @@
 // Procore sign-in (everyone on a project has a Procore login), so Procore shows the real author.
 // Kept in one module so a service account (DMSA, client credentials) could replace it later.
 // Like procoreGet: refreshes the token first when needed and retries once on a 401. Never logs tokens.
-import { session } from "./_procore.js";
+// A guest demo session (docs/guest-demo.md) only gets GETs on its allowlisted projects through here; anything
+// else is refused before it reaches Procore, even if the guest's own Procore permissions would allow it.
+import { demoRead, session } from "./_procore.js";
 
 async function call(req, res, cfg, method, path, { companyId, query, body, form } = {}) {
   let tokens = await session(req, res, cfg);
+  demoRead.guard(tokens, method, path, query);
   const url = `${cfg.apiUrl}${path}${query ? `?${new URLSearchParams(query)}` : ""}`;
+  const cacheKey = tokens.demo ? `send ${companyId ?? ""} ${url}` : null;
+  if (cacheKey) {
+    const hit = demoRead.cached(cacheKey);
+    if (hit !== undefined) return structuredClone(hit);
+    demoRead.spend();
+  }
   const send = (t) => fetch(url, {
     method,
     headers: {
@@ -31,7 +40,9 @@ async function call(req, res, cfg, method, path, { companyId, query, body, form 
     const v = resp.headers?.get?.(k);
     if (v) headers[k] = v;
   }
-  return { status: resp.status, ok: resp.ok, json, headers };
+  const out = { status: resp.status, ok: resp.ok, json, headers };
+  if (cacheKey && resp.ok) demoRead.remember(cacheKey, structuredClone(out));
+  return out;
 }
 
 /** A Procore API call; returns { status, ok, json, headers } and never throws on a Procore error answer.
@@ -43,6 +54,7 @@ export const procoreSend = (req, res, cfg, method, path, opts) => call(req, res,
  * its storage URL with every returned field unchanged plus "file", and return the upload's uuid for upload_ids.
  */
 export async function uploadFile(req, res, cfg, { companyId, projectId, name, type, bytes }) {
+  // (the upload slot below is a POST, so a demo session is refused there before any file is sent)
   const slot = await call(req, res, cfg, "POST", `/rest/v1.1/projects/${projectId}/uploads`, {
     companyId, body: { response_filename: name, response_content_type: type },
   });

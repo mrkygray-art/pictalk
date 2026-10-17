@@ -7,6 +7,7 @@ import { statusOf } from "./quickReplies";
 import { namesLine, timeAgo } from "./format";
 import { SHOW_AI_PHOTO_DESCRIPTION } from "../features";
 import { recordAction, syncRecord } from "./recordStore";
+import { useDemo, useDemoGuard } from "./demo";
 import {
   addPeople, ccOf, fileUrl, markRead, pendingLine, queueMessage, setStatus, setTask, watchConversation, watchMessages,
 } from "./messagingStore";
@@ -121,6 +122,8 @@ function Tracking({ conv }) {
 
 export default function ConversationView({ session, projectKey, cid, pending, onBack }) {
   const { me } = session;
+  const { demo } = useDemo();
+  const guard = useDemoGuard();
   const [conv, setConv] = useState(undefined);
   const [messages, setMessages] = useState([]);
   const [adding, setAdding] = useState(false);
@@ -139,7 +142,7 @@ export default function ConversationView({ session, projectKey, cid, pending, on
   const [busy, setBusy] = useState("");
   useEffect(() => watchMessages(projectKey, cid, setMessages), [projectKey, cid]);
   // Opening it (and each new message while it's open) counts as read
-  useEffect(() => { markRead(projectKey, me.procoreUserId, cid); }, [projectKey, cid, me.procoreUserId, messages.length]);
+  useEffect(() => { if (!demo) markRead(projectKey, me.procoreUserId, cid); }, [projectKey, cid, me.procoreUserId, messages.length, demo]);
   useEffect(() => {
     if (!sent) return undefined;
     const t = setTimeout(() => setSent(""), 2500);
@@ -159,16 +162,16 @@ export default function ConversationView({ session, projectKey, cid, pending, on
       setError(e.message);
     }
   };
-  const onTask = async (mid, taskId, status) => {
+  const onTask = guard("Marking a to-do done", async (mid, taskId, status) => {
     try {
       await setTask(projectKey, cid, mid, taskId, status);
       if (status === "done") await markRecordDone();
     } catch (e) {
       setError(e?.message ?? "Couldn't change that.");
     }
-  };
+  });
   // Closing or reopening a record thread goes through Procore (it decides who may)
-  const recordChange = async (action) => {
+  const recordChange = guard("Closing or reopening the Procore record", async (action) => {
     setError("");
     setBusy(action);
     try {
@@ -178,7 +181,7 @@ export default function ConversationView({ session, projectKey, cid, pending, on
     } finally {
       setBusy("");
     }
-  };
+  });
 
   if (conv === undefined && !waiting.length) return <p className="procore-note">Loading…</p>;
   const tagged = conv?.tagged ?? waiting[0]?.newConversation?.tagged ?? [];
@@ -197,10 +200,10 @@ export default function ConversationView({ session, projectKey, cid, pending, on
       setError("Couldn't send that. Please try again.");
     }
   };
-  const pick = (r) => (r.code === "delayed" ? setAskDelay(true) : quick(r));
-  const changeStatus = (next) => (conv?.procore
+  const pick = guard("Quick replies", (r) => (r.code === "delayed" ? setAskDelay(true) : quick(r)));
+  const changeStatus = guard("Closing or reopening a message", (next) => (conv?.procore
     ? recordChange(next === "closed" ? "close" : "reopen")
-    : setStatus(projectKey, cid, next, me).catch(() => setError("Couldn't change it. Check your signal.")));
+    : setStatus(projectKey, cid, next, me).catch(() => setError("Couldn't change it. Check your signal."))));
   const everyoneDone = !!conv?.procore && !closed && (conv.openTasks ?? []).length === 0 && messages.some((m) => (m.tasks ?? []).length);
 
   if (adding && conv) {
@@ -244,7 +247,7 @@ export default function ConversationView({ session, projectKey, cid, pending, on
         <p>To: <strong>{tagged.length ? namesLine(tagged, 6) : "no one yet"}</strong></p>
         {ccOf(conv).length > 0 && <p>CC: <strong>{namesLine(ccOf(conv), 6)}</strong></p>}
         {conv && <Tracking conv={conv} />}
-        {conv && !closed && <button type="button" className="stop-more" onClick={() => setAdding(true)}>Add People</button>}
+        {conv && !closed && <button type="button" className="stop-more" onClick={guard("Adding people to a message", () => setAdding(true))}>Add People</button>}
       </div>
       {error && <p className="error" role="alert">{error}</p>}
 
@@ -269,7 +272,7 @@ export default function ConversationView({ session, projectKey, cid, pending, on
         <>
           {sentToMe && <QuickReplyBar onPick={pick} />}
           {sent && <p className="msg-status" role="status">{sent}</p>}
-          <button type="button" className="save-btn msg-reply-btn" onClick={() => setReplying(true)}>Reply</button>
+          <button type="button" className="save-btn msg-reply-btn" onClick={guard("Replying", () => setReplying(true))}>Reply</button>
         </>
       )}
       {conv && !closed && replying && (

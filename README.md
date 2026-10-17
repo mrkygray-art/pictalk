@@ -1,15 +1,16 @@
 # SiteSnap AI
 
-**Report a jobsite issue by voice and photo, straight into Procore, follow it up with the crew, and keep the project's photos in Procore.**
+**Report a jobsite issue by voice and photo, straight into Procore, walk Procore inspections one question at a time, follow it up with the crew, and keep the project's photos in Procore.**
 
 > **In development.** SiteSnap AI has been tested only in Procore's developer sandbox, with fictional people, companies, and projects. No real crew uses it yet. It needs a Procore sign-in, so it isn't open to visitors. SiteSnap AI is an independent project. It isn't affiliated with, sponsored by, or endorsed by Procore Technologies, Inc.; Procore is a trademark of its owner.
 
-SiteSnap AI is a phone-first web app for construction crews that works with Procore. Everyone signs in with their own Procore account and picks a Procore project, and that project's directory is the team. The project home has four tiles: Report an issue, Message (with the count of messages waiting for you), Project photos, and Daily log.
+SiteSnap AI is a phone-first web app for construction crews that works with Procore. Everyone signs in with their own Procore account and picks a Procore project, and that project's directory is the team. The project home has five tiles: Report an issue, Message (with the count of messages waiting for you), Inspection, Daily log, and Project photos.
 
 1. **Report an Issue: voice + photo → a real Procore record.** A foreman takes a photo and says what's wrong. Claude drafts an **Observation** or a **Punch Item** using the project's own lists, and one tap creates it in Procore with the photo and the voice recording attached.
 2. **Project messaging, like Microsoft Teams for one jobsite.** A Procore project is the team and messages are threads. You tag who a message is for, CC people to keep them in the loop, and attach photos and a transcribed voice note. Claude pulls out the to-dos and who they're for.
 3. **Project photos, kept in Procore's own Photos tool.** Browse the project's photos by day, area, trade, or album, and snap new ones with an optional voice note. They file into that day's album, even when there's no signal at the time.
-4. **Daily log by voice (new, being checked in the sandbox).** A foreman says one end-of-day update ("six guys on site, drywall delayed waiting on materials, forklift delivery at 10"). Claude sorts it into Procore Daily Log entries (Manpower, Delays, Deliveries, Notes), the foreman checks the cards, and Send writes each one into Procore's Daily Log for that day, with photos.
+4. **Inspections, one question at a time (new, being checked in the sandbox).** A foreman walks a Procore inspection on the phone with big Pass, Fail, and N/A buttons, by tap or by voice, with photos and spoken notes. A Fail becomes a Procore Observation in one tap, linked to the failed item.
+5. **Daily log by voice (being checked in the sandbox).** A foreman says one end-of-day update ("six guys on site, drywall delayed waiting on materials, forklift delivery at 10"). Claude sorts it into Procore Daily Log entries (Manpower, Delays, Deliveries, Notes), the foreman checks the cards, and Send writes each one into Procore's Daily Log for that day, with photos.
 
 **Portfolio case study, with a looping demo and a quick tour:** https://ky-gray-portfolio.vercel.app/#sitesnap
 **Built on:** [PicTalk](https://github.com/mrkygray-art/pictalk) (the `master` branch). This `sitesnap` branch is the SiteSnap fork, and every push to it deploys to the SiteSnap app on Vercel.
@@ -49,6 +50,18 @@ CC is SiteSnap-only: a CC'd person sees the thread in their CC tab but is never 
   <img src="docs/sitesnap/procore-punch-list.webp" alt="Procore Punch List with SiteSnap items in Initiated, Ready to Close, and Closed" width="760">
 </p>
 
+## Inspections
+
+The foreman never opens Procore's Inspections tool. Procore's API still calls inspections "checklists".
+
+- **The list:** Assigned to me (the foreman is one of the inspection's inspectors), My company's work (their company is the responsible contractor), and other open inspections on the project. Each row shows the name and number ("Site Safety Inspection #2", since several can come from one template), location, due date, and progress ("12 of 87"). A long template disclaimer stays behind a Details link.
+- **Sections:** every section with its answered count and Pass / Fail / N/A counts. Continue picks up at the first unanswered item, and Set N/A (with a confirm, or by saying "section not applicable") answers a whole section that doesn't apply.
+- **One question at a time:** the item number ("2.3", which tells repeated questions apart), big Pass, Fail, and N/A buttons for gloves, Speak, and Photo. Saying "pass", "fail", or "N/A" picks the answer; anything else becomes a note on the item. Templates with their own answer choices, and text, number, or date questions, get their own inputs. Photos attach to the item and also go to Procore Photos.
+- **A Fail becomes an Observation:** add a photo and say what's wrong, and one tap creates a Procore Observation through the same code as Report an Issue, with `inspection_item_failed` and the item's id, so Procore links it to the item and marks the item Deficient. The responsible contractor prefills when the inspection has one; otherwise "Choose who" opens the project directory. Skip, keep going records the Fail without an Observation and flags it on the summary.
+- **Never lost:** every answer is saved on the phone first (IndexedDB) and sent in order, with backoff, so a dead zone shows "Not synced yet" and nothing is lost. Photos and Observations are sent once only, even when a retry follows a lost answer.
+- **Several inspectors:** before saving, the server re-reads the item. If someone else answered it since the phone last looked, the foreman sees "Already answered by …" and keeps theirs or uses their own; nothing is overwritten quietly.
+- **Finish:** the counts, each failed item with its Observation, and Submit, which closes the inspection in Procore when the person's role allows it ("Saved. Your project manager will review it." otherwise).
+
 ## Daily log by voice
 
 The foreman never opens Procore's Daily Log. Nothing is written until they tap Send.
@@ -80,19 +93,21 @@ Before building, the Photos API was checked in Procore's sandbox: album creation
 - **Procore doesn't email anyone when the API creates a record.**
 - **Rate limit:** about 25 calls per 10 seconds per user, so bulk work is paced, and a 429 waits and tries once more.
 - **Directory data is often thin.** In the original sandbox only 1 of 9 people had a job title, so no feature assumes titles, companies, or roles are filled in.
+- **Inspections are "checklists" in the API.** A sandbox check showed answers save (`item_response`), an answer can't be cleared again (422), and the read doesn't say which sections are N/A. Setting a section N/A answers every item in it N/A, and turning it off clears them all, so SiteSnap reads N/A from the items and asks before undoing it. Notes go to the inspection's comments with the item's id.
 - **Webhooks exist** for Observations, Punch Items, and Change Events, but they need a sign-in that isn't a person's (a stored token or a service account).
 
 Full notes: [`docs/sitesnap-procore-findings.md`](docs/sitesnap-procore-findings.md) and [`docs/PROCORE_API_NOTES.md`](docs/PROCORE_API_NOTES.md).
 
 ## Sandbox test pages
 
-Four hidden pages make realistic test data. They refuse to run outside Procore's developer sandbox, and none of them is linked from the app.
+Hidden pages make realistic test data and check the API. They refuse to run outside Procore's developer sandbox, and none of them is linked from the app.
 
 | Page | What it does |
 | --- | --- |
 | `/api/procore/seed-directory` | Test people: adds test companies and people with job titles, the Project Manager project role, and permission templates. Runs again safely and offers older test data for cleanup (made inactive, since Procore's API can't delete people). |
 | `/api/procore/demo-staging` | Demo staging (needs `DEMO_MODE=true` and a Procore admin): creates three demo projects at early, middle, and closeout stages, adds 12 people, imports 15 scenarios as Observations and Punch Items with photos in small batches, and resets them. It only touches records tagged `[SS-DEMO]`. See [`docs/DEMO_STAGING.md`](docs/DEMO_STAGING.md). |
 | `/api/procore/test-records` | Record test: proves the write path by creating an Observation and a Punch Item with a photo and an audio file. |
+| `/api/procore/test-inspections` | Inspections check: reads the project's inspections, sections, and items; Run Write Check also answers the last item, sets the last section N/A and back, and adds a test note. See [`docs/inspections-api-notes.md`](docs/inspections-api-notes.md). |
 | `/api/procore/test-permissions` | Permissions check (read only): what each permission template allows for Observations, the Punch List, Tasks, and the Directory, and who each tool accepts as an assignee. |
 
 ## How it's built

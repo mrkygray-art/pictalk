@@ -57,7 +57,8 @@ The foreman never opens Procore's Daily Log. Nothing is written until they tap S
 - **Defaults:** the foreman's own company fills in when they don't name one ("six guys on site"), the date is the project's own date (Today, Yesterday, or another past day), and photos go with Notes unless given to an entry.
 - **Send:** entries go to Procore one at a time with the person's own Procore sign-in, each with its own ✓ or Retry, so one failure never blocks the rest. Procore's rate limit gets "Procore is busy, trying again in a moment" and an automatic retry. SiteSnap asks before adding manpower for a company already logged that day, and never sets an entry's approval status.
 - **Never lost:** the draft (words, cards, photos) stays on the phone until every entry is in, and the server remembers each entry's id, so a retry never creates a duplicate.
-- **Permissions:** a person whose Procore role can't use the Daily Log sees a plain message instead of a broken screen. A sandbox check page tries each section as the signed-in person.
+- **Past logs:** a New log | Past logs switch under the title. Past logs reads Procore's Daily Log live, two weeks at a time (newest first, with Show older days and Go to a day): each day shows its totals and how many entries are yours. A day lists everyone's entries with who made them and their approval status. Only your own entries have Edit and Delete, and the server checks Procore's author before changing anything. Once a day is marked Completed, Procore locks it; SiteSnap says so and points to the superintendent instead of trying to get around it. Edits never touch the approval status.
+- **Permissions:** a person whose Procore role can't use the Daily Log sees a plain message naming their Procore permission template, instead of a broken screen. A sandbox check page tries each section as the signed-in person.
 
 ## Project photos
 

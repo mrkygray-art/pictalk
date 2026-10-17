@@ -98,3 +98,38 @@ export async function sendEntry(project, { date, section, entryId, entry, photos
   if (!r.ok) throw Object.assign(new Error(body.message ?? "Procore didn't save it. Tap Retry."), { status: r.status, retryAfter: body.retryAfter ?? null });
   return body; // { id, section, status, duplicate }
 }
+
+// ---------- past logs ----------
+
+const getJson = async (url) => {
+  let r;
+  try { r = await fetch(url, { headers: { Accept: "application/json" } }); } catch { return { error: "No signal. Past logs need signal." }; }
+  const body = await r.json().catch(() => null);
+  if (r.ok && body) return body;
+  if (r.status === 401) return { error: "Sign in to Procore again." };
+  return { error: body?.message ?? "Procore didn't answer. Try again." };
+};
+
+/** Every Daily Log entry from `from` to `to` (YYYY-MM-DD), straight from Procore: { access, today, entries: [{ id,
+ *  section, date, by, status, photos, entry, mine }] } or { error }. One day is read with log_date. */
+export function pastLogs(project, from, to = from) {
+  const q = new URLSearchParams({ companyId: project.companyId, projectId: project.projectId, view: "past", from, to });
+  return getJson(`/api/procore/daily-log?${q}`);
+}
+
+/** Change (action "update", with entry) or delete one of your own entries. Throws an Error with { status, code }. */
+export async function changeEntry(project, { action, section, id, entry }) {
+  let r;
+  try {
+    r = await fetch("/api/procore/daily-log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ companyId: project.companyId, projectId: project.projectId, action, section, id, entry }),
+    });
+  } catch {
+    throw Object.assign(new Error("No signal. Try again when you have signal."), { status: 0, code: "offline" });
+  }
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(body.message ?? "Procore didn't take the change. Try again."), { status: r.status, code: body.error ?? "" });
+  return body; // { ok, action, section, id, entry }
+}

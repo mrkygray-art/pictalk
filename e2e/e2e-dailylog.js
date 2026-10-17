@@ -2,7 +2,9 @@
 // PICTALK_FAKE_STT=1 for the words), with /api/procore/* mocked in the browser: the Daily log tile -> talk ->
 // type the spec's sentence -> a photo -> Organize My Log -> the four cards (Check this on the 10 o'clock delivery)
 // -> fix it -> Send (asks about the manpower already logged today) -> one entry at a time, Procore busy once ->
-// all in -> the tile says Sent today. Then a person without Daily Log access sees the plain message.
+// all in -> the tile says Sent today. Past logs: the New log | Past logs switch, the days list, one day with everyone's
+// entries, Edit and Delete only on your own, a locked (Completed) day. Then a person without Daily Log access sees
+// the plain message.
 // Needs: npm run emulators, and npx vite --port 5176. Screenshots: e2e/dailylog-shots/.
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
@@ -50,6 +52,13 @@ const OPTIONS = {
   let access = true;
   const posts = [];
   let busyOnce = true;
+  const TWO_AGO = (() => { const d = new Date(`${TODAY}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - 2); return d.toISOString().slice(0, 10); })();
+  let pastRows = [
+    { id: 901, section: "manpower", date: TODAY, by: { id: 481274, name: "Chloe Abara" }, status: "pending", photos: 0, mine: true, entry: { company: 10, companyName: "Ironbridge Construction", workers: 6, hours: null, location: null, locationName: null, trade: "", comment: "" } },
+    { id: 77, section: "deliveries", date: TODAY, by: { id: 5, name: "Tyler Brandt" }, status: "approved", photos: 0, mine: false, entry: { what: "Drywall", time: "07:30", from: "ABC Supply", comment: "" } },
+    { id: 55, section: "notes", date: TWO_AGO, by: { id: 481274, name: "Chloe Abara" }, status: "approved", photos: 1, mine: true, entry: { text: "Poured the slab on Level 2.", location: null, locationName: null } },
+  ];
+  const changes = [];
   await page.setRequestInterception(true);
   page.on("request", async (r) => {
     const u = new URL(r.url());
@@ -59,6 +68,19 @@ const OPTIONS = {
     if (!signedIn) return json(401, { error: "not_connected" });
     if (u.pathname === "/api/procore/session") return json(200, { token: await getAuth().createCustomToken("procore_481274", { procoreUserId: "481274" }), me: { procoreUserId: "481274", name: "Chloe Abara" }, projects: PROJECTS });
     if (u.pathname === "/api/procore/directory") return json(200, { people: [{ id: 481274, name: "Chloe Abara", company: "Ironbridge Construction", title: "Foreman" }], canTag: false, labels: [], compact: false, rolesAvailable: true });
+    if (u.pathname === "/api/procore/daily-log" && r.method() === "GET" && u.searchParams.get("view") === "past") {
+      const from = u.searchParams.get("from"), to = u.searchParams.get("to");
+      return json(200, { access: true, today: TODAY, from, to, entries: pastRows.filter((x) => x.date >= from && x.date <= to) });
+    }
+    if (u.pathname === "/api/procore/daily-log" && r.method() === "POST" && /"action"/.test(r.postData() || "")) {
+      const b = JSON.parse(r.postData());
+      changes.push(b);
+      const row = pastRows.find((x) => x.id === b.id);
+      if (row.date === TWO_AGO) return json(403, { error: "day_locked", message: "Procore has locked this day." });
+      if (b.action === "delete") { pastRows = pastRows.filter((x) => x !== row); return json(200, { ok: true }); }
+      row.entry = { ...row.entry, ...b.entry };
+      return json(200, { ok: true, entry: row });
+    }
     if (u.pathname === "/api/procore/daily-log" && r.method() === "GET") {
       return json(200, access ? OPTIONS : { access: false, reason: "You don't have permission to use the Daily Log on this project.", timeZone: "America/Los_Angeles", today: TODAY, date: TODAY });
     }
@@ -141,6 +163,7 @@ const OPTIONS = {
   await waitText("Procore is busy, trying again in a moment.", 15000);
   check("a 429 shows the busy message and tries again by itself", true);
   await waitText("All 3 entries are in Procore", 30000);
+  check("sent: a See it in Past logs button", (await text()).includes("See it in Past logs"));
   await shot("4-sent");
   const order = posts.map((p) => p.section).join(",");
   check("entries go one at a time, in order", order === "manpower,delays,deliveries", order);
@@ -153,6 +176,55 @@ const OPTIONS = {
   await click("button::-p-text(Back to the project)");
   await waitText("Sent today · 3 entries");
   check("home: Sent today · 3 entries; the draft is gone", !(await text()).includes("Draft in progress"));
+  check("home: the Daily log tile mentions past logs", (await page.$eval(".home-tile.is-log small", (e) => e.textContent)).includes("past logs"));
+
+  // Past logs
+  await click(".home-tile.is-log");
+  await waitText("Say who was on site");
+  const tabNames = await page.$$eval(".dl-tabs button", (b) => b.map((x) => x.textContent));
+  check("Daily log: a New log | Past logs switch under the title", tabNames.join("|") === "New log|Past logs", tabNames.join("|"));
+  await click(".dl-tabs button::-p-text(Past logs)");
+  await waitText("Show older days");
+  const dayRows = await page.$$eval(".dl-day", (l) => l.map((x) => x.innerText.replace(/\s+/g, " ")));
+  check("past: two weeks of days, newest first", dayRows.length === 14 && dayRows[0].startsWith("Today"), dayRows[0]);
+  check("past: today's summary and how many are yours", /6 workers · 1 delivery/.test(dayRows[0]) && /1 yours/.test(dayRows[0]), dayRows[0]);
+  check("past: a day with nothing says so", dayRows.some((x) => x.includes("Nothing logged")));
+  await shot("6-past-days");
+  await click(".dl-day");
+  await waitText("Tyler Brandt");
+  const cards = await page.$$eval(".dl-past", (l) => l.map((x) => ({ t: x.innerText, edit: !!x.querySelector(".dl-edit") })));
+  check("past day: my entry has Edit, someone else's doesn't", cards.find((c) => /6 workers/.test(c.t))?.edit === true && cards.find((c) => /Drywall/.test(c.t))?.edit === false, JSON.stringify(cards));
+  check("past day: approval status shows, read-only", (await text()).includes("Waiting on approval") && (await text()).includes("Approved"));
+  await shot("7-past-day");
+  await click(".dl-past.is-mine .dl-edit");
+  await waitText("Save to Procore");
+  await page.$eval(".sheet input[type=number]", (e) => { e.focus(); e.select(); });
+  await page.keyboard.type("7");
+  await shot("8-edit");
+  await click("button::-p-text(Save to Procore)");
+  await waitText("Saved in Procore.");
+  const upd = changes.find((c) => c.action === "update");
+  check("edit: sends my entry's new numbers, no status", upd?.id === 901 && upd.entry.workers === 7 && !("status" in (upd.entry ?? {})), JSON.stringify(upd));
+  check("edit: the card shows 7 workers", (await text()).includes("7 workers"));
+  // A Completed day is locked
+  await click("button::-p-text(Past logs)");
+  await waitText("Show older days");
+  await page.$$eval(".dl-day", (l) => l[2].click());
+  await waitText("Poured the slab");
+  await click(".dl-past.is-mine .dl-delete");
+  await click("button::-p-text(Delete from Procore)");
+  await waitText("This day is locked in Procore.");
+  check("locked day: says so, and Edit/Delete go away", !(await page.$(".dl-past .dl-edit")));
+  await shot("9-locked-day");
+  check("locked day: no Add more to this day", !(await text()).includes("Add more to this day"));
+  await click("button::-p-text(Past logs)");
+  await waitText("Show older days");
+  await page.$$eval(".dl-day", (l) => l[1].click());
+  await waitText("Nothing in the Daily Log for this day yet.");
+  await click("button::-p-text(Log this day)");
+  await waitText("Say who was on site");
+  check("Log this day: back on New log with that day picked", (await page.$eval(".dl-date", (e) => e.textContent)).startsWith("Yesterday"));
+  await click("button::-p-text(Home)");
 
   // A person without Daily Log access (B7)
   access = false;

@@ -3086,3 +3086,31 @@ select.dir-input { appearance: auto; }
 .dl-done strong { color: var(--success-ink); font-size: 18px; }
 .dl-done.is-partial { background: var(--warning-soft); }
 .dl-done.is-partial strong { color: var(--warning-ink); }
+
+/* Daily log: New log | Past logs switch (iOS segmented control, like .pane-switch) and the Past logs screens */
+.dl-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 2px; border-radius: 12px; background: var(--segment-track); }
+.dl-tabs button { min-height: 44px; border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+.dl-tabs button.is-on { background: var(--brand); color: var(--on-brand); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 1px 1px rgba(0, 0, 0, 0.04); }
+.dl-days { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.dl-day { width: 100%; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; min-height: 60px; padding: 10px 16px; border: 0; border-radius: 14px; background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.dl-day-name { display: grid; gap: 2px; min-width: 0; font-size: 17px; font-weight: 700; }
+.dl-day-name small { font-size: 14px; font-weight: 500; color: var(--text-2); overflow-wrap: anywhere; }
+.dl-day.is-empty .dl-day-name { color: var(--text-2); }
+.dl-day.is-empty .dl-day-name small { color: var(--text-3); }
+.dl-yours { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 8px; background: var(--brand-soft); color: var(--brand-ink); white-space: nowrap; }
+.dl-sec-title { margin: 0; padding: 14px 16px 10px; font-size: 19px; }
+.dl-past { display: grid; gap: 6px; min-width: 0; padding: 12px; border-radius: 14px; background: var(--surface-2); }
+.dl-past.is-mine { box-shadow: inset 3px 0 0 var(--brand); }
+.dl-past strong { font-size: 16px; overflow-wrap: anywhere; }
+.dl-past p { margin: 0; font-size: 15px; color: var(--text-2); overflow-wrap: anywhere; white-space: pre-wrap; }
+.dl-past-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 13px; color: var(--text-2); }
+.dl-status { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 6px; }
+.dl-status.is-ok { background: var(--success-soft); color: var(--success-ink); }
+.dl-status.is-wait { background: var(--warning-soft); color: var(--warning-ink); }
+.dl-past-actions { display: flex; justify-content: flex-end; gap: 18px; }
+.dl-edit { border: 0; background: none; color: var(--brand-ink); font: inherit; font-size: 15px; font-weight: 700; padding: 4px 0; cursor: pointer; }
+.dl-saved { margin: 0; padding: 12px 14px; border-radius: 14px; background: var(--success-soft); color: var(--success-ink); font-weight: 600; }
+.dl-empty.is-day { padding: 16px; border-radius: 14px; background: var(--surface); }
+.dl-edit-sheet { display: grid; gap: 12px; }
+.dl-edit-sheet p { margin: 0; }
+.save-btn.is-danger { background: var(--danger); color: #fff; }

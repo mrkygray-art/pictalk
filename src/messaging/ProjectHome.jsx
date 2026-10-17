@@ -24,7 +24,7 @@ export default function ProjectHome({ unread, onReport, onMessages, onPhotos, on
       <button type="button" className="home-tile is-log" onClick={onDailyLog}>
         <DailyLogIcon />
         <strong>Daily log</strong>
-        <small>Crew, delays and deliveries, by voice</small>
+        <small>Crew, delays and deliveries, by voice · past logs</small>
         <span className={`home-tile-status${dailyStatus === "draft" ? " is-draft" : dailyStatus ? " is-sent" : ""}`}>
           {dailyStatus === "draft" ? "Draft in progress" : dailyStatus ? `Sent today · ${dailyStatus.count} entr${dailyStatus.count === 1 ? "y" : "ies"}` : "Not sent today"}
         </span>

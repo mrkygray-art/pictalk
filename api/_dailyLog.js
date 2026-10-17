@@ -7,7 +7,9 @@
 //   Delays     POST /rest/v1.0/projects/{id}/delay_logs     { delay_log: { date, delay_type (the key, see delayTypeKey), start_time, end_time, vendor_id, location_id, comments } }
 //   Deliveries POST /rest/v1.0/projects/{id}/delivery_logs  { delivery_log: { date, time_hour, time_minute, delivery_from, contents, comments } }
 //   Notes      POST /rest/v1.0/projects/{id}/notes_logs     { notes_log: { date, comment, location_id } }
-//   Lists:     GET  …/{section path}?log_date=YYYY-MM-DD (no date = today only)
+//   Lists:     GET  …/{section path}?log_date=YYYY-MM-DD (no date = today only); a span: start_date + end_date
+//   Change:    PATCH / DELETE …/{section path}/{id}. A day marked Completed in Procore is locked: both answer 403,
+//              even for the person who made the entry (sandbox, 2026-10-16).
 // Photos go with the entry as multipart attachments ({root}[attachments][]). SiteSnap never sets an entry's
 // status (pending / approved): Procore sets it from the project's settings.
 
@@ -84,10 +86,11 @@ export function cleanEntry(section, e = {}) {
   throw new Error("Unknown part of the Daily Log.");
 }
 
-/** The Procore fields for one cleaned entry. Blank fields are left out. */
-export function procoreFields(section, e, { date }) {
+/** The Procore fields for one cleaned entry. Blank fields are left out, except on an edit (clear: true), where a
+ *  field the person emptied is sent as null so Procore clears it too. Never a status. */
+export function procoreFields(section, e, { date, clear = false }) {
   const f = { date };
-  const put = (k, v) => { if (v !== null && v !== undefined && v !== "") f[k] = v; };
+  const put = (k, v) => { if (v !== null && v !== undefined && v !== "") f[k] = v; else if (clear) f[k] = null; };
   if (section === "manpower") {
     put("num_workers", e.workers);
     put("num_hours", e.hours);
@@ -102,7 +105,8 @@ export function procoreFields(section, e, { date }) {
     put("location_id", e.location);
     put("comments", e.comment);
   } else if (section === "deliveries") {
-    if (e.time) { put("time_hour", Number(e.time.slice(0, 2))); put("time_minute", Number(e.time.slice(3))); }
+    put("time_hour", e.time ? Number(e.time.slice(0, 2)) : null);
+    put("time_minute", e.time ? Number(e.time.slice(3)) : null);
     put("delivery_from", e.from);
     put("contents", e.what);
     put("comments", e.comment);
@@ -131,6 +135,50 @@ export function requestFor(section, fields, photos = []) {
 export function manpowerLine(m) {
   const co = m?.contact ?? m?.vendor ?? null;
   return { id: m?.id ?? null, companyId: co?.id ?? null, companyName: co?.name ?? null, workers: Number(m?.num_workers) || 0, status: m?.status ?? null };
+}
+
+// ---------- reading entries back (Past logs) ----------
+
+/** "8:00 AM", "08:00", "2026-10-16T08:00:00Z" or an hour + minute -> "HH:MM", else null */
+export function hhmm(v, hour, minute) {
+  const s = String(v ?? "").trim();
+  let m = /^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/.exec(s);
+  if (m) { let h = Number(m[1]) % 12; if (/p/i.test(m[3])) h += 12; return `${String(h).padStart(2, "0")}:${m[2]}`; }
+  m = /(?:^|T)(\d{1,2}):(\d{2})/.exec(s);
+  if (m && Number(m[1]) < 24) return `${m[1].padStart(2, "0")}:${m[2]}`;
+  if (hour !== null && hour !== undefined && hour !== "" && Number.isFinite(Number(hour)) && Number(hour) < 24) {
+    return `${String(Number(hour)).padStart(2, "0")}:${String(Number(minute) || 0).padStart(2, "0")}`;
+  }
+  return null;
+}
+const named = (o) => (o && typeof o === "object" ? { id: o.id ?? null, name: o.name ?? o.node_name ?? null } : { id: null, name: null });
+
+/** One Procore entry -> { id, section, date, by: { id, name }, status, createdAt, photos, entry } where entry has
+ *  the review card's fields (company, workers, ...), plus the names Procore gave (companyName, locationName). */
+export function entryFromProcore(section, r = {}) {
+  const loc = named(r.location);
+  let entry;
+  if (section === "manpower") {
+    const co = named(r.contact ?? r.vendor);
+    entry = { company: co.id, companyName: co.name, workers: Number(r.num_workers) || 0, hours: r.num_hours == null || r.num_hours === "" ? null : Number(r.num_hours), location: loc.id, locationName: loc.name, trade: "", comment: r.notes ?? "" };
+  } else if (section === "delays") {
+    const co = named(r.vendor ?? r.contact);
+    const t = r.delay_type;
+    entry = {
+      type: typeof t === "object" && t ? (t.name ?? t.display_name ?? t.translation_key ?? "") : String(t ?? ""),
+      start: hhmm(r.start_time, r.start_time_hour, r.start_time_minute), end: hhmm(r.end_time, r.end_time_hour, r.end_time_minute),
+      company: co.id, companyName: co.name, location: loc.id, locationName: loc.name, comment: r.comments ?? "",
+    };
+  } else if (section === "deliveries") {
+    entry = { what: r.contents ?? "", time: hhmm(null, r.time_hour, r.time_minute), from: r.delivery_from ?? "", comment: r.comments ?? "" };
+  } else {
+    entry = { text: r.comment ?? "", location: loc.id, locationName: loc.name };
+  }
+  return {
+    id: r.id ?? null, section, date: String(r.date ?? r.log_date ?? "").slice(0, 10) || null,
+    by: named(r.created_by), status: r.status ?? null, createdAt: r.created_at ?? null,
+    photos: Array.isArray(r.attachments) ? r.attachments.length : 0, entry,
+  };
 }
 
 // ---------- Procore's answer in plain words (spec section 0) ----------

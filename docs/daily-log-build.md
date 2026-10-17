@@ -40,6 +40,16 @@ The organizer keeps only companies, delay types and locations from the project's
 | Delay types | first of `…/daily_logs/delay_log_types`, `…/projects/{id}/delay_log_types`, `…/companies/{id}/delay_log_types` that answers with a list |
 | Companies | `GET /rest/v1.0/projects/{id}/vendors`; the foreman's own company = their project user's `vendor` |
 
+## Past logs (2026-10-16)
+
+Ky asked for: view past logs; edit or delete only your own entries while the day is open (Procore locks a Completed day); never change approval status; easy to find.
+
+- Where: a **New log | Past logs** switch under the title (capture and review screens), "See it in Past logs" after a send, and "· past logs" on the home tile.
+- Days list: two weeks, newest first, totals per day and "N yours"; Show older days; Go to a day. A day: everyone's entries by section, who made each, Approved / Waiting on approval, photo count.
+- Own entries only: Edit (the review card in a sheet, Save to Procore) and Delete (asks first). The server re-reads the entry and checks `created_by` before PATCH / DELETE.
+- Locked day: Procore answers 403 (seen with the Daily Log Examples cleanup); the app shows "This day is locked in Procore" and hides Edit / Delete. SiteSnap never PATCHes a status to get around it.
+- Still to confirm in the sandbox: that `start_date` / `end_date` filter the list endpoints (one day uses `log_date`, already confirmed), that PATCH with nulls clears a field, and the shape of `start_time` / `delay_type` in a read-back.
+
 Procore's field-level reference doesn't load outside a browser, so these are not yet confirmed against a live answer. **The check page shows exactly what Procore kept for each field** ("company BLANK" etc.); fix any mismatch in `api/_dailyLog.js` only.
 
 ## To go live (Ky)

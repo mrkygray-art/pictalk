@@ -4,36 +4,23 @@ import { formatTime, useRecorder } from "./useRecorder";
 import { newId, transcribeVoice, uploadFile, voicePathFor } from "./messagingStore";
 import { clearDraft, dailyLogOptions, loadDraft, loadPhotos, markSent, MAX_PHOTOS, organizeLog, saveDraft, savePhotos, SECTIONS, sendEntry } from "./dailyLogStore";
 import Sheet from "../Sheet";
+import { Entry } from "./DailyLogEntry";
+import { addDays, entryLine, fmtDate, payload, problem } from "./dailyLogFormat";
+import PastLogs from "./PastLogs";
 
 // Daily log by voice (docs/closeout-and-daily-log-spec.md, Feature B). The foreman talks (as many times as they
 // like), SiteSnap sorts the words into Manpower, Delays, Deliveries and Notes, the foreman checks the cards, and
 // Send writes each entry into Procore's Daily Log for the project's date, one at a time, with its photos.
 // Steps: loading -> locked | error | capture -> organizing -> review -> sending (results).
+// A New log | Past logs switch sits under the title on the capture and review screens; Past logs (PastLogs.jsx)
+// shows what's already in Procore by day, and lets the person edit or delete their own entries.
 // Nothing goes to Procore until Send. Blank means "not said": never guessed. Unsure answers carry a
 // "Check this" tag with one-tap fixes. The draft stays on the phone until every entry is in.
 
-const fmtDate = (iso) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : "");
-const addDays = (iso, n) => { const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
-const label12 = (t) => { if (!t) return ""; const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
 const flagCount = (log) => SECTIONS.reduce((n, s) => n + (log?.[s.key] ?? []).reduce((a, e) => a + (e.flags?.length ?? 0), 0), 0);
 const entryCount = (log) => SECTIONS.reduce((n, s) => n + (log?.[s.key]?.length ?? 0), 0);
 
-// What each section sends (api/_dailyLog.js cleanEntry checks it again)
-function payload(section, e) {
-  if (section === "manpower") return { company: e.company ?? null, workers: e.workers, hours: e.hours ?? null, location: e.location ?? null, trade: e.trade ?? "", comment: e.comment ?? "" };
-  if (section === "delays") return { type: e.type ?? "", start: e.start ?? null, end: e.end ?? null, company: e.company ?? null, location: e.location ?? null, comment: e.comment ?? "" };
-  if (section === "deliveries") return { what: e.what ?? "", time: e.time ?? null, from: e.from ?? "", comment: e.comment ?? "" };
-  return { text: e.text ?? "", location: e.location ?? null };
-}
-// Missing must-haves, in plain words (shown on the card; Send waits until they're fixed)
-function problem(section, e) {
-  if (section === "manpower" && !(Number.isInteger(Number(e.workers)) && e.workers !== "" && e.workers != null)) return "Add how many workers.";
-  if (section === "delays" && !String(e.type ?? "").trim() && !String(e.comment ?? "").trim()) return "Say what held things up.";
-  if (section === "deliveries" && !String(e.what ?? "").trim()) return "Add what was delivered.";
-  if (section === "notes" && !String(e.text ?? "").trim()) return "The note is empty.";
-  return "";
-}
 function blankEntry(section, opts) {
   const base = { id: newId(), source: "", flags: [] };
   const mine = opts?.myCompany?.id ?? null;
@@ -43,7 +30,7 @@ function blankEntry(section, opts) {
   return { ...base, text: "", location: null };
 }
 
-export default function DailyLogFlow({ session, onClose }) {
+export default function DailyLogFlow({ session, onClose, startTab = "new" }) {
   const { project } = session;
   const key = `${project.companyId}_${project.projectId}`;
   const [draft, setDraft] = useState(() => loadDraft(key) ?? { id: newId(), date: null, words: "", log: null, sent: {} });
@@ -60,6 +47,7 @@ export default function DailyLogFlow({ session, onClose }) {
   const [ask, setAsk] = useState(null); // fix | flags | dup
   const [sheetPhoto, setSheetPhoto] = useState(null);
   const [rows, setRows] = useState([]);
+  const [tab, setTab] = useState(startTab); // new | past
   const fileInput = useRef(null);
 
   // Every change is saved on the phone at once (B8)
@@ -228,6 +216,19 @@ export default function DailyLogFlow({ session, onClose }) {
   // ---------- screens ----------
   const back = (to, label) => <button type="button" className="link-btn msg-home-back" onClick={to}><BackIcon /> {label}</button>;
   const dayWord = opts?.today && draft.date === opts.today ? "Today" : opts?.today && draft.date === addDays(opts.today, -1) ? "Yesterday" : "";
+  const draftBusy = !!(String(draft.words ?? "").trim() || draft.log || photos.length);
+  const tabs = (
+    <div className="dl-tabs" role="tablist" aria-label="Daily log">
+      <button type="button" role="tab" aria-selected={tab === "new"} className={tab === "new" ? "is-on" : ""} onClick={() => setTab("new")}>{draftBusy ? "Your draft" : "New log"}</button>
+      <button type="button" role="tab" aria-selected={tab === "past"} className={tab === "past" ? "is-on" : ""} onClick={() => setTab("past")}>Past logs</button>
+    </div>
+  );
+  // Past logs -> "Add to this day": the draft takes that date (only offered when there's no draft for another day)
+  const addToDay = (iso) => {
+    if (draft.date !== iso) pickDate(iso);
+    setTab("new");
+    setStep(draftRef.current.log ? "review" : "capture");
+  };
 
   if (step === "loading") {
     return <section className="report report-wait" aria-live="polite">{back(onClose, "Home")}<p className="page-title">Daily log</p><p className="msg-status">Checking the Daily Log in Procore…</p></section>;
@@ -239,7 +240,7 @@ export default function DailyLogFlow({ session, onClose }) {
         <h2 className="page-title">Daily log</h2>
         <div className="dl-locked">
           <strong>{step === "locked" ? opts.reason : opts?.error}</strong>
-          {step === "locked" && <p className="msg-status">Ask your project manager to give your role access to the Daily Log in Procore. Everything else in SiteSnap still works.</p>}
+          {step === "locked" && <p className="msg-status">{opts.template ? `Your Procore permission template here is ${opts.template}, and it has no Daily Log access. ` : ""}Ask your project manager to give you Daily Log access in Procore (Standard lets you add and fix your own entries). Everything else in SiteSnap still works.</p>}
         </div>
         <button type="button" className="text-btn" onClick={onClose}>Back to the project</button>
       </section>
@@ -252,6 +253,10 @@ export default function DailyLogFlow({ session, onClose }) {
         <p className="msg-status">Sorting your words into Manpower, Delays, Deliveries and Notes.</p>
       </section>
     );
+  }
+
+  if (tab === "past" && (step === "capture" || step === "review")) {
+    return <PastLogs project={project} opts={opts} draftDate={draft.date} draftBusy={draftBusy} onAddToDay={addToDay} tabs={tabs} onClose={onClose} />;
   }
 
   if (step === "sending") {
@@ -279,6 +284,7 @@ export default function DailyLogFlow({ session, onClose }) {
           <div className="dl-done"><strong>All {rows.length} entries are in Procore&rsquo;s Daily Log.</strong><span>Your project manager sees them in Procore for {fmtDate(draft.date)}.</span></div>
         ))}
         {done && <button type="button" className={failed ? "text-btn" : "save-btn"} onClick={onClose}>{failed ? "Leave it for now" : "Back to the project"}</button>}
+        {done && !failed && <button type="button" className="text-btn" onClick={() => { setTab("past"); setStep("capture"); }}>See it in Past logs</button>}
         {done && failed > 0 && <button type="button" className="text-btn" onClick={() => setStep("review")}>Fix an entry</button>}
       </section>
     );
@@ -293,6 +299,7 @@ export default function DailyLogFlow({ session, onClose }) {
       <section className="report dl-review" aria-label="Check your log">
         {back(() => setStep("capture"), "Add more")}
         <h2 className="page-title">Check your log</h2>
+        {tabs}
         <p className="msg-status">{project.name} · {dayWord ? `${dayWord}, ` : ""}{fmtDate(draft.date)}</p>
         {notice === "fallback" && <p className="procore-note">I couldn&rsquo;t organize this. It&rsquo;s saved as a note. You can move things into the other sections with + Add.</p>}
         {flags > 0 && <p className="dl-banner"><b>{flags} thing{flags === 1 ? "" : "s"} to check.</b> Look for the orange Check this tags. Tap the right answer or fix the box.</p>}
@@ -373,6 +380,7 @@ export default function DailyLogFlow({ session, onClose }) {
     <section className="report" aria-label="Daily log">
       {back(onClose, "Home")}
       <h2 className="page-title">Daily log</h2>
+      {tabs}
       <div className="dl-date-row">
         <button type="button" className="dl-date" aria-expanded={datePick} onClick={() => setDatePick((v) => !v)}>{dayWord ? `${dayWord} · ` : ""}{fmtDate(draft.date)} ▾</button>
         <span className="msg-status">Project time</span>
@@ -421,101 +429,6 @@ export default function DailyLogFlow({ session, onClose }) {
   );
 }
 
-// ---------- one entry card ----------
-
-function Entry({ section, e, opts, sent, photos, onSet, onFix, onRemove, onPhoto }) {
-  const flagged = (f) => (e.flags ?? []).some((x) => x.fields.includes(f));
-  const cls = (f, wide) => `dl-fld${wide ? " is-wide" : ""}${flagged(f) ? " is-check" : ""}`;
-  const companies = opts?.companies ?? [];
-  const mineId = opts?.myCompany?.id;
-  const coSelect = (f) => (
-    <select className="dir-input" value={e[f] ?? ""} onChange={(ev) => onSet({ [f]: ev.target.value ? Number(ev.target.value) : null })}>
-      <option value="">Pick a company</option>
-      {companies.map((c) => <option key={c.id} value={c.id}>{c.name}{c.id === mineId ? " (yours)" : ""}</option>)}
-    </select>
-  );
-  const locSelect = (opts?.locations ?? []).length > 0 && (
-    <label className={cls("location")}><span>Where</span>
-      <select className="dir-input" value={e.location ?? ""} onChange={(ev) => onSet({ location: ev.target.value ? Number(ev.target.value) : null })}>
-        <option value="">Not said</option>
-        {opts.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-      </select>
-    </label>
-  );
-  const time = (f, label) => (
-    <label className={cls(f)}><span>{label}</span><input type="time" className="dir-input" value={e[f] ?? ""} onChange={(ev) => onSet({ [f]: ev.target.value || null })} /></label>
-  );
-  const wrong = problem(section, e);
-  return (
-    <article className={`dl-entry${sent ? " is-sent" : ""}`}>
-      {sent && <p className="dl-sent-tag">Already in Procore</p>}
-      {e.source && <p className="dl-source">You said &ldquo;{e.source}&rdquo;</p>}
-      {(e.flags ?? []).map((f, i) => (
-        <div key={i} className="dl-check">
-          <span className="dl-check-tag">Check this</span>
-          <p>{f.reason}</p>
-          <div className="dl-chips">
-            {f.options.map((o) => <button key={o.label} type="button" onClick={() => onFix(i, o)}>{o.label}</button>)}
-            <button type="button" onClick={() => onFix(i, null)}>Looks right</button>
-          </div>
-        </div>
-      ))}
-      <div className="dl-fields">
-        {section === "manpower" && (
-          <>
-            <label className={cls("company", true)}><span>Company{e.defaulted ? <em> your company, since you didn&rsquo;t name one</em> : null}</span>{coSelect("company")}</label>
-            <label className={cls("workers")}><span>Workers</span><input type="number" inputMode="numeric" min="0" className="dir-input" value={e.workers ?? ""} onChange={(ev) => onSet({ workers: ev.target.value === "" ? "" : Number(ev.target.value) })} /></label>
-            <label className={cls("hours")}><span>Hours each</span><input type="number" inputMode="decimal" min="0" max="24" className="dir-input" placeholder="Not said" value={e.hours ?? ""} onChange={(ev) => onSet({ hours: ev.target.value === "" ? null : Number(ev.target.value) })} /></label>
-            {locSelect}
-            <label className={cls("comment", true)}><span>Notes</span><input className="dir-input" placeholder={e.trade ? e.trade : "Optional"} value={e.comment ?? ""} onChange={(ev) => onSet({ comment: ev.target.value })} /></label>
-          </>
-        )}
-        {section === "delays" && (
-          <>
-            <label className={cls("type", true)}><span>Kind of delay</span>
-              {(opts?.delayTypes ?? []).length ? (
-                <select className="dir-input" value={e.type ?? ""} onChange={(ev) => onSet({ type: ev.target.value })}>
-                  <option value="">Pick one</option>
-                  {opts.delayTypes.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
-                </select>
-              ) : <input className="dir-input" value={e.type ?? ""} onChange={(ev) => onSet({ type: ev.target.value })} placeholder="e.g. Weather" />}
-            </label>
-            {time("start", "Started")}
-            {time("end", "Ended")}
-            <label className={cls("company", true)}><span>Company{e.defaulted ? <em> your company</em> : null}</span>{coSelect("company")}</label>
-            {locSelect}
-            <label className={cls("comment", true)}><span>What happened</span><input className="dir-input" value={e.comment ?? ""} onChange={(ev) => onSet({ comment: ev.target.value })} /></label>
-          </>
-        )}
-        {section === "deliveries" && (
-          <>
-            <label className={cls("what")}><span>What came</span><input className="dir-input" value={e.what ?? ""} onChange={(ev) => onSet({ what: ev.target.value })} placeholder="e.g. Rebar" /></label>
-            {time("time", "Time")}
-            <label className={cls("from", true)}><span>From</span>
-              <input className="dir-input" list={`dl-co-${e.id}`} value={e.from ?? ""} onChange={(ev) => onSet({ from: ev.target.value })} placeholder="Not said" />
-              <datalist id={`dl-co-${e.id}`}>{companies.map((c) => <option key={c.id} value={c.name} />)}</datalist>
-            </label>
-            <label className={cls("comment", true)}><span>Comment</span><input className="dir-input" value={e.comment ?? ""} onChange={(ev) => onSet({ comment: ev.target.value })} placeholder="Optional" /></label>
-          </>
-        )}
-        {section === "notes" && (
-          <>
-            <label className={cls("text", true)}><span>Note</span><textarea className="words-field" rows={3} value={e.text ?? ""} onChange={(ev) => onSet({ text: ev.target.value })} /></label>
-            {locSelect}
-          </>
-        )}
-      </div>
-      {photos.length > 0 && (
-        <ul className="dl-photos is-small">
-          {photos.map((p) => <li key={p.id}><button type="button" onClick={() => onPhoto(p.id)} aria-label="Move this photo"><img src={p.url} alt="" /></button></li>)}
-        </ul>
-      )}
-      {wrong && <p className="error">{wrong}</p>}
-      {!sent && <button type="button" className="dl-delete" onClick={onRemove}>Delete</button>}
-    </article>
-  );
-}
-
 function summary(s, list) {
   if (!list.length) return "None";
   if (s.key === "manpower") {
@@ -523,13 +436,6 @@ function summary(s, list) {
     return `${w} worker${w === 1 ? "" : "s"}${list.length > 1 ? ` · ${list.length} entries` : ""}`;
   }
   return `${list.length} ${list.length === 1 ? s.one : s.many}`;
-}
-const coName = (opts, id) => (opts?.companies ?? []).find((c) => Number(c.id) === Number(id))?.name ?? "";
-function entryLine(section, e, opts) {
-  if (section === "manpower") return `Manpower: ${e.workers || "?"} workers · ${coName(opts, e.company) || "company not set"}`;
-  if (section === "delays") return `Delay: ${[e.type, e.comment].filter(Boolean).join(" · ") || "delay"}`;
-  if (section === "deliveries") return `Delivery: ${e.what || "delivery"}${e.time ? ` at ${label12(e.time)}` : ""}`;
-  return `Note: ${String(e.text ?? "").slice(0, 60) || "note"}`;
 }
 function attachLabel(p, log, opts) {
   if (!p.attach) return "Notes";

@@ -133,7 +133,15 @@ export async function savePhoto(runKey, item, blob) {
 }
 
 export function setSectionNa(runKey, section, na) {
-  return enqueue(runKey, { action: "section_na", sectionId: section.id, na }, (run) => { run.sectionNa[section.id] = na; });
+  return enqueue(runKey, { action: "section_na", sectionId: section.id, na }, (run) => {
+    run.sectionNa[section.id] = na;
+    // Procore answers every item N/A when a section is set N/A, and clears them all when it's turned off
+    const sec = run.snapshot?.sections?.find((x) => x.id === section.id);
+    for (const it of sec?.items ?? []) {
+      delete run.local[it.id];
+      it.answer = na ? { counts: "na", optionId: null, value: null, by: null, at: new Date().toISOString() } : null;
+    }
+  });
 }
 
 /** Fail -> Observation (Report an issue's card, photos as Blobs). Procore marks the item failed when it links them. */

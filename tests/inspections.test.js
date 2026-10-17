@@ -80,8 +80,14 @@ const reply = (u, init) => {
     return [200, hit.it];
   }
   x = /\/rest\/v1\.0\/checklist\/lists\/(\d+)\/sections\/(\d+)\/toggle_not_applicable$/.exec(u);
-  if (x && m === "PATCH") { const s = lists[x[1]].sections.find((y) => String(y.id) === x[2]); s.not_applicable = !s.not_applicable; return [200, s]; }
-  if (/\/inspections\/\d+\/comments$/.test(u)) return refuse === "note" ? [404, { errors: "Not found" }] : [201, { id: 5 }];
+  if (x && m === "PATCH") {
+    // Like the sandbox (2026-10-16): on answers every item not_applicable, off clears them all
+    const s = lists[x[1]].sections.find((y) => String(y.id) === x[2]);
+    s.not_applicable = !s.not_applicable;
+    for (const i of s.items) Object.assign(i, s.not_applicable ? { status: "n/a", item_response: { status: "not_applicable", responder: { id: ME, name: "Edward Gray" }, payload: null } } : { status: "none", item_response: null });
+    return [200, { id: s.id, name: s.name, position: s.position, not_applicable: s.not_applicable }];
+  }
+  if (/\/rest\/v1\.0\/checklist\/lists\/\d+\/comments$/.test(u)) return refuse === "note" ? [404, { message: "Item not found" }] : [201, { id: 5 }];
   x = /\/v1\.1\/projects\/373716\/checklist\/lists\/(\d+)\/close$/.exec(u);
   if (x) return refuse === "close" ? [403, { errors: "Forbidden" }] : [200, { ...lists[x[1]], status: "Closed" }];
   if (/\/observations\/items$/.test(u) && m === "POST") {
@@ -252,7 +258,9 @@ test("photo: multipart PATCH on the item with attachments[] and its answer uncha
 
 test("note: a Procore comment; when Procore refuses the path it says not saved (the phone keeps it)", async () => {
   assert.deepEqual((await post({ listId: "9001", action: "note", itemId: "601", text: "Missing at the stair" })).json(), { ok: true, saved: true });
-  assert.deepEqual(JSON.parse(calls.find((c) => /comments$/.test(c.url)).body), { comment: { body: "Missing at the stair" } });
+  const note = calls.find((c) => /comments$/.test(c.url));
+  assert.match(note.url, /\/rest\/v1\.0\/checklist\/lists\/9001\/comments$/);
+  assert.deepEqual(JSON.parse(note.body), { project_id: 373716, item_id: 601, comment: { body: "Missing at the stair" } });
   refuse = "note";
   assert.equal((await post({ listId: "9001", action: "note", itemId: "601", text: "x" })).json().saved, false);
 });
@@ -370,4 +378,15 @@ test("section N/A when Procore's read doesn't say (the sandbox): SiteSnap rememb
   const off = await post({ listId: "9001", action: "section_na", sectionId: "50", na: false });
   assert.equal(off.json().changed, true);
   assert.equal(calls.filter((c) => /toggle_not_applicable/.test(c.url)).length, 2);
+});
+
+test("section N/A set in Procore's web app (every item N/A, nothing remembered) shows as N/A; turned off there, it shows on again", async () => {
+  hideNa = true;
+  for (const i of lists[9001].sections.find((x) => x.id === 50).items) Object.assign(i, { status: "n/a", item_response: { status: "not_applicable", payload: null } });
+  let secs = (await get("&id=9001")).json().inspection.sections;
+  assert.equal(secs.find((x) => x.id === "50").na, true);
+  await post({ listId: "9001", action: "section_na", sectionId: "51", na: true });
+  for (const i of lists[9001].sections.find((x) => x.id === 51).items) Object.assign(i, { status: "none", item_response: null }); // turned off in Procore
+  secs = (await get("&id=9001")).json().inspection.sections;
+  assert.equal(secs.find((x) => x.id === "51").na, false, "SiteSnap's record gives way to what Procore's items say");
 });

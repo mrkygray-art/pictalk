@@ -142,7 +142,6 @@ export default async function handler(req, res) {
       const lastSection = detail.sections.at(-1);
       const target = detail.sections.flatMap((s) => s.items).filter((i) => i.kind === "passfail").at(-1);
       if (target) {
-        const before = target.answer;
         const r = await send("POST", PATHS.respond(p, target.id), { body: responseBody(target, { counts: "na" }) });
         raw.answer = { item: target.number, sent: responseBody(target, { counts: "na" }), status: r.status, answer: r.ok ? r.json : brief(r) };
         step(`Answer item ${target.number} N/A (item_response)`, r, r.ok ? `Saved: status ${r.json?.status ?? "?"}, by ${r.json?.responder?.name ?? "?"}` : r.status === 403 ? "Procore said no: this person can't answer items" : `Procore answered ${r.status}: ${brief(r)}`);
@@ -153,11 +152,7 @@ export default async function handler(req, res) {
         const again = await send("GET", PATHS.list(pick.id), { query: { project_id: p } });
         const now = again.ok ? inspectionDetail(again.json) : null;
         steps.push({ name: "Counts after answering", ok: !!now && now.counts.na > detail.counts.na, status: again.status, detail: now ? `n/a ${detail.counts.na} -> ${now.counts.na}; Procore's own counts now: n/a ${again.json?.na_item_count ?? again.json?.not_applicable_item_count ?? "?"}, not inspected ${again.json?.not_inspected_item_count ?? "?"}` : `Procore answered ${again.status}` });
-        if (!before) {
-          const clear = await send("POST", PATHS.respond(p, target.id), { body: { item_response: { status: null } } });
-          step(`Clear item ${target.number} again`, clear, clear.ok ? `Cleared (status ${clear.json?.status ?? "null"})` : `Couldn't clear it (${clear.status}): ${brief(clear)}. Clear it by hand in Procore if needed.`);
-        }
-        const n = await send("POST", PATHS.comment(p, target.id), { body: { comment: { body: "SiteSnap test note" } } });
+        const n = await send("POST", PATHS.comment(pick.id), { body: { project_id: Number(p), item_id: Number(target.id), comment: { body: "SiteSnap test note" } } });
         raw.note = { status: n.status, answer: n.ok ? shape(n.json) : brief(n) };
         step(`Add a note to item ${target.number}`, n, n.ok ? "Saved as a comment on the item" : `Procore answered ${n.status}: ${brief(n)} (the note path is the least certain; notes stay in SiteSnap until this works)`);
       } else steps.push({ name: "Answer an item", ok: false, status: 0, detail: "No Pass / Fail / N/A item found" });

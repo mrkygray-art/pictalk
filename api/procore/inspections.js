@@ -46,7 +46,9 @@ async function withSavedNa(key, inspection) {
   const store = await naLog(key);
   if (!store) return inspection;
   const docs = await Promise.all(unknown.map((s) => store.doc(`${inspection.id}_${s.id}`).get().catch(() => null)));
-  unknown.forEach((s, i) => { if (docs[i]?.exists) s.na = docs[i].data()?.na === true; });
+  // What SiteSnap set, unless Procore's items say otherwise since (all N/A = on; a section SiteSnap set N/A whose
+  // items are no longer all N/A was turned off in Procore)
+  unknown.forEach((s, i) => { if (docs[i]?.exists) s.na = docs[i].data()?.na === true && s.allNa; });
   return inspection;
 }
 
@@ -121,7 +123,7 @@ async function answer(send, projectId, listId, body) {
 async function note(send, projectId, listId, body) {
   const t = String(body.text ?? "").trim().slice(0, 4000);
   if (!t) throw new HttpError(400, "bad_note", "Say or type the note first.");
-  const r = await send("POST", PATHS.comment(projectId, body.itemId), { body: { comment: { body: t } } });
+  const r = await send("POST", PATHS.comment(listId), { body: { project_id: Number(projectId), item_id: Number(body.itemId), comment: { body: t } } });
   if (!r.ok) { log("note refused", { status: r.status }); return { ok: false, saved: false, reason: r.status === 403 ? "no_permission" : "not_supported" }; }
   return { ok: true, saved: true };
 }

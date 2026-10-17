@@ -22,7 +22,7 @@ All need the `Procore-Company-Id` header. SiteSnap calls them with the signed-in
 | Answer an item | `POST /rest/v1.0/projects/{project_id}/checklist/items/{item_id}/item_response` | Body `{ item_response: { status } }` for Pass / Fail / N/A items (`conforming`, `non_conforming`, `not_applicable`), `{ response_option_id }` for multiple choice, `{ text_value }`, `{ number_value }`, `{ date_value: "YYYY-MM-DD" }` for open-ended items. Send only the field for the item's type. 201 returns `{ item_id, status, responded_at, responder, item_type, payload }`. |
 | Answer (older way, fallback) | `PATCH /rest/v1.0/checklist/lists/{list_id}/items/{id}` | Body `{ project_id, section_id, item: { status: "yes" \| "no" \| "n/a" \| "none", response_id } }`. Used only if `item_response` answers 404. |
 | Photo on an item | Same PATCH as multipart: `project_id`, `section_id`, `item[status]` and files under `attachments[]` | Shows under the item's Attachments. The photo also goes to the Photos tool through SiteSnap's existing photo queue (`autoFilePhotos`). |
-| Note on an item | `POST /rest/v1.0/projects/{project_id}/inspections/{item_id}/comments` `{ comment: { body } }` | **Least certain path.** If Procore refuses it, the note stays in SiteSnap (summary shows "note not in Procore") and goes into the Observation description on a Fail. |
+| Note on an item | `POST /rest/v1.0/checklist/lists/{list_id}/comments` `{ project_id, item_id, comment: { body } }` | The first guess (`/projects/{p}/inspections/{item}/comments`) answered 404 in the sandbox. If Procore refuses it, the note stays in SiteSnap (summary shows "note not in Procore") and goes into the Observation description on a Fail. |
 | Section N/A | `PATCH /rest/v1.0/checklist/lists/{list_id}/sections/{id}/toggle_not_applicable` `{ project_id }` | It's a toggle: SiteSnap reads the section's `not_applicable` first and only toggles when it differs. Fallback: deprecated `PATCH …/sections/{id}` `{ project_id, section: { name, position, not_applicable } }`. |
 | Failed item → Observation | `POST /rest/v1.0/observations/items` with top-level `inspection_item_failed: 1` and `observation.checklist_item_id` | Same body as Report an issue (`observationBody` in `api/_records.js`) plus those two fields. Procore links the Observation to the item (origin = inspection) **and marks the item failed itself**. The Observation shows in the item's `observations[]` and its activity. |
 | Close | `PATCH /rest/v1.1/projects/{project_id}/checklist/lists/{id}/close` | Idempotent. Only the close, no other fields. A 403 here = the role can't close inspections: SiteSnap says "Saved. Your project manager will review it." |
@@ -81,6 +81,14 @@ A 401/403 on the list read → "Your Procore role can't see Inspections on this 
 - Show: 17 sections, 87 items. Items are `type: { category: "multiple_choice", name: "default" }` with `response_set: null`: SiteSnap reads them as Pass / Fail / N/A (correct). Unanswered items: `status "none"`, `responded_with "No Response"`, `item_response null`. Section 1 is "Housekeeping and Sanitation" (6 items); 2.1 and 2.5 have the same text.
 - **Sections have no `not_applicable` field.** Since Procore's N/A call is a toggle, SiteSnap remembers what it set (`procoreProjects/{key}/inspectionSections/{listId}_{sectionId}`) and only toggles when that differs. A section set N/A in Procore's web app won't show as N/A in SiteSnap until we find where Procore keeps it (the write check now prints the section and its items after the toggle).
 - `list_items` works (total 87). Rate limit 25, as before.
+
+## Write check (Edward, admin, #2, 2026-10-16)
+
+- **Answer: works.** `POST …/checklist/items/{id}/item_response` `{ item_response: { status: "not_applicable" } }` → 201 with `status`, `responder`, `item_type`.
+- **An answer can't be cleared** through the API: `{ status: null }` → 422 "Invalid params for default item response". SiteSnap never needs to.
+- **Section N/A: works** via `toggle_not_applicable`; the answer has `not_applicable` true / false. Turning it on answers **every item in the section `not_applicable`** (Procore's N/A count +5); turning it off **clears every item** in it (even ones answered before). So a section whose items are all N/A is shown as N/A (that also catches sections set N/A in Procore's web app), and Undo N/A asks first.
+- **Notes: the guessed path was wrong** (`/projects/{p}/inspections/{item}/comments` → 404 "Item not found"). Now `POST /rest/v1.0/checklist/lists/{listId}/comments` `{ project_id, item_id, comment: { body } }` (not yet run).
+- Still to run: item photo, the new note path, Observation from a Fail, close.
 
 ## 7. To confirm in the sandbox (`/api/procore/test-inspections`)
 

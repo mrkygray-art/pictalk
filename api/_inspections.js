@@ -8,7 +8,7 @@ export const PATHS = {
   list: (listId) => `/rest/v1.0/checklist/lists/${listId}`, // ?project_id=
   respond: (projectId, itemId) => `/rest/v1.0/projects/${projectId}/checklist/items/${itemId}/item_response`,
   item: (listId, itemId) => `/rest/v1.0/checklist/lists/${listId}/items/${itemId}`,
-  comment: (projectId, itemId) => `/rest/v1.0/projects/${projectId}/inspections/${itemId}/comments`,
+  comment: (listId) => `/rest/v1.0/checklist/lists/${listId}/comments`, // body { project_id, item_id, comment: { body } }
   sectionToggle: (listId, sectionId) => `/rest/v1.0/checklist/lists/${listId}/sections/${sectionId}/toggle_not_applicable`,
   section: (listId, sectionId) => `/rest/v1.0/checklist/lists/${listId}/sections/${sectionId}`,
   close: (projectId, listId) => `/rest/v1.1/projects/${projectId}/checklist/lists/${listId}/close`,
@@ -86,7 +86,10 @@ export function inspectionDetail(raw) {
         observations: (Array.isArray(it.observations) ? it.observations : []).map((o) => ({ id: String(o.id), number: o.number ?? null, title: text(o.title ?? o.name, 120), status: o.status ?? null })),
       };
     });
-    return { id: String(s.id), number: si + 1, name: text(s.name, 200) || `Section ${si + 1}`, position: Number(s.position) || si, na: s.not_applicable === true, naKnown: typeof s.not_applicable === "boolean", items }; // the sandbox's show call has no not_applicable (2026-10-16)
+    // The sandbox's read has no not_applicable on sections (2026-10-16). Setting a section N/A answers every item in
+    // it not_applicable (and turning it off clears them), so a section whose items are all N/A is shown as N/A.
+    const allNa = items.length > 0 && items.every((i) => i.answer?.counts === "na");
+    return { id: String(s.id), number: si + 1, name: text(s.name, 200) || `Section ${si + 1}`, position: Number(s.position) || si, na: typeof s.not_applicable === "boolean" ? s.not_applicable : allNa, naKnown: typeof s.not_applicable === "boolean", allNa, items };
   });
   return { ...inspectionSummary(raw), sections, ...countsOf(sections) };
 }

@@ -267,17 +267,24 @@ function SectionOverview({ run, runKey, view, sync, offline, onBack, onItem, onF
                 </span>
               )}
             </button>
-            <button type="button" className="insp-na-btn" onClick={() => (s.na ? setSectionNa(runKey, s, false).then(() => setToast(`${s.name}: back on`)) : setAskNa(s))}>
+            <button type="button" className="insp-na-btn" onClick={() => setAskNa(s)}>
               {s.na ? "Undo N/A" : "Set N/A"}
             </button>
           </li>
         ))}
       </ul>
       {next && view.counts.answered > 0 && <button type="button" className="text-btn" onClick={onFinish}>See the summary</button>}
-      {askNa && (
+      {askNa && !askNa.na && (
         <Sheet title={`Set "${askNa.name}" as N/A?`} onClose={() => setAskNa(null)}>
-          <p>All {askNa.items.length} item{askNa.items.length === 1 ? "" : "s"} in this section count as not applicable in Procore. You can undo it.</p>
+          <p>All {askNa.items.length} item{askNa.items.length === 1 ? "" : "s"} in this section are answered N/A in Procore. You can undo it.</p>
           <button type="button" className="save-btn" onClick={() => { setSectionNa(runKey, askNa, true); setToast(`${askNa.name}: N/A`); setAskNa(null); }}>Yes, Set Section N/A</button>
+          <button type="button" className="text-btn" onClick={() => setAskNa(null)}>Cancel</button>
+        </Sheet>
+      )}
+      {askNa?.na && (
+        <Sheet title={`Undo N/A on "${askNa.name}"?`} onClose={() => setAskNa(null)}>
+          <p>Procore clears the N/A answer on all {askNa.items.length} item{askNa.items.length === 1 ? "" : "s"} in this section, so each one needs an answer again.</p>
+          <button type="button" className="save-btn" onClick={() => { setSectionNa(runKey, askNa, false); setToast(`${askNa.name}: back on`); setAskNa(null); }}>Yes, Undo N/A</button>
           <button type="button" className="text-btn" onClick={() => setAskNa(null)}>Cancel</button>
         </Sheet>
       )}
@@ -446,7 +453,7 @@ function ItemScreen({ session, run, runKey, view, sync, offline, itemId, onGo, o
       {error && <p className="error" role="alert">{error}</p>}
       {askNa && (
         <Sheet title={`Set "${item.section.name}" as N/A?`} onClose={() => setAskNa(false)}>
-          <p>All {item.section.items.length} items in this section count as not applicable in Procore. You can undo it from the sections list.</p>
+          <p>All {item.section.items.length} items in this section are answered N/A in Procore. You can undo it from the sections list.</p>
           <button type="button" className="save-btn" onClick={() => { setSectionNa(runKey, item.section, true); setAskNa(false); setToast(`${item.section.name}: N/A`); onGo(nextOutsideSection(view, item.section.id)); }}>Yes, Set Section N/A</button>
           <button type="button" className="text-btn" onClick={() => setAskNa(false)}>Cancel</button>
         </Sheet>

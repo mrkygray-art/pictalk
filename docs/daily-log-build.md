@@ -45,7 +45,7 @@ The organizer keeps only companies, delay types and locations from the project's
 Ky asked for: view past logs; edit or delete only your own entries while the day is open (Procore locks a Completed day); never change approval status; easy to find.
 
 - Where: a **New log | Past logs** switch under the title (capture and review screens), "See it in Past logs" after a send, and "· past logs" on the home tile.
-- Days list: two weeks, newest first, totals per day and "N yours"; Show older days; Go to a day. A day: everyone's entries by section, who made each, Approved / Waiting on approval, photo count.
+- Days list (Ky, 2026-10-16): only days with entries, newest first, 30 days per read, Show older logs, the list scrolls in its own box (58dvh), Go to a day above it (opens only a complete date). The open day lives in DailyLogFlow, so the Past logs tab inside a day goes back to the list. A day: everyone's entries by section, who made each, Approved / Waiting on approval, photo count.
 - Own entries only: Edit (the review card in a sheet, Save to Procore) and Delete (asks first). The server re-reads the entry and checks `created_by` before PATCH / DELETE.
 - Locked day: Procore answers 403 (seen with the Daily Log Examples cleanup); the app shows "This day is locked in Procore" and hides Edit / Delete. SiteSnap never PATCHes a status to get around it.
 - Still to confirm in the sandbox: that `start_date` / `end_date` filter the list endpoints (one day uses `log_date`, already confirmed), that PATCH with nulls clears a field, and the shape of `start_time` / `delay_type` in a read-back.

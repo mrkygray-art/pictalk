@@ -6,13 +6,15 @@ import { addDays, fmtDate, label12, payload, problem } from "./dailyLogFormat";
 import Sheet from "../Sheet";
 
 // Past logs: what's already in Procore's Daily Log for this project, read live from Procore with the person's own
-// sign-in. Days list (newest first, two weeks at a time, Show older days) -> one day, by section. Everyone's entries
+// sign-in. Days list (only days with entries, newest first, 30 days at a time, Show older logs, Go to a day; the list
+// scrolls in its own box) -> one day, by section. Everyone's entries
 // are shown; only your own have Edit and Delete, and Procore refuses both once the day is marked Completed (the
 // day then says it's locked). SiteSnap never changes an entry's approval status.
 // Props: project, opts (the Daily Log options: companies, locations, delay types), draftDate + draftBusy (a draft
-// for another day stops "Add to this day"), onAddToDay(date), tabs (the New log | Past logs switch), onClose.
+// for another day stops "Add to this day"), onAddToDay(date), tabs (the New log | Past logs switch), onClose,
+// day + onDay (the open day lives in DailyLogFlow, so tapping the Past logs tab inside a day goes back to the list).
 
-const SPAN = 14;
+const SPAN = 30; // the server takes up to 31 days per read
 const STATUS = { approved: "Approved", pending: "Waiting on approval", submitted: "Waiting on approval" };
 
 function dayWord(iso, today) {
@@ -47,16 +49,15 @@ function typeName(t, opts) {
   return hit?.name ?? s.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 }
 
-export default function PastLogs({ project, opts, draftDate, draftBusy, onAddToDay, tabs, onClose }) {
+export default function PastLogs({ project, opts, draftDate, draftBusy, onAddToDay, tabs, onClose, day, onDay }) {
   const today = opts?.today;
   const [from, setFrom] = useState(() => (today ? addDays(today, -(SPAN - 1)) : null));
   const [entries, setEntries] = useState([]);
   const [state, setState] = useState("loading"); // loading | ready | more | error | locked
   const [error, setError] = useState("");
-  const [day, setDay] = useState(null); // the open day, YYYY-MM-DD
   const [jump, setJump] = useState("");
 
-  // Two weeks at a time; "Show older days" adds the two weeks before
+  // 30 days at a time; "Show older logs" adds the 30 days before
   const apply = (r, add) => {
     if (r.error) { setError(r.error); setState(add ? "ready" : "error"); return; }
     if (!r.access) { setError(r.reason + (r.template ? ` Your Procore permission template here is ${r.template}.` : "")); setState("locked"); return; }
@@ -80,14 +81,14 @@ export default function PastLogs({ project, opts, draftDate, draftBusy, onAddToD
 
   if (day) {
     return (
-      <PastDay project={project} opts={opts} date={day} tabs={tabs} onBack={() => setDay(null)}
+      <PastDay project={project} opts={opts} date={day} tabs={tabs} onBack={() => onDay(null)}
         canAdd={!draftBusy || draftDate === day} draftDate={draftDate} onAddToDay={() => onAddToDay(day)}
         onChanged={(list) => setEntries((all) => [...all.filter((x) => x.date !== day), ...list])} />
     );
   }
 
-  const days = [];
-  if (today && from) for (let d = today; d >= from; d = addDays(d, -1)) days.push(d);
+  // Only days with something logged, newest first
+  const days = [...new Set(entries.map((x) => x.date))].filter((d) => d >= from).sort().reverse();
   return (
     <section className="report" aria-label="Past logs">
       <button type="button" className="link-btn msg-home-back" onClick={onClose}><BackIcon /> Home</button>
@@ -100,14 +101,18 @@ export default function PastLogs({ project, opts, draftDate, draftBusy, onAddToD
       )}
       {(state === "ready" || state === "more") && (
         <>
-          <ul className="dl-days">
+          <label className="msg-field"><span>Go to a day</span>
+            <input type="date" className="dir-input" max={today} value={jump} onChange={(e) => { setJump(e.target.value); if (e.target.value >= "2000-01-01") onDay(e.target.value); /* typing a year passes through 0002, 0020... */ }} />
+          </label>
+          <p className="msg-status">{days.length ? `${days.length} day${days.length === 1 ? "" : "s"} with logs since ${fmtDate(from)}` : `No logs since ${fmtDate(from)}.`}</p>
+          {days.length > 0 && <ul className="dl-days" aria-label="Days with logs">
             {days.map((d) => {
               const list = entries.filter((x) => x.date === d);
               const mine = list.filter((x) => x.mine).length;
               const word = dayWord(d, today);
               return (
                 <li key={d}>
-                  <button type="button" className={`dl-day${list.length ? "" : " is-empty"}`} onClick={() => setDay(d)}>
+                  <button type="button" className="dl-day" onClick={() => onDay(d)}>
                     <span className="dl-day-name">{word ? `${word} · ` : ""}{fmtDate(d)}<small>{daySummary(list)}</small></span>
                     {mine > 0 && <span className="dl-yours">{mine} yours</span>}
                     <span className="dl-chev" aria-hidden="true">›</span>
@@ -115,12 +120,9 @@ export default function PastLogs({ project, opts, draftDate, draftBusy, onAddToD
                 </li>
               );
             })}
-          </ul>
+          </ul>}
           {error && <p className="error" role="alert">{error}</p>}
-          <button type="button" className="text-btn" onClick={older} disabled={state === "more"}>{state === "more" ? "Loading…" : "Show older days"}</button>
-          <label className="msg-field"><span>Go to a day</span>
-            <input type="date" className="dir-input" max={today} value={jump} onChange={(e) => { setJump(e.target.value); if (e.target.value) setDay(e.target.value); }} />
-          </label>
+          <button type="button" className="text-btn" onClick={older} disabled={state === "more"}>{state === "more" ? "Loading…" : "Show older logs"}</button>
         </>
       )}
     </section>

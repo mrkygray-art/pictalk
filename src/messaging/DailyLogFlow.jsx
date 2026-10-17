@@ -48,6 +48,7 @@ export default function DailyLogFlow({ session, onClose, startTab = "new" }) {
   const [sheetPhoto, setSheetPhoto] = useState(null);
   const [rows, setRows] = useState([]);
   const [tab, setTab] = useState(startTab); // new | past
+  const [pastDay, setPastDay] = useState(null); // the day open in Past logs
   const fileInput = useRef(null);
 
   // Every change is saved on the phone at once (B8)
@@ -220,7 +221,7 @@ export default function DailyLogFlow({ session, onClose, startTab = "new" }) {
   const tabs = (
     <div className="dl-tabs" role="tablist" aria-label="Daily log">
       <button type="button" role="tab" aria-selected={tab === "new"} className={tab === "new" ? "is-on" : ""} onClick={() => setTab("new")}>{draftBusy ? "Your draft" : "New log"}</button>
-      <button type="button" role="tab" aria-selected={tab === "past"} className={tab === "past" ? "is-on" : ""} onClick={() => setTab("past")}>Past logs</button>
+      <button type="button" role="tab" aria-selected={tab === "past"} className={tab === "past" ? "is-on" : ""} onClick={() => { setTab("past"); setPastDay(null); }}>Past logs</button>
     </div>
   );
   // Past logs -> "Add to this day": the draft takes that date (only offered when there's no draft for another day)
@@ -256,7 +257,7 @@ export default function DailyLogFlow({ session, onClose, startTab = "new" }) {
   }
 
   if (tab === "past" && (step === "capture" || step === "review")) {
-    return <PastLogs project={project} opts={opts} draftDate={draft.date} draftBusy={draftBusy} onAddToDay={addToDay} tabs={tabs} onClose={onClose} />;
+    return <PastLogs project={project} opts={opts} draftDate={draft.date} draftBusy={draftBusy} onAddToDay={addToDay} tabs={tabs} onClose={onClose} day={pastDay} onDay={setPastDay} />;
   }
 
   if (step === "sending") {
@@ -284,7 +285,7 @@ export default function DailyLogFlow({ session, onClose, startTab = "new" }) {
           <div className="dl-done"><strong>All {rows.length} entries are in Procore&rsquo;s Daily Log.</strong><span>Your project manager sees them in Procore for {fmtDate(draft.date)}.</span></div>
         ))}
         {done && <button type="button" className={failed ? "text-btn" : "save-btn"} onClick={onClose}>{failed ? "Leave it for now" : "Back to the project"}</button>}
-        {done && !failed && <button type="button" className="text-btn" onClick={() => { setTab("past"); setStep("capture"); }}>See it in Past logs</button>}
+        {done && !failed && <button type="button" className="text-btn" onClick={() => { setTab("past"); setPastDay(draft.date); setStep("capture"); }}>See it in Past logs</button>}
         {done && failed > 0 && <button type="button" className="text-btn" onClick={() => setStep("review")}>Fix an entry</button>}
       </section>
     );

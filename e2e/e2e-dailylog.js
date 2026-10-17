@@ -184,11 +184,13 @@ const OPTIONS = {
   const tabNames = await page.$$eval(".dl-tabs button", (b) => b.map((x) => x.textContent));
   check("Daily log: a New log | Past logs switch under the title", tabNames.join("|") === "New log|Past logs", tabNames.join("|"));
   await click(".dl-tabs button::-p-text(Past logs)");
-  await waitText("Show older days");
+  await waitText("Show older logs");
   const dayRows = await page.$$eval(".dl-day", (l) => l.map((x) => x.innerText.replace(/\s+/g, " ")));
-  check("past: two weeks of days, newest first", dayRows.length === 14 && dayRows[0].startsWith("Today"), dayRows[0]);
+  check("past: only days with logs, newest first", dayRows.length === 2 && dayRows[0].startsWith("Today") && /Oct|Sep|Nov|Dec|Jan/.test(dayRows[1]), dayRows.join(" | "));
   check("past: today's summary and how many are yours", /6 workers · 1 delivery/.test(dayRows[0]) && /1 yours/.test(dayRows[0]), dayRows[0]);
-  check("past: a day with nothing says so", dayRows.some((x) => x.includes("Nothing logged")));
+  check("past: no empty days in the list", !dayRows.some((x) => x.includes("Nothing logged")));
+  check("past: Go to a day is above the list", await page.evaluate(() => { const g = document.querySelector('.report input[type="date"]'); const l = document.querySelector(".dl-days"); return !!g && !!l && (g.compareDocumentPosition(l) & Node.DOCUMENT_POSITION_FOLLOWING) > 0; }));
+  check("past: the list scrolls in its own box", await page.$eval(".dl-days", (e) => getComputedStyle(e).overflowY === "auto"));
   await shot("6-past-days");
   await click(".dl-day");
   await waitText("Tyler Brandt");
@@ -207,9 +209,11 @@ const OPTIONS = {
   check("edit: sends my entry's new numbers, no status", upd?.id === 901 && upd.entry.workers === 7 && !("status" in (upd.entry ?? {})), JSON.stringify(upd));
   check("edit: the card shows 7 workers", (await text()).includes("7 workers"));
   // A Completed day is locked
-  await click("button::-p-text(Past logs)");
-  await waitText("Show older days");
-  await page.$$eval(".dl-day", (l) => l[2].click());
+  // Tapping the Past logs tab inside a day goes back to the list
+  await click(".dl-tabs button::-p-text(Past logs)");
+  await waitText("Show older logs");
+  check("Past logs tab inside a day: back to the list", (await page.$$(".dl-day")).length === 2);
+  await page.$$eval(".dl-day", (l) => l[1].click());
   await waitText("Poured the slab");
   await click(".dl-past.is-mine .dl-delete");
   await click("button::-p-text(Delete from Procore)");
@@ -217,9 +221,11 @@ const OPTIONS = {
   check("locked day: says so, and Edit/Delete go away", !(await page.$(".dl-past .dl-edit")));
   await shot("9-locked-day");
   check("locked day: no Add more to this day", !(await text()).includes("Add more to this day"));
-  await click("button::-p-text(Past logs)");
-  await waitText("Show older days");
-  await page.$$eval(".dl-day", (l) => l[1].click());
+  await click(".dl-tabs button::-p-text(Past logs)");
+  await waitText("Show older logs");
+  const yest = (() => { const d = new Date(`${TODAY}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); })();
+  await page.click('.report input[type="date"]');
+  await page.keyboard.type(`${yest.slice(5, 7)}${yest.slice(8, 10)}${yest.slice(0, 4)}`);
   await waitText("Nothing in the Daily Log for this day yet.");
   await click("button::-p-text(Log this day)");
   await waitText("Say who was on site");

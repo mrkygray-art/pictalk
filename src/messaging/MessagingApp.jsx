@@ -5,6 +5,9 @@ import Feed from "./Feed";
 import ConversationView from "./ConversationView";
 import Composer from "./Composer";
 import ReportFlow from "./ReportFlow";
+import ReportPicker from "./ReportPicker";
+import { isNew, pickerRows, showMyItems, useCapabilities } from "./capabilities";
+import { useHomeBadges } from "./homeBadges";
 import AccessList from "./AccessList";
 import PushToggle from "./PushToggle";
 import ProjectHome from "./ProjectHome";
@@ -27,6 +30,9 @@ import { isUnread, onQueueChange, pendingMessages, startMessageSync, watchFeed, 
 // Guest demo (/demo, docs/guest-demo.md): the visitor arrives at /?demo=1 signed in as the view-only guest, sees the
 // project picker first, a "Demo mode: view only" banner on every screen. Every feature works up to its send button
 // (photos, voice notes written down, Fill It In, Organize, inspection answers on the phone); the send shows a note.
+// Report something picker (sitesnap-report-picker-my-items-spec.md): the types built so far. The others join as
+// their build step lands; until then they stay out of the picker.
+const READY_TYPES = ["issue"];
 const RESULT = { denied: "Procore sign-in was cancelled.", error: "Procore sign-in didn't work. Try again." };
 
 export default function MessagingApp() {
@@ -38,7 +44,7 @@ export default function MessagingApp() {
   const [view, setView] = useState(() => {
     const cid = new URLSearchParams(window.location.search).get("cid");
     return cid && /^[A-Za-z0-9_-]{1,64}$/.test(cid) ? { name: "conversation", cid } : { name: "home" };
-  }); // home | feed | conversation {cid} | compose | report | photos | dailylog | inspections | access
+  }); // home | feed | conversation {cid} | compose | picker | report | myitems | photos | dailylog | inspections | access
   const [choosing, setChoosing] = useState(false);
   const [reads, setReads] = useState(new Map());
   const [pending, setPending] = useState([]);
@@ -51,6 +57,9 @@ export default function MessagingApp() {
   const { demo } = session;
   setDemoMode(demo); // the background senders never send in the demo (demoMode.js)
   const explain = (what) => setExplaining(what);
+  const caps = useCapabilities(signedIn ? project : null); // which Procore tools this person can use here
+  const badges = useHomeBadges(signedIn ? project : null, view.name === "home" && !choosing);
+  const newPill = isNew();
 
   useEffect(() => (signedIn ? startMessageSync() : undefined), [signedIn]);
   useEffect(() => (signedIn ? startPhotoSync() : undefined), [signedIn]); // Snap photos waiting on this phone
@@ -169,8 +178,12 @@ export default function MessagingApp() {
         <>
           <ProjectHome
             unread={forMe.filter((c) => isUnread(c, me.procoreUserId, reads)).length}
-            onReport={() => setView({ name: "report" })}
+            onReport={() => setView({ name: "picker" })}
             onMessages={() => setView({ name: "feed" })}
+            onMyItems={() => setView({ name: "myitems" })}
+            showMyItems={showMyItems(caps.tools, { demo })}
+            badges={badges}
+            newPill={newPill}
             onInspections={() => setView({ name: "inspections" })}
             onPhotos={() => setView({ name: "photos" })}
             onDailyLog={() => setView({ name: "dailylog" })}
@@ -196,6 +209,21 @@ export default function MessagingApp() {
         </>
       )}
       {view.name === "access" && <AccessList session={session} onBack={() => setView({ name: "home" })} />}
+      {view.name === "picker" && (
+        <ReportPicker
+          rows={pickerRows(caps.tools, { demo, ready: READY_TYPES })}
+          newPill={newPill}
+          onBack={() => setView({ name: "home" })}
+          onPick={(row) => setView({ name: "report", type: row.id, via: row.via })}
+        />
+      )}
+      {view.name === "myitems" && (
+        <section className="rp">
+          <button type="button" className="link-btn msg-home-back" onClick={() => setView({ name: "home" })}><BackIcon /> Home</button>
+          <h2 className="page-title">My items</h2>
+          <p className="rp-empty">Coming next: Observations and Punch Items assigned to you, with voice close-out.</p>
+        </section>
+      )}
       {view.name === "report" && (
         <ReportFlow session={session} onClose={() => setView({ name: "home" })} onOpenThread={(cid) => setView({ name: "conversation", cid })} />
       )}

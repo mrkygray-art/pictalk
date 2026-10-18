@@ -18,7 +18,7 @@ const { getFirestore } = fnRequire("firebase-admin/firestore");
 const { getAuth } = fnRequire("firebase-admin/auth");
 initializeApp({ projectId: "demo-pictalk" });
 
-const APP = "http://localhost:5176/";
+const APP = process.env.APP_URL || "http://localhost:5176/";
 const OUT = path.join(__dirname, "dailylog-shots");
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
@@ -102,7 +102,7 @@ const OPTIONS = {
   await click("button::-p-text(Sign in with Procore)");
   await waitText("Daily log");
   const tiles = await page.$$eval(".home-tile strong", (b) => b.map((x) => x.textContent.trim()));
-  check("home: Report an issue | Message | Inspection | Daily log | Project photos", tiles.join("|") === "Report an issue|Message|Inspection|Daily log|Project photos", tiles.join("|"));
+  check("home: Report something | Message | My items | Inspection | Daily log | Project photos", tiles.join("|") === "Report something|Message|My items|Inspection|Daily log|Project photos", tiles.join("|"));
   check("the Daily log tile says nothing was sent today", (await text()).includes("Not sent today"));
   await shot("0-home");
 
@@ -176,7 +176,7 @@ const OPTIONS = {
   await click("button::-p-text(Back to the project)");
   await waitText("Sent today · 3 entries");
   check("home: Sent today · 3 entries; the draft is gone", !(await text()).includes("Draft in progress"));
-  check("home: the Daily log tile mentions past logs", (await page.$eval(".home-tile.is-log small", (e) => e.textContent)).includes("past logs"));
+  check("home: the Daily log tile says crew, delays, deliveries", (await page.$eval(".home-tile.is-log small", (e) => e.textContent)).includes("Crew, delays, deliveries, by voice"));
 
   // Past logs
   await click(".home-tile.is-log");

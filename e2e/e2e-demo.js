@@ -16,7 +16,7 @@ const { getFirestore } = fnRequire("firebase-admin/firestore");
 const { getAuth } = fnRequire("firebase-admin/auth");
 initializeApp({ projectId: "demo-pictalk" });
 
-const APP = "http://localhost:5178/";
+const APP = process.env.APP_URL || "http://localhost:5178/";
 const OUT = path.join(__dirname, "demo-shots");
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
@@ -86,14 +86,15 @@ const PEOPLE = [
   await shot("1-picker");
 
   await click(`::-p-text(${PROJECTS[0].name})`);
-  await waitText("Report an issue");
+  await waitText("Report something");
   t = await text();
   check("home: signed in as Guest, banner still there", t.includes("Guest") && t.includes("Demo mode:"));
   check("home: no phone-alert switch in the demo", !/alert/i.test(t.split("Project photos")[1] ?? ""));
   await shot("2-home");
 
   // Report an issue: the whole flow, then the note at Send to Procore
-  await click("::-p-text(Report an issue)");
+  await click("::-p-text(Report something)");
+  await click(".rp-row::-p-text(Issue)");
   await page.waitForSelector('textarea[placeholder="Or type it here"]', { timeout: 15000 });
   check("Report an issue opens the real capture screen", !(await text()).includes("This is a view-only demo"));
   await page.type('textarea[placeholder="Or type it here"]', "Exposed wires at the panel in room 204, needs a cover before Friday");
@@ -109,7 +110,7 @@ const PEOPLE = [
   await click("::-p-text(Home)").catch(() => {});
   await click("::-p-text(Cancel)").catch(() => {});
   await page.goto(`${APP}?companyId=${COMPANY}&projectId=${PROJECTS[0].projectId}`, { waitUntil: "networkidle2" });
-  await waitText("Report an issue");
+  await waitText("Report something");
 
   await click("::-p-text(Message)");
   await waitText("Panel L2 cover");

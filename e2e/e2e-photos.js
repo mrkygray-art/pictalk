@@ -14,7 +14,7 @@ const { getFirestore } = fnRequire("firebase-admin/firestore");
 const { getAuth } = fnRequire("firebase-admin/auth");
 initializeApp({ projectId: "demo-pictalk" });
 
-const APP = "http://localhost:5176/";
+const APP = process.env.APP_URL || "http://localhost:5176/";
 const OUT = path.join(__dirname, "photos-shots");
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });

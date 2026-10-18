@@ -15,7 +15,7 @@ const { getFirestore } = fnRequire("firebase-admin/firestore");
 const { getAuth } = fnRequire("firebase-admin/auth");
 initializeApp({ projectId: "demo-pictalk" });
 
-const APP = "http://localhost:5176/";
+const APP = process.env.APP_URL || "http://localhost:5176/";
 const OUT = path.join(__dirname, "report-shots");
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
@@ -112,10 +112,11 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   await click("button::-p-text(Sign in with Procore)");
   await waitText("Project photos");
   const tiles = await page.$$eval(".home-tile strong", (b) => b.map((x) => x.textContent.trim()));
-  check("home: Report an issue | Message | Inspection | Daily log | Project photos, in that order", tiles.join("|") === "Report an issue|Message|Inspection|Daily log|Project photos", tiles.join("|"));
-  check("the Report tile says what it does", (await text()).includes("Becomes a Procore Observation or Punch Item"));
+  check("home: Report something | Message | My items | Inspection | Daily log | Project photos, in that order", tiles.join("|") === "Report something|Message|My items|Inspection|Daily log|Project photos", tiles.join("|"));
+  check("the Report tile says what it does", (await text()).includes("Issue, safety, delay, RFI, extra work"));
   await shot("0-home");
   await click(".home-tile:nth-child(1)");
+  await click(".rp-row::-p-text(Issue)"); // Report something -> What are you reporting? -> Issue
   await waitText("Take a photo and say what you see");
 
   const photo = path.join(OUT, "photo.jpg");

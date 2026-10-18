@@ -78,3 +78,27 @@ export function DailyLogIcon() {
     </svg>
   );
 }
+
+// Report something picker and My items (outline icons drawn after Tabler's: list-check, shield-check, clock-pause,
+// receipt, help-circle, chevron-right)
+const Outline = ({ children }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
+);
+export function MyItemsIcon() {
+  return <Outline><path d="M3.5 5.5l1.5 1.5l2.5 -2.5M3.5 11.5l1.5 1.5l2.5 -2.5M3.5 17.5l1.5 1.5l2.5 -2.5M11 6h9M11 12h9M11 18h9" /></Outline>;
+}
+export function SafetyIcon() {
+  return <Outline><path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3" /><path d="M9 12l2 2l4 -4" /></Outline>;
+}
+export function DelayIcon() {
+  return <Outline><path d="M20.94 13.02a9 9 0 1 0 -7.91 7.92" /><path d="M12 7v5l2 2M17 17v5M21 17v5" /></Outline>;
+}
+export function ExtraWorkIcon() {
+  return <Outline><path d="M5 21v-16a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v16l-3 -2l-2 2l-2 -2l-2 2l-2 -2l-3 2" /><path d="M9 7h6M9 11h6M13 15h2" /></Outline>;
+}
+export function QuestionIcon() {
+  return <Outline><circle cx="12" cy="12" r="9" /><path d="M12 16v.01M12 13a2 2 0 0 0 .91 -3.78a2 2 0 0 0 -2.41 .48" /></Outline>;
+}
+export function ChevronIcon() {
+  return <Outline><path d="M9 6l6 6l-6 6" /></Outline>;
+}

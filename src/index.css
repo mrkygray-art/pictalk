@@ -3236,3 +3236,26 @@ select.dir-input { appearance: auto; }
 :root:has(.demo-banner) .ph-bar { top: var(--demo-h); }
 :root:has(.demo-banner) .ph-group h3 { top: calc(var(--demo-h) + var(--ph-bar-h)); }
 .demo-guest-link { text-align: center; text-decoration: none; }
+
+/* Report something picker, My items, home badges (sitesnap-report-picker-my-items-spec.md) */
+.home-tile { position: relative; }
+.home-tile.is-new { box-shadow: inset 0 0 0 2px var(--brand); }
+.home-tile-status.is-empty { visibility: hidden; }
+.home-tile-status.is-empty::before { content: "\00a0"; }
+.home-tile-status.is-alert { background: var(--record-soft); color: var(--record); }
+.new-pill { display: inline-block; padding: 2px 9px; border-radius: 10px; background: var(--brand); color: #1f1a14; font-size: 13px; font-weight: 700; line-height: 1.3; }
+.home-new { position: absolute; top: 14px; right: 14px; }
+.rp { display: grid; gap: 10px; }
+.rp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.rp-row {
+  width: 100%; display: grid; grid-template-columns: 34px 1fr 20px; align-items: center; column-gap: 14px;
+  padding: 14px 16px; border: none; border-radius: 18px; background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.rp-row:active { transform: scale(0.99); }
+.rp-row > svg:first-child { width: 30px; height: 30px; color: var(--brand-ink); }
+.rp-row.is-issue > svg:first-child { color: var(--record); }
+.rp-row > svg:last-child { width: 20px; height: 20px; color: var(--muted); }
+.rp-row strong { font-size: 19px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rp-row small { display: block; color: var(--muted); font-size: 14px; line-height: 1.3; margin-top: 2px; }
+.rp-foot { color: var(--muted); font-size: 14px; text-align: center; margin: 4px 0 0; }
+.rp-empty { color: var(--muted); }

@@ -114,9 +114,9 @@ const row = (insp, extra = {}) => ({ id: insp.id, number: insp.number, name: ins
   await click("button::-p-text(Sign in with Procore)");
   await waitText("Walk a checklist");
   const tiles = await page.$$eval(".home-tile", (b) => b.map((x) => { const r = x.getBoundingClientRect(); return { name: x.querySelector("strong").textContent.trim(), x: Math.round(r.x), y: Math.round(r.y) }; }));
-  check("home: Report an issue | Message, Inspection | Daily log, Project photos alone on the left", tiles.map((t) => t.name).join("|") === "Report an issue|Message|Inspection|Daily log|Project photos", tiles.map((t) => t.name).join("|"));
-  const [report, message, inspect, daily, photos] = tiles;
-  check("home: two columns, three rows, photos under Inspection", report.y === message.y && inspect.y === daily.y && inspect.y > report.y && photos.y > inspect.y && photos.x === report.x && inspect.x === report.x && message.x > report.x);
+  check("home: Report something | Message, My items | Inspection, Daily log | Project photos", tiles.map((t) => t.name).join("|") === "Report something|Message|My items|Inspection|Daily log|Project photos", tiles.map((t) => t.name).join("|"));
+  const [report, message, mine, inspect, daily, photos] = tiles;
+  check("home: two columns, three rows, Inspection right of My items", report.y === message.y && mine.y === inspect.y && daily.y === photos.y && inspect.y > report.y && daily.y > inspect.y && inspect.x === message.x && photos.x === message.x && mine.x === report.x && message.x > report.x);
   check("home: Inspection tile says Walk a checklist with a checklist icon", (await page.$eval(".home-tile.is-inspect", (e) => e.innerText)).includes("Walk a checklist") && !!(await page.$(".home-tile.is-inspect svg")));
   await shot("0-home");
 

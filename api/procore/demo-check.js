@@ -13,7 +13,8 @@ import { demoSettings } from "../_demo.js";
 import { evaluateProject, levelNum, statusValues, worst, PASS, PARTIAL, FAIL } from "../_demoCheck.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-export const pace = { gapMs: 450 }; // Procore allows about 25 calls per 10 seconds
+// Procore allows about 25 calls per 10 seconds; a 429 waits for its reset and tries again (tests shorten it)
+export const pace = { gapMs: 600, retries: 3, minWaitMs: 2000, maxWaitMs: 12000 };
 
 const lower = (s) => String(s ?? "").trim().toLowerCase();
 const listOf = (json) => (Array.isArray(json) ? json : Array.isArray(json?.data) ? json.data : []);
@@ -121,16 +122,21 @@ export default async function handler(req, res) {
 
     const { projects } = await listProjects(req, res, cfg);
     let last = 0;
+    let limited = false; // a call Procore still refused with 429 after waiting (reset per project)
     const get = async (path, companyId, query = {}) => {
       for (let attempt = 0; ; attempt++) {
         const wait = last + pace.gapMs - Date.now();
         if (wait > 0) await sleep(wait);
         last = Date.now();
         const r = await procoreSend(req, res, cfg, "GET", path, { companyId, query });
-        if (r.status !== 429 || attempt) return r;
-        await sleep(3000);
+        if (r.status !== 429) return r;
+        if (attempt >= pace.retries) { limited = true; return r; }
+        // Wait until Procore's window resets (X-Rate-Limit-Reset, epoch seconds), 2 to 12 s
+        const reset = Number(r.headers?.["x-rate-limit-reset"]) * 1000 - Date.now();
+        await sleep(Math.min(pace.maxWaitMs, Math.max(pace.minWaitMs, Number.isFinite(reset) ? reset : 0)));
       }
     };
+    const busy = { check: "Procore's rate limit", result: PARTIAL, detail: "Procore said \"too many requests\" even after waiting, so this project wasn't checked. Run the check again in a minute." };
 
     const levelCache = {}; // per company: { [templateId]: levels }
     const out = [];
@@ -139,6 +145,7 @@ export default async function handler(req, res) {
       const p = projects.find((x) => x.projectId === id);
       if (!p) { out.push({ projectId: id, name: `Project ${id}`, result: FAIL, rows: evaluateProject({ project: { projectId: id, open: false } }) }); continue; }
       const c = p.companyId;
+      limited = false;
       const users = await get(`/rest/v1.0/projects/${id}/users`, c, { per_page: 300 });
       const people = listOf(users.json);
       // Template levels for the people being checked (only a Procore admin can read them)
@@ -164,18 +171,21 @@ export default async function handler(req, res) {
         vendors: vendors.ok ? listOf(vendors.json) : [],
         obsTotal: total(obs), photoTotal: total(photos), pm: pmWho, assignee,
       });
+      // A 429 that outlasted the retries makes rows look like real gaps ("not in the Directory"): say so instead
+      if (limited) { out.push({ projectId: id, name: p.name, result: PARTIAL, rows: [busy] }); continue; }
       if (!users.ok) rows.unshift({ check: "Project Directory readable", result: FAIL, detail: `Procore answered ${users.status} to the project's people.` });
       out.push({ projectId: id, name: p.name, result: worst(rows), rows });
 
       // Open question 6, once: does Procore offer Observation webhooks here (read only: lists, never creates)
-      if (!hooksChecked) {
+      if (!hooksChecked && !limited) {
         hooksChecked = true;
+        limited = false;
         const resources = await get("/rest/v1.0/webhooks/resources", c, { project_id: id });
         const names = listOf(resources.json).map((x) => (typeof x === "string" ? x : x?.name ?? x?.resource_name ?? "")).map(String).filter(Boolean);
         const has = names.some((n) => /observation item/i.test(n));
-        g("Observation webhooks offered", resources.ok ? (has ? PASS : PARTIAL) : PARTIAL, resources.ok ? (has ? `Yes (${names.filter((n) => /observation/i.test(n)).join(", ")}). Status sync can use a webhook; polling stays as the fallback.` : "Not in Procore's list: status sync will poll.") : `Procore answered ${resources.status}: status sync will poll unless this is sorted out.`);
+        g("Observation webhooks offered", resources.ok ? (has ? PASS : PARTIAL) : PARTIAL, resources.ok ? (has ? `Yes (${names.filter((n) => /observation/i.test(n)).join(", ")}). Status sync can use a webhook; polling stays as the fallback.` : "Not in Procore's list: status sync will poll.") : resources.status === 429 ? "Procore's rate limit: run the check again in a minute." : `Procore answered ${resources.status}: status sync will poll unless this is sorted out.`);
         const hooks = await get("/rest/v1.0/webhooks/hooks", c, { project_id: id });
-        g("Existing webhooks on the first project", hooks.ok ? PASS : PARTIAL, hooks.ok ? `${listOf(hooks.json).length} set up.` : `Procore answered ${hooks.status} (may need a company admin, or a hook made by the app itself).`);
+        g("Existing webhooks on the first project", hooks.ok ? PASS : PARTIAL, hooks.ok ? `${listOf(hooks.json).length} set up.` : hooks.status === 429 ? "Procore's rate limit: run the check again in a minute." : `Procore answered ${hooks.status} (may need a company admin, or a hook made by the app itself).`);
       }
     }
     console.log("SiteSnap demo check", JSON.stringify(out.map((p) => ({ projectId: p.projectId, result: p.result }))));

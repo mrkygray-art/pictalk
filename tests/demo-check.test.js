@@ -84,7 +84,7 @@ test("Option B: Standard sub passes, an Admin sub is PARTIAL (could close), unkn
 
 // ---------- the page, against a mocked Procore ----------
 
-let calls, saved;
+let calls, saved, limitWG;
 const reply = (u) => {
   if (/\/me(\?|$)/.test(u)) return [200, { id: 1, name: "Edward Gray", login: PM_EMAIL }];
   if (/\/companies\?|\/companies$/.test(u)) return [200, [{ id: 555, name: "Kyco", is_active: true }]];
@@ -102,12 +102,14 @@ const reply = (u) => {
 };
 beforeEach(() => {
   calls = [];
-  pace.gapMs = 0;
+  Object.assign(pace, { gapMs: 0, minWaitMs: 0, maxWaitMs: 0 });
+  limitWG = 0;
   saved = { fetch: globalThis.fetch, env: { ...process.env }, log: console.log };
   Object.assign(process.env, ENV);
   console.log = () => {};
   globalThis.fetch = async (url, init = {}) => {
     calls.push({ url: String(url), method: init.method ?? "GET" });
+    if (/\/projects\/102\/users\?/.test(String(url)) && limitWG-- > 0) return new Response(JSON.stringify({ errors: "Too many requests" }), { status: 429, headers: { "content-type": "application/json" } });
     const [status, body] = reply(String(url));
     const headers = { "content-type": "application/json" };
     if (/\/observations\/items\?/.test(String(url))) headers.total = "3";
@@ -189,4 +191,18 @@ test("sign-in from the check page comes back to it; any other back= is ignored",
   assert.equal(go("").back, undefined);
   const { state, cookie: c } = newState(cfg, { back: "nowhere" });
   assert.equal(checkState(cfg, c, state).back, undefined);
+});
+
+test("demo check: a 429 is waited out; one that lasts says 'run again', never a fake gap", async () => {
+  limitWG = 2; // two 429s, then Procore answers: the project is checked normally
+  const ok = res();
+  await check(post(), ok);
+  assert.equal(ok.json().projects[1].rows.find((r) => r.check.startsWith("PM account")).result, PASS);
+  limitWG = 99; // Procore keeps refusing
+  const busy = res();
+  await check(post(), busy);
+  const wg = busy.json().projects[1];
+  assert.deepEqual(wg.rows.map((r) => r.check), ["Procore's rate limit"]);
+  assert.equal(wg.result, PARTIAL);
+  assert.equal(busy.json().projects[0].rows.find((r) => r.check.startsWith("PM account")).result, PASS);
 });

@@ -144,6 +144,11 @@ function fakeProcore() {
       return json(l, 201);
     }
     if ((m = p.match(/^\/rest\/v1\.0\/checklist\/lists\/(\d+)$/))) { if (method === "DELETE") { delete s.lists[m[1]]; return json({}, 204); } return s.lists[m[1]] ? json(s.lists[m[1]]) : json({}, 404); }
+    if (method === "POST" && (m = p.match(/^\/rest\/v1\.0\/checklist\/lists\/(\d+)\/items$/))) {
+      const sec = s.lists[m[1]].sections.find((x) => x.id === body.section_id);
+      sec.items.push({ id: next(), name: body.item.name, position: body.item.position });
+      return json({}, 201);
+    }
     if (method === "POST" && (m = p.match(/^\/rest\/v1\.0\/checklist\/lists\/(\d+)\/sections$/))) {
       const sec = { id: next(), name: body.section.name, items: (body.section.items_attributes ?? []).map((it) => ({ id: next(), name: it.name, position: it.position })) };
       s.lists[m[1]].sections.push(sec);
@@ -506,4 +511,20 @@ test("delay types refused in a new project: logged without one; template questio
   const row = b.tasks.find((t) => t.id === "inspection:INSP-A");
   assert.equal(row.status, "done", JSON.stringify(row));
   assert.equal([...db.threads.keys()].length, 8, "messages still ran");
+});
+
+test("inspection sections refused too: the questions go in one at a time; Copy for Claude leads with problems, no ✓ lines", async () => {
+  refuse = (method, p) => {
+    if (method === "POST" && /list_templates\/\d+\/(items|item_templates)$/.test(p)) return { status: 404, body: {} };
+    if (method === "POST" && /^\/rest\/v1\.0\/checklist\/lists\/\d+\/sections$/.test(p)) return { status: 404, body: {} };
+    return null;
+  };
+  await seedAll();
+  const insB = Object.values(P.s.lists).find((l) => l.name.includes("Rough-in"));
+  assert.equal(insB.sections.flatMap((x) => x.items).length, 8);
+  const b = (await post({ action: "state" })).json();
+  assert.equal(b.tasks.find((t) => t.id === "inspection:INSP-B").status, "done");
+  const lines = b.copyText.split("\n");
+  assert.match(lines.find((l) => l.startsWith("- ")), /template:A \[partial\]/);
+  assert.ok(!b.copyText.includes("✓ "), "no ✓ step lines");
 });

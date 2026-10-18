@@ -62,10 +62,11 @@ export function copyForClaude(list, meta) {
   const count = (s) => list.filter((t) => t.row.status === s).length;
   for (const c of CODES) { const r = list.find((t) => t.id === `project:${c}`)?.row; lines.push(`${PROJECTS[c].name}: project ${r?.made?.projectId ?? "not made yet"}${r?.made?.toolsOff?.length ? ` · TOOLS OFF: ${r.made.toolsOff.join(", ")}` : r?.made?.toolsOff ? " · all tools on" : ""}`); }
   lines.push(`Done ${count("done")}, partial ${count("partial")}, failed ${count("failed")}, not started ${count("not_started")} (of ${list.length})`);
-  for (const t of list.filter((x) => x.row.status !== "done" || x.row.notes?.length)) {
-    if (t.row.status === "not_started") continue;
-    lines.push(`- ${t.id} [${t.row.status}]${t.row.error ? ` ${t.row.error}` : ""}${t.row.notes?.length ? ` | ${t.row.notes.join(" | ")}` : ""}`);
-  }
+  // Problems first, in full; then done tasks only where a note says more than a ✓ step or the project id
+  const line = (t, notes) => `- ${t.id} [${t.row.status}]${t.row.error ? ` ${t.row.error}` : ""}${notes.length ? ` | ${notes.join(" | ")}` : ""}`;
+  for (const t of list.filter((x) => ["failed", "partial"].includes(x.row.status))) lines.push(line(t, t.row.notes ?? []));
+  const worth = (n) => !/^✓ /.test(n) && !/^Procore project d+/.test(n);
+  for (const t of list.filter((x) => x.row.status === "done" && (x.row.notes ?? []).some(worth))) lines.push(line(t, t.row.notes.filter(worth)));
   return lines.join("\n").slice(0, 20000);
 }
 
@@ -115,7 +116,7 @@ async function next(req, res, cfg, g, body) {
   if (!t) return { finished: true };
   const out = await runTask(ctx, t.id);
   await (await store()).saveMeta({ lastRunAt: Date.now() });
-  console.log("SiteSnap demo seed", t.id, out.row.status, out.row.error ?? "");
+  console.log("SiteSnap demo seed", t.id, out.row.status, out.row.error ?? "", out.row.status === "done" ? "" : (out.row.notes ?? []).join(" | ").slice(0, 1500));
   return { id: t.id, label: t.label, status: out.row.status, error: out.row.error, notes: out.row.notes, rateLimited: out.rateLimited, retryAfter: out.retryAfter };
 }
 

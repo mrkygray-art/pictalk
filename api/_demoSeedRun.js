@@ -596,11 +596,23 @@ async function runInspection(ctx, insp, made, note) {
   let read = await ctx.call("GET", PATHS.list(made.listId), { query: { project_id: projectId } });
   if (!read.ok) throw new Stop(`Couldn't read the inspection back. ${said(read)}`);
   // No questions came with the template: add them to this inspection directly
-  if (itemCount(read.json) === 0) {
+  // (once only: a section Procore makes without its questions shouldn't pile up on every run)
+  if (itemCount(read.json) === 0 && !made.sectionTried) {
     const r = await ctx.call("POST", `/rest/v1.0/checklist/lists/${made.listId}/sections`, { body: { project_id: Number(projectId), section: { name: tpl.section, position: 1, not_applicable: false, items_attributes: tpl.items.map((name, i) => ({ name, position: i + 1, status: "none" })) } } });
-    note(`Questions added to the inspection itself: ${brief(r)}`);
+    note(`Questions added to the inspection itself (a section with them): ${brief(r)}`);
+    made.sectionTried = true;
     read = await ctx.call("GET", PATHS.list(made.listId), { query: { project_id: projectId } });
   }
+  // Still none: one question at a time into the inspection's first section (path unconfirmed; Procore's answer is noted)
+  const firstSection = (read.json?.sections ?? [])[0];
+  if (itemCount(read.json) === 0 && firstSection?.id) {
+    for (const [i, name] of tpl.items.entries()) {
+      const r = await ctx.call("POST", `/rest/v1.0/checklist/lists/${made.listId}/items`, { body: { project_id: Number(projectId), section_id: Number(firstSection.id), item: { name, position: i + 1, section_id: Number(firstSection.id) } } });
+      if (!r.ok) { note(`Questions one at a time: ${said(r)}`); break; }
+    }
+    read = await ctx.call("GET", PATHS.list(made.listId), { query: { project_id: projectId } });
+  }
+  if (itemCount(read.json) === 0) note(`Add the ${tpl.items.length} questions by hand in Procore (the inspection's own page, or the template), then press Run on this task to seed the answers: ${tpl.items.join(" / ")}`);
   const detail = inspectionDetail(read.json);
   const items = detail.sections.flatMap((s) => s.items);
   if (items.length < tpl.items.length) note(`The inspection has ${items.length} of ${tpl.items.length} questions.`);

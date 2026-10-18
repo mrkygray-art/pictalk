@@ -38,7 +38,7 @@ export function demoSettings(env = process.env) {
     enabled: env.DEMO_ENABLED === "true",
     projectIds: [...new Set(ids)],
     key: String(env.DEMO_TOKEN_ENCRYPTION_KEY ?? ""),
-    admins: String(env.DEMO_ADMIN_EMAILS ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean),
+    admins: String(env.DEMO_ADMIN_EMAILS ?? "").split(/[,;\s]+/).map((s) => s.replace(/^["'<]+|["'>]+$/g, "").trim().toLowerCase()).filter(Boolean),
   };
 }
 

@@ -161,6 +161,7 @@ test("settings: DEMO_PROJECT_IDS takes the demo-staging form (HP:101) or plain i
   assert.deepEqual(demoSettings({ DEMO_PROJECT_IDS: "HP:101, WG:102,LV:103" }).projectIds, ["101", "102", "103"]);
   assert.deepEqual(demoSettings({ DEMO_PROJECT_IDS: "101,102,abc,,103" }).projectIds, ["101", "102", "103"]);
   assert.deepEqual(demoSettings({ DEMO_ADMIN_EMAILS: " A@B.com ,c@d.com" }).admins, ["a@b.com", "c@d.com"]);
+  assert.deepEqual(demoSettings({ DEMO_ADMIN_EMAILS: '"a@b.com"; <c@d.com>' }).admins, ["a@b.com", "c@d.com"]);
 });
 
 // ---------- acceptance 1: /demo signs in with no login ----------
@@ -410,7 +411,9 @@ test("authorize: owner only; a non-owner and a demo visitor are refused", async 
   const demo = res();
   await authorize(req({ url: "/api/procore/demo-authorize", cookie: await demoCookie() }), demo);
   assert.equal(demo.statusCode, 403);
-  assertClean(out.body + demo.body);
+  // A signed-in non-owner is told their own login (so the owner can fix DEMO_ADMIN_EMAILS); a demo visitor never sees the guest's
+  assert.match(out.body, /signed in to SiteSnap with the Procore login guest-secret@example\.com/);
+  assertClean(demo.body);
 });
 
 test("authorize: the owner starts Procore's sign-in with prompt=login and a demo-authorize state", async () => {

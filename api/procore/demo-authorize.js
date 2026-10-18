@@ -19,7 +19,12 @@ const PAGE = "/api/procore/demo-authorize";
 async function requireOwner(req, res, cfg, s) {
   if (!s.admins.length) throw new HttpError(403, "not_configured", "Set DEMO_ADMIN_EMAILS in Vercel first.");
   const me = await procoreGet(req, res, cfg, "/rest/v1.0/me");
-  if (!s.admins.includes(String(me?.login ?? "").trim().toLowerCase())) throw new HttpError(403, "not_owner", "Only the app's owner can use this page.");
+  const login = String(me?.login ?? "").trim().toLowerCase();
+  if (!s.admins.includes(login)) {
+    // Shown only to the signed-in person (their own login), so the owner can see what to put in the setting.
+    // A demo visitor never gets here: demo sessions are refused before /me (the page is blocked for them).
+    throw new HttpError(403, "not_owner", `Only the app's owner can use this page. You're signed in to SiteSnap with the Procore login ${login || "(none)"}; if that's you, put exactly that in DEMO_ADMIN_EMAILS in Vercel and redeploy.`);
+  }
 }
 
 // Called by the callback with the guest's fresh tokens. Returns where to send the browser.

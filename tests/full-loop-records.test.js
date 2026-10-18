@@ -7,6 +7,7 @@ import process from "node:process";
 import records from "../api/procore/records.js";
 import recordOptions from "../api/procore/record-options.js";
 import { LOCK_MS } from "../api/_captures.js";
+import { forgetOwners } from "../api/_fullLoop.js";
 import { setStore } from "../api/_firestore.js";
 import { seal, SESSION_COOKIE } from "../api/_procore.js";
 import { proposeAssignee, tradeStem } from "../src/messaging/assigneeMatch.js";
@@ -50,7 +51,7 @@ beforeEach(() => {
     const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
     if (/\/companies\?/.test(u)) return json(200, [{ id: 4291776, name: "Kyco", is_active: true }]);
     if (/\/v1\.1\/projects\?/.test(u)) return json(200, [{ id: 373715, name: "Harbor Point" }, { id: 373235, name: "Sandbox Test Project" }]);
-    if (/\/me\?/.test(u)) return json(200, { id: 481274, login: "e@example.com", name: "Edward Gray" });
+    if (/\/me(\?|$)/.test(u)) return json(200, { id: 481274, login: "e@example.com", name: "Edward Gray" });
     if (m === "POST" && /\/observations\/items$/.test(u)) {
       if (refuse) return json(422, { errors: "type_id is invalid" });
       created++;
@@ -155,6 +156,15 @@ test("record options say when the card is Observations-only (demo mode, a demo p
   process.env.FULL_LOOP_DEMO = "false";
   const off = await run(recordOptions, req("GET", "/api/procore/record-options?companyId=4291776&projectId=373715"));
   assert.equal(off.json().fullLoopDemo, false);
+});
+
+test("the owner gets the normal card even with demo mode on, and can send a Punch Item", async () => {
+  process.env.DEMO_ADMIN_EMAILS = "e@example.com"; // the mocked /me login
+  forgetOwners();
+  const opts = await run(recordOptions, req("GET", "/api/procore/record-options?companyId=4291776&projectId=373715"));
+  assert.equal(opts.json().fullLoopDemo, false);
+  const other = await run(records, req("POST", "/api/procore/records", { companyId: "4291776", projectId: "373235", card: card({ captureId: "cap-90" }), files: [] }));
+  assert.equal(other.statusCode, 201, "a project outside the demo works for the owner");
 });
 
 // ---------- the card's assignee ----------

@@ -4,12 +4,12 @@
 //   GET /rest/v1.0/projects/{project_id}/observation_types
 //   GET /rest/v1.0/companies/{company_id}/trades
 //   GET /rest/v1.0/projects/{project_id}/locations   (paged)
-// fullLoopDemo: demo mode is on (FULL_LOOP_DEMO, api/_fullLoop.js) and this is a demo project, so the card makes
-// Observations only (spec phase 1) and needs an assignee.
-import { config, HttpError, procoreId, queryOf, sendError, sendJson } from "../_procore.js";
+// fullLoopDemo: demo mode is on (FULL_LOOP_DEMO, api/_fullLoop.js) for this person (never the owner) and this is a
+// demo project, so the card makes Observations only (spec phase 1) and needs an assignee.
+import { config, HttpError, procoreId, queryOf, sendError, sendJson, session } from "../_procore.js";
 import { allPages } from "../_projects.js";
 import { procoreSend } from "../_procoreWrite.js";
-import { fullLoopSettings } from "../_fullLoop.js";
+import { fullLoopSettings, limited } from "../_fullLoop.js";
 
 const list = (r) => (r.ok && Array.isArray(r.json) ? r.json : []);
 
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
       locations: locations.slice(0, 500).map((l) => ({ id: l.id, name: l.node_name || l.name })),
       canObservations: types.ok,
       tradesReadable: trades.ok,
-      fullLoopDemo: fullLoopSettings().enabled && fullLoopSettings().projectIds.includes(projectId),
+      fullLoopDemo: fullLoopSettings().projectIds.includes(projectId) && await limited(req, cfg, await session(req, res, cfg)),
     });
   } catch (err) {
     sendError(res, err);

@@ -6,12 +6,12 @@
 // A guest demo session (docs/guest-demo.md) only gets GETs on its allowlisted projects through here; anything
 // else is refused before it reaches Procore, even if the guest's own Procore permissions would allow it.
 import { demoRead, session, waitFor429 } from "./_procore.js";
-import { guardFullLoop } from "./_fullLoop.js";
+import { guardCall } from "./_fullLoop.js";
 
 async function call(req, res, cfg, method, path, { companyId, query, body, form, retry429 = false } = {}) {
   let tokens = await session(req, res, cfg);
   demoRead.guard(tokens, method, path, query);
-  if (!tokens.demo) guardFullLoop(req, method, path, { query, body }); // full-loop demo mode (api/_fullLoop.js)
+  await guardCall(req, cfg, tokens, method, path, { query, body }); // full-loop demo mode; never the owner (api/_fullLoop.js)
   const url = `${cfg.apiUrl}${path}${query ? `?${new URLSearchParams(query)}` : ""}`;
   const cacheKey = tokens.demo ? `send ${companyId ?? ""} ${url}` : null;
   if (cacheKey) {

@@ -53,7 +53,7 @@ export async function listProjects(req, res, cfg) {
   }
   projects.sort((a, b) => a.name.localeCompare(b.name) || a.projectId.localeCompare(b.projectId));
   // Full-loop demo mode on: the picker lists only the demo projects (api/_fullLoop.js)
-  return { projects: demoProjectsOnly(req, projects), companies: companies.length, refused };
+  return { projects: await demoProjectsOnly(req, cfg, await session(req, res, cfg), projects), companies: companies.length, refused };
 }
 
 // Firestore key for a project: procoreProjects/{companyId}_{projectId}

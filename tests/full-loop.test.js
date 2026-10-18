@@ -3,7 +3,7 @@
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import process from "node:process";
-import { demoProjectsOnly, fullLoopProblem, fullLoopSettings, guardFullLoop } from "../api/_fullLoop.js";
+import { demoProjectsOnly, forgetOwners, fullLoopProblem, fullLoopSettings, guardFullLoop } from "../api/_fullLoop.js";
 import { procoreGet, rateLimitWait, seal, SESSION_COOKIE } from "../api/_procore.js";
 import { procoreSend } from "../api/_procoreWrite.js";
 import { listProjects } from "../api/_projects.js";
@@ -58,11 +58,12 @@ test("sandbox tool pages keep their own guards and are exempt", () => {
   guardFullLoop({ url: "/api/procore/demo-check" }, "GET", "/rest/v1.0/projects/999/users", { query: {} }, ON);
 });
 
-test("project picker: only the demo projects while on; everything when off or on a tool page", () => {
+test("project picker: only the demo projects while on; everything when off or on a tool page", async () => {
   const all = [{ projectId: "101" }, { projectId: "555" }, { projectId: "103" }];
-  assert.deepEqual(demoProjectsOnly(app, all, ON).map((p) => p.projectId), ["101", "103"]);
-  assert.equal(demoProjectsOnly(app, all, OFF).length, 3);
-  assert.equal(demoProjectsOnly({ url: "/api/procore/test-records" }, all, ON).length, 3);
+  const t = { at: "someone" }; // ON has no DEMO_ADMIN_EMAILS, so nobody is the owner (no Procore call)
+  assert.deepEqual((await demoProjectsOnly(app, {}, t, all, ON)).map((p) => p.projectId), ["101", "103"]);
+  assert.equal((await demoProjectsOnly(app, {}, t, all, OFF)).length, 3);
+  assert.equal((await demoProjectsOnly({ url: "/api/procore/test-records" }, {}, t, all, ON)).length, 3);
 });
 
 // ---------- wired into the real Procore helpers ----------
@@ -70,18 +71,21 @@ test("project picker: only the demo projects while on; everything when off or on
 const ENV = {
   PROCORE_CLIENT_ID: "id", PROCORE_CLIENT_SECRET: "secret", PROCORE_LOGIN_URL: "https://login-sandbox.procore.test",
   PROCORE_API_URL: "https://sandbox.procore.test", SESSION_SECRET: "test-session-secret-32-bytes-long!!",
-  FULL_LOOP_DEMO: "true", DEMO_PROJECT_IDS: "HP:101,WG:102",
+  FULL_LOOP_DEMO: "true", DEMO_PROJECT_IDS: "HP:101,WG:102", DEMO_ADMIN_EMAILS: "owner@example.com",
 };
-let calls, saved, replies;
+let calls, saved, replies, meLogin;
 beforeEach(() => {
   calls = [];
   replies = [];
   saved = { fetch: globalThis.fetch, env: { ...process.env }, err: console.error, wait: rateLimitWait.maxMs };
   Object.assign(process.env, ENV);
   rateLimitWait.maxMs = 0;
+  forgetOwners();
+  meLogin = "someone@example.com";
   console.error = () => {};
   globalThis.fetch = async (url, init = {}) => {
-    calls.push({ url: String(url), method: init.method ?? "GET" });
+    calls.push({ url: String(url), method: init.method ?? "GET", at: init.headers?.Authorization });
+    if (/\/rest\/v1\.0\/me$/.test(String(url))) return new Response(JSON.stringify({ id: 7, login: meLogin }), { status: 200, headers: { "content-type": "application/json" } });
     const [status, body] = replies.shift() ?? (/\/companies/.test(String(url)) ? [200, [{ id: 9, name: "Co" }]] : /\/projects\?/.test(String(url)) ? [200, [{ id: 101, name: "HP" }, { id: 555, name: "Other" }]] : [200, { id: 1 }]);
     return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   };
@@ -99,7 +103,7 @@ const res = () => ({ setHeader() {}, getHeader() {} });
 test("procoreGet and procoreSend refuse outside the demo before calling Procore", async () => {
   await assert.rejects(procoreGet(req(), res(), cfg(), "/rest/v1.0/projects/555/users"), (e) => e.code === "loop_project");
   await assert.rejects(procoreSend(req(), res(), cfg(), "POST", "/rest/v1.1/punch_items", { body: { project_id: 101 } }), (e) => e.code === "loop_action");
-  assert.equal(calls.length, 0, "Procore never saw them");
+  assert.equal(calls.filter((c) => !/\/me$/.test(c.url)).length, 0, "Procore never saw them");
   const ok = await procoreSend(req(), res(), cfg(), "POST", "/rest/v1.0/observations/items", { body: { project_id: 101 } });
   assert.equal(ok.status, 200);
 });
@@ -113,8 +117,18 @@ test("procoreSend with retry429 waits out a 429 and tries again; without it, the
   replies = [[429, { errors: "Too many" }], [201, { id: 5 }]];
   const r = await procoreSend(req(), res(), cfg(), "POST", "/rest/v1.0/observations/items", { body: { project_id: 101 }, retry429: true });
   assert.equal(r.status, 201);
-  assert.equal(calls.length, 2);
+  assert.equal(calls.filter((c) => /observations/.test(c.url)).length, 2);
   replies = [[429, { errors: "Too many" }]];
   const plain = await procoreSend(req(), res(), cfg(), "POST", "/rest/v1.0/observations/items", { body: { project_id: 101 } });
   assert.equal(plain.status, 429, "demo staging and others handle a 429 themselves");
+});
+
+test("the owner (DEMO_ADMIN_EMAILS) is never limited: every project, every tool; /me asked once", async () => {
+  meLogin = "Owner@Example.com";
+  await procoreGet(req(), res(), cfg(), "/rest/v1.0/projects/555/users");
+  const punch = await procoreSend(req(), res(), cfg(), "POST", "/rest/v1.1/punch_items", { body: { project_id: 555 } });
+  assert.equal(punch.status, 200);
+  const { projects } = await listProjects(req(), res(), cfg());
+  assert.deepEqual(projects.map((p) => p.projectId).sort(), ["101", "555"]);
+  assert.equal(calls.filter((c) => /\/me$/.test(c.url)).length, 1, "remembered for this sign-in");
 });

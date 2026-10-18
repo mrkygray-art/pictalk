@@ -9,6 +9,10 @@
 // It's its own flag: DEMO_ENABLED is the public view-only guest demo (api/_demo.js), whose sessions keep their
 // own read-only guard and are never affected by this one. The sandbox tool pages (TOOL_PAGES) have their own
 // owner/admin guards and are exempt, so demo staging can still add people while the demo is on.
+// The owner (Ky: a Procore login in DEMO_ADMIN_EMAILS) is never limited (Ky, 2026-10-18: "Edward Gray should have
+// full rights, I am the admin"): every project, every tool, the normal card. ownerToken() asks Procore's /me once per
+// access token and remembers it for a while on this server (never the token itself: a hash of it).
+import { createHash } from "node:crypto";
 import { HttpError } from "./_procore.js";
 
 export const DEMO_TAG = "[SS-DEMO]"; // the marker on everything the demo creates (api/procore/records.js adds it)
@@ -35,7 +39,39 @@ export function fullLoopSettings(env = process.env) {
     projectIds: [...new Set(ids)],
     pm: String(env.DEMO_ACTOR_PM ?? "").trim().toLowerCase(),
     assignee: String(env.DEMO_ACTOR_ASSIGNEE ?? "").trim().toLowerCase(),
+    admins: String(env.DEMO_ADMIN_EMAILS ?? "").split(/[,;\s]+/).map((x) => x.replace(/^["'<]+|["'>]+$/g, "").trim().toLowerCase()).filter(Boolean),
   };
+}
+
+// ---------- the owner is never limited ----------
+
+const OWNER_MS = 10 * 60 * 1000;
+const owners = new Map(); // sha256(access token) -> { owner, until }
+export const forgetOwners = () => owners.clear();
+
+/** Is this access token the owner's (a login in DEMO_ADMIN_EMAILS)? Asks /me once, then remembers it. */
+export async function ownerToken(cfg, at, s = fullLoopSettings()) {
+  if (!at || !s.admins.length) return false;
+  const key = createHash("sha256").update(String(at)).digest("hex");
+  const hit = owners.get(key);
+  if (hit && hit.until > Date.now()) return hit.owner;
+  let owner;
+  try {
+    const r = await fetch(`${cfg.apiUrl}/rest/v1.0/me`, { headers: { Authorization: `Bearer ${at}`, Accept: "application/json" } });
+    if (!r.ok) return false; // not known: limited this time, asked again next time
+    owner = s.admins.includes(String((await r.json())?.login ?? "").trim().toLowerCase());
+  } catch {
+    return false;
+  }
+  if (owners.size > 1000) owners.delete(owners.keys().next().value);
+  owners.set(key, { owner, until: Date.now() + OWNER_MS });
+  return owner;
+}
+
+/** Demo mode limits this signed-in person here (on, not a tool page, not the owner). tokens from session(). */
+export async function limited(req, cfg, tokens, s = fullLoopSettings()) {
+  if (!s.enabled || tokens?.demo || isToolPage(req)) return false;
+  return !(await ownerToken(cfg, tokens?.at, s));
 }
 
 // What's missing for the demo to run (setting names only), else null
@@ -70,8 +106,14 @@ export function guardFullLoop(req, method, path, { query, body } = {}, s = fullL
   }
 }
 
-/** The project picker's list while demo mode is on: only the demo projects (tool pages see everything). */
-export function demoProjectsOnly(req, projects, s = fullLoopSettings()) {
-  if (!s.enabled || isToolPage(req)) return projects;
+/** guardFullLoop for a real Procore call: skipped for the owner, guest sessions (own guard) and tool pages. */
+export async function guardCall(req, cfg, tokens, method, path, opts, s = fullLoopSettings()) {
+  if (!(await limited(req, cfg, tokens, s))) return;
+  guardFullLoop(req, method, path, opts, s);
+}
+
+/** The project picker's list while demo mode is on: only the demo projects (the owner and tool pages see all). */
+export async function demoProjectsOnly(req, cfg, tokens, projects, s = fullLoopSettings()) {
+  if (!(await limited(req, cfg, tokens, s))) return projects;
   return projects.filter((p) => s.projectIds.includes(String(p.projectId)));
 }

@@ -6,7 +6,7 @@
 //   GET /rest/v1.0/me, GET /rest/v1.0/projects/{project_id}/users (Procore-Company-Id header)
 // Never log or return the client secret, a token, or a cookie value.
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes, timingSafeEqual } from "node:crypto";
-import { guardFullLoop } from "./_fullLoop.js";
+import { guardCall } from "./_fullLoop.js";
 
 export const REDIRECT_URI = "https://sitesnap-procore.vercel.app/api/procore/callback";
 export const STATE_COOKIE = "pc_state";
@@ -296,7 +296,7 @@ export function waitFor429(resp, now = Date.now()) {
 export async function procoreGet(req, res, cfg, path, { companyId, query } = {}) {
   let tokens = await session(req, res, cfg);
   guardDemo(tokens, "GET", path, query);
-  if (!tokens.demo) guardFullLoop(req, "GET", path, { query });
+  await guardCall(req, cfg, tokens, "GET", path, { query }); // full-loop demo mode; never the owner (api/_fullLoop.js)
   const url = `${cfg.apiUrl}${path}${query ? `?${new URLSearchParams(query)}` : ""}`;
   const cacheKey = tokens.demo ? `get ${companyId ?? ""} ${url}` : null;
   if (cacheKey) {

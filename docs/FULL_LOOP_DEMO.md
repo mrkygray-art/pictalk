@@ -35,7 +35,7 @@ Roofing & Waterproofing, added to the demo people that day), Observation webhook
 | Project allowlist | A call naming a project outside `DEMO_PROJECT_IDS` (path `/projects/{id}`, `project_id` in the query or the JSON body) is refused (403 `loop_project`), reads too. A write that names no project is refused. The project picker (`listProjects`) shows only the demo projects. |
 | Action allowlist | Reads pass. Writes allowed: create an Observation (+ its assignee email), change it (status), add a response, upload slot, Photos album + image. Anything else, deletes included, is refused (403 `loop_action`) before Procore sees it. |
 | Kill switch | `FULL_LOOP_DEMO=false` (then redeploy) turns all of this off; the app is exactly as before. |
-| Not affected | Guest demo sessions (their own read-only guard), and the sandbox tool pages (`test-*`, demo staging / check / seed / authorize, seed directory, daily log examples), which have their own owner/admin guards. |
+| Not affected | **The owner** (a Procore login in `DEMO_ADMIN_EMAILS`, i.e. Ky / Edward Gray): never limited, every project, every tool, the normal card (Ky, 2026-10-18: "Edward Gray should have full rights, I am the admin"). Checked with Procore's `/me` once per sign-in token, remembered 10 minutes per server. Guest demo sessions (their own read-only guard: everything works up to the send button, nothing reaches Procore), and the sandbox tool pages (`test-*`, demo staging / check / seed / authorize, seed directory, daily log examples), which have their own owner/admin guards. So demo mode now limits only other signed-in test accounts. |
 
 While it's on, the app's other Procore tools (Punch Items, Daily log, Inspections, …) can't write: the spec keeps
 them out of this phase.

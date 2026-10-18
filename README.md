@@ -2,7 +2,7 @@
 
 **Report a jobsite issue by voice and photo, straight into Procore, walk Procore inspections one question at a time, follow it up with the crew, and keep the project's photos in Procore.**
 
-> **In development.** SiteSnap AI has been tested only in Procore's developer sandbox, with fictional people, companies, and projects. No real crew uses it yet. It needs a Procore sign-in, so it isn't open to visitors. SiteSnap AI is an independent project. It isn't affiliated with, sponsored by, or endorsed by Procore Technologies, Inc.; Procore is a trademark of its owner.
+> **In development.** SiteSnap AI has been tested only in Procore's developer sandbox, with fictional people, companies, and projects. No real crew uses it yet. Anyone can look around in the **[live demo](https://sitesnap-procore.vercel.app/demo)**: it opens with no sign-in as a view-only guest on three sample sandbox projects, and anything that would change Procore is turned off (see [`docs/guest-demo.md`](docs/guest-demo.md)). SiteSnap AI is an independent project. It isn't affiliated with, sponsored by, or endorsed by Procore Technologies, Inc.; Procore is a trademark of its owner.
 
 SiteSnap AI is a phone-first web app for construction crews that works with Procore. Everyone signs in with their own Procore account and picks a Procore project, and that project's directory is the team. The project home has five tiles: Report an issue, Message (with the count of messages waiting for you), Inspection, Daily log, and Project photos.
 
@@ -12,7 +12,9 @@ SiteSnap AI is a phone-first web app for construction crews that works with Proc
 4. **Inspections, one question at a time (new, being checked in the sandbox).** A foreman walks a Procore inspection on the phone with big Pass, Fail, and N/A buttons, by tap or by voice, with photos and spoken notes. A Fail becomes a Procore Observation in one tap, linked to the failed item.
 5. **Daily log by voice (being checked in the sandbox).** A foreman says one end-of-day update ("six guys on site, drywall delayed waiting on materials, forklift delivery at 10"). Claude sorts it into Procore Daily Log entries (Manpower, Delays, Deliveries, Notes), the foreman checks the cards, and Send writes each one into Procore's Daily Log for that day, with photos.
 
-**Portfolio case study, with a looping demo and a quick tour:** https://ky-gray-portfolio.vercel.app/#sitesnap
+**Live demo (view only, no sign-in):** https://sitesnap-procore.vercel.app/demo
+
+**Portfolio case study, with a looping demo:** https://ky-gray-portfolio.vercel.app/#sitesnap
 **Built on:** [PicTalk](https://github.com/mrkygray-art/pictalk) (the `master` branch). This `sitesnap` branch is the SiteSnap fork, and every push to it deploys to the SiteSnap app on Vercel.
 
 <p>

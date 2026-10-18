@@ -5,8 +5,9 @@
 // lkowalski and druiz records are reused: updated into Lena Kowalski (ClearFlow) and Daniel Ruiz (Summit Framing).
 // Project Role: "Project Manager" for PMs only; GC and Worker get none (job title shows), as decided 2026-10-14.
 // Used only by api/procore/seed-directory.js, which refuses to run outside Procore's sandbox.
-// The demo projects' people and companies (api/_demoScenarios.js, Demo staging page) are never offered for cleanup.
+// The demo projects' people and companies (Demo staging and Demo seed pages) are never offered for cleanup.
 import { isDemoEmail, isDemoVendor } from "./_demoScenarios.js";
+import { isSeedEmail as isDemoSeedEmail, isSeedVendor as isDemoSeedVendor } from "./_demoSeedData.js";
 
 export const TAG = "SiteSnap test data";
 
@@ -163,6 +164,7 @@ export function cleanupPlan({ users, vendors, meId }) {
     if (vid && protectedVendorIds.has(vid)) return { ...row, action: "keep", reason: "Architect TEST Company" };
     if (isSeedEmail(u.email_address)) return { ...row, action: "reuse", reason: "new test person, updated" };
     if (isDemoEmail(u.email_address)) return { ...row, action: "keep", reason: "demo person (Demo staging page)" };
+    if (isDemoSeedEmail(u.email_address)) return { ...row, action: "keep", reason: "demo person (Demo seed page)" };
     if (extraEmails.has(email(u))) return { ...row, action: "keep", reason: "sample foreman (Daily Log Examples page)" };
     if (!row.active) return { ...row, action: "keep", reason: "already inactive" };
     if (email(u).includes("mrkygray+") || /sonletric/i.test(row.detail)) return { ...row, action: "remove", checked: true, reason: "earlier test data" };
@@ -174,6 +176,7 @@ export function cleanupPlan({ users, vendors, meId }) {
     if (protectedVendorIds.has(String(v.id))) return { ...row, action: "keep", reason: KEEP_VENDOR.test(String(v.name ?? "").trim()) ? "Procore test company" : "has people who stay" };
     if (isSeedVendor(v.name)) return { ...row, action: "reuse", reason: "new test company, updated" };
     if (isDemoVendor(v.name)) return { ...row, action: "keep", reason: "demo company (Demo staging page)" };
+    if (isDemoSeedVendor(v.name)) return { ...row, action: "keep", reason: "demo company (Demo seed page)" };
     if (!row.active) return { ...row, action: "keep", reason: "already inactive" };
     const people = userRows.filter((u) => String(users.find((x) => x.id === u.id)?.vendor?.id) === String(v.id) && u.active);
     const earlier = /mrkygray/i.test(row.detail) || /sonletric/i.test(row.name) || (people.length > 0 && people.every((p) => p.action === "remove"));

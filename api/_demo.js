@@ -28,7 +28,7 @@ export const demoTiming = { waitMs: 500, waitTries: 20 }; // waiting for another
 export const RATE_PER_MINUTE = 60;
 
 // Sandbox tool pages (they write to Procore or need an admin) are never part of the demo
-const BLOCKED = /^\/api\/procore\/(test-|demo-staging|demo-check|seed-directory|daily-log-examples|responsibility|demo-authorize)/;
+const BLOCKED = /^\/api\/procore\/(test-|demo-staging|demo-check|demo-seed|seed-directory|daily-log-examples|responsibility|demo-authorize)/;
 
 // ---------- settings ----------
 

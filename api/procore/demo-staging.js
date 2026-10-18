@@ -35,7 +35,7 @@ import { recordUrl } from "../_records.js";
 // ---------- who may use it ----------
 
 // A brand-new project has no permission templates yet, so try the company's projects until one lists some
-async function isAdmin(req, res, cfg, companyId, projectIds) {
+export async function isAdmin(req, res, cfg, companyId, projectIds) {
   for (const projectId of projectIds.slice(0, 6)) {
     const list = await api(req, res, cfg, "GET", `/rest/v1.0/projects/${projectId}/permission_templates`, { companyId });
     const first = Array.isArray(list.json) ? list.json[0] : null;

@@ -4,7 +4,8 @@
   ],
   "redirects": [
     { "source": "/admin/demo-authorize", "destination": "/api/procore/demo-authorize", "permanent": false },
-    { "source": "/admin/demo-check", "destination": "/api/procore/demo-check", "permanent": false }
+    { "source": "/admin/demo-check", "destination": "/api/procore/demo-check", "permanent": false },
+    { "source": "/admin/demo-seed", "destination": "/api/procore/demo-seed", "permanent": false }
   ],
   "headers": [
     { "source": "/demo", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }

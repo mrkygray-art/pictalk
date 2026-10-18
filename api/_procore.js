@@ -203,7 +203,7 @@ export function appUrl({ companyId, projectId }, status) {
 // ---------- state (CSRF protection for the sign-in round trip) ----------
 
 // Pages a sign-in may return to (login ?back=<name>): a fixed list, so the round trip can't redirect anywhere else
-export const BACK_PAGES = { "demo-check": "/api/procore/demo-check" };
+export const BACK_PAGES = { "demo-check": "/api/procore/demo-check", "demo-seed": "/api/procore/demo-seed" };
 
 // A random state for /oauth/authorize, plus the sealed cookie that remembers it and the context
 export function newState(cfg, context, now = Date.now()) {

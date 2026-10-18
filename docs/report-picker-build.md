@@ -36,7 +36,19 @@ Spec: `sitesnap-report-picker-my-items-spec.md` (Ky, 2026-10-17). Branch `featur
 - The Daily Log probe answered 422: a UTC "today" was tomorrow on the project's clock. It now asks for the day before.
 - RFIs, Change Events, Incidents read paths: 403 where off, 200 (RFIs, Change Events) where on. Confirmed.
 
-**Still to run:** a Foreman / Superintendent and a Subcontractor - External person (levels below Admin, and whether
+**2026-10-17, Subcontractor-style person, sandbox test project 373212** (template levels: Observations, Punch
+List, RFIs, Photos, Commitments, Change Orders, Submittals = Standard; Change Events, Daily Log, Inspections,
+Directory = None; Home, Drawings, Specifications, Documents = Read Only):
+
+- `can_create`: observations true, punch_list true, rfi **true** (a sub can create RFIs), change_events false,
+  submittal_log false.
+- The list and the reads agree everywhere except **Directory**: None in the list, but the project people read
+  answers 200. Directory is now always decided by the read (`PROBE_ALWAYS`); nothing hides on it anyway.
+- Picker for this person: Issue (record), Safety (Observation), Delay (Observation fallback, no Daily Log),
+  Extra work (Message fallback, no Change Events), Question for the PM (draft RFI). Matches the spec's
+  subcontractor row.
+
+**Still to run (optional):** a Foreman / Superintendent and a Subcontractor - External person (levels below Admin, and whether
 `can_create` turns false for them).
 
 ## Differences from the spec (for Ky)

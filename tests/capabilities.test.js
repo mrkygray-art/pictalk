@@ -108,3 +108,12 @@ test("the Daily Log probe asks for the day before (a UTC today can be tomorrow o
   await probeAll(async (path, q) => { seen.push([path, q]); return { status: path.includes("settings") ? 500 : 200 }; }, { projectId: "1", today: "2026-10-18" });
   assert.equal(seen.find(([p]) => p.includes("manpower_logs"))[1].log_date, "2026-10-17");
 });
+
+test("Directory is decided by the read: a sub with Directory None in the list can still read the project's people", async () => {
+  const send = async (path) => path.includes("settings")
+    ? { status: 200, json: { tools: [{ name: "directory", available_for_user: false, user_access_level: { id: 1, name: "None" } }] } }
+    : { status: 200 };
+  const { tools: t } = await probeAll(send, { projectId: "1", today: "2026-10-17" });
+  assert.equal(t.directory.state, "available");
+  assert.equal(t.directory.source, "probe");
+});

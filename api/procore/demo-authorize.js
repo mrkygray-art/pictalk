@@ -101,7 +101,8 @@ for (const b of document.querySelectorAll("button[data-action]")) b.addEventList
 
 function statusPage(res, { s, info, q }) {
   const problem = demoProblem(s);
-  const msg = q.get("done") ? `<p class="ok"><strong>Saved.</strong> The guest authorization is stored. Open <a href="/demo">/demo</a> in a private window to try it.</p>`
+  const msg = q.get("done") ? `<p class="ok"><strong>Saved.</strong> The guest authorization is stored. Open <a href="/demo">/demo</a> in a private window to try it.</p>
+<p class="muted">Procore is now logged in as the guest in this browser, so "Sign in with Procore" would sign SiteSnap in as the guest. To get back to your own account, use <strong>Use a different Procore account</strong> on SiteSnap's sign-in screen.</p>`
     : q.get("error") ? `<p class="bad"><strong>${esc(ERRORS[q.get("error")] ?? ERRORS.failed)}</strong></p>` : "";
   const stored = !info?.hasTokens ? `<p class="bad">No guest authorization is stored. The demo shows "temporarily unavailable".</p>`
     : `<p class="${info.status === "failed" ? "bad" : "ok"}"><strong>${info.status === "failed" ? "Failed: authorize again" : "Working"}</strong>${info.failure ? ` · ${esc(info.failure.reason)} (${when(info.failure.at)})` : ""}</p>

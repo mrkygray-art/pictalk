@@ -87,7 +87,7 @@ async function signInStatus(req, res, cfg) {
     throw err;
   }
   const login = lower(me?.login);
-  return { signedIn: true, demo: false, name: me?.name || login.split("@")[0] || "you", login, owner: demoSettings().admins.includes(login) };
+  return { signedIn: true, demo: false, name: String(me?.name ?? "").trim() || login.split("@")[0] || "you", login, owner: demoSettings().admins.includes(login) };
 }
 
 export default async function handler(req, res) {
@@ -171,7 +171,7 @@ export default async function handler(req, res) {
       if (!hooksChecked) {
         hooksChecked = true;
         const resources = await get("/rest/v1.0/webhooks/resources", c, { project_id: id });
-        const names = listOf(resources.json).map((x) => x?.name ?? x).map(String);
+        const names = listOf(resources.json).map((x) => (typeof x === "string" ? x : x?.name ?? x?.resource_name ?? "")).map(String).filter(Boolean);
         const has = names.some((n) => /observation item/i.test(n));
         g("Observation webhooks offered", resources.ok ? (has ? PASS : PARTIAL) : PARTIAL, resources.ok ? (has ? `Yes (${names.filter((n) => /observation/i.test(n)).join(", ")}). Status sync can use a webhook; polling stays as the fallback.` : "Not in Procore's list: status sync will poll.") : `Procore answered ${resources.status}: status sync will poll unless this is sorted out.`);
         const hooks = await get("/rest/v1.0/webhooks/hooks", c, { project_id: id });

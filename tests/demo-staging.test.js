@@ -118,7 +118,7 @@ test("the scenarios: 15, three projects, every title tagged, people on their pro
     if (s.planned === "overdue") assert.ok(s.due < 0, s.id);
   }
   for (const p of DEMO_PEOPLE) assert.match(p.email_address, /@example\.com$/);
-  assert.equal(directorySeed("LV").flatMap((c) => c.users).length, 7);
+  assert.equal(directorySeed("LV").flatMap((c) => c.users).length, 9);
 });
 
 test("settings: the allowlist needs all three ids; a tagged title archives once", () => {

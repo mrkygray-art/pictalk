@@ -96,7 +96,7 @@ const reply = (u) => {
   if (/\/projects\/10[12]\/vendors\?/.test(u)) return [200, vendors];
   if (/\/observations\/items\?/.test(u)) return [200, [{ id: 9 }]];
   if (/\/images\?/.test(u)) return [200, [{ id: 8 }]];
-  if (/webhooks\/resources/.test(u)) return [200, [{ name: "Observation Items" }, { name: "Punch Items" }]];
+  if (/webhooks\/resources/.test(u)) return [200, [{ resource_name: "Observation Items" }, { resource_name: "Punch Items" }]];
   if (/webhooks\/hooks/.test(u)) return [403, { errors: "Forbidden" }];
   return [404, { errors: "Not found" }];
 };

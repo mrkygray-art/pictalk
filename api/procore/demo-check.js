@@ -6,7 +6,7 @@
 //   GET  the page        POST  run it (same-origin JSON)
 // GET calls only, with Ky's own sign-in: nothing changes in Procore or in SiteSnap. Sandbox only, owner only
 // (DEMO_ADMIN_EMAILS), never in a guest demo session. Never returns an email, a phone or a token.
-import { config, demoCookie, HttpError, procoreGet, readBody, requireSameOriginJson, sendError, sendJson } from "../_procore.js";
+import { config, demoCookie, HttpError, procoreGet, queryOf, readBody, requireSameOriginJson, sendError, sendJson } from "../_procore.js";
 import { procoreSend } from "../_procoreWrite.js";
 import { listProjects } from "../_projects.js";
 import { demoSettings } from "../_demo.js";
@@ -29,7 +29,7 @@ td,th{text-align:left;padding:6px 6px;border-top:1px solid #3a332b;vertical-alig
 a{color:#ffc24d}small{color:#b8ac9c}</style></head>
 <body><h1>Full-loop demo check</h1>
 <p>Step 0 of the full-loop demo spec. For each demo project it checks the PM account, its permission template, the trades, and (Option B) the second user. <b>Read only: nothing changes in Procore or in SiteSnap.</b></p>
-<p id="who"><small>Sign in with Procore first if this fails: <a href="/api/procore/login">Sign in</a>.</small></p>
+<p id="who"><small>Checking your Procore sign-in…</small></p>
 <label for="sub"><small>Option B only: the second Foreman/Sub user's name or email (leave empty for Option A, or to use DEMO_ACTOR_ASSIGNEE)</small></label>
 <input id="sub" autocomplete="off">
 <button id="run">Run Demo Check</button>
@@ -37,6 +37,17 @@ a{color:#ffc24d}small{color:#b8ac9c}</style></head>
 <script>
 const $=(s)=>document.querySelector(s);
 const esc=(s)=>String(s??'').replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const signIn='<a href="/api/procore/login?back=demo-check">Sign in with Procore</a>';
+const other='<a href="/api/procore/login?back=demo-check&fresh=1">use a different Procore account</a>';
+const said={denied:'Procore sign-in was cancelled. ',error:'Procore sign-in didn\\'t finish. '}[new URLSearchParams(location.search).get('signin')]||'';
+$('#run').disabled=true;
+fetch('/api/procore/demo-check?status=1').then(r=>r.json()).then(s=>{
+  if(!s.signedIn){ $('#who').innerHTML='<span class="FAIL">'+said+'Not signed in.</span> '+signIn+' (it brings you back here).'; return; }
+  if(s.demo){ $('#who').innerHTML='<span class="FAIL">This browser is in the guest demo.</span> '+signIn+' as yourself to replace it.'; return; }
+  if(!s.owner){ $('#who').innerHTML='<span class="FAIL">Signed in as '+esc(s.name)+', but that Procore login ('+esc(s.login)+') isn\\'t in DEMO_ADMIN_EMAILS.</span> Put exactly that in DEMO_ADMIN_EMAILS in Vercel and redeploy, or '+other+'.'; return; }
+  $('#who').innerHTML='<span class="PASS">Signed in as '+esc(s.name)+'.</span> <small>Not you? '+other+'.</small>';
+  $('#run').disabled=false;
+}).catch(()=>{ $('#who').innerHTML='<span class="FAIL">Couldn\\'t check your sign-in.</span> '+signIn+'.'; });
 const table=(rows)=>'<table><tr><th>Check</th><th>Result</th><th>Details</th></tr>'+rows.map(r=>'<tr><td>'+esc(r.check)+'</td><td class="'+r.result+'">'+r.result+'</td><td>'+esc(r.detail)+'</td></tr>').join('')+'</table>';
 $('#run').onclick=async()=>{
   $('#run').disabled=true; $('#out').innerHTML='<p>Checking… (about 30 seconds)</p>';
@@ -64,10 +75,26 @@ async function requireOwner(req, res, cfg, s) {
   return me;
 }
 
+// For the page, when it opens: signed in? the guest demo? the owner? The login is shown only to the person
+// signed in with it (like /admin/demo-authorize), so they can see what DEMO_ADMIN_EMAILS must say.
+async function signInStatus(req, res, cfg) {
+  if (demoCookie(req, cfg.sessionSecret)) return { signedIn: true, demo: true };
+  let me;
+  try {
+    me = await procoreGet(req, res, cfg, "/rest/v1.0/me");
+  } catch (err) {
+    if (err instanceof HttpError && err.status === 401) return { signedIn: false };
+    throw err;
+  }
+  const login = lower(me?.login);
+  return { signedIn: true, demo: false, name: me?.name || login.split("@")[0] || "you", login, owner: demoSettings().admins.includes(login) };
+}
+
 export default async function handler(req, res) {
   try {
     const cfg = config();
     if (!/sandbox/i.test(cfg.apiUrl)) throw new HttpError(403, "not_sandbox", "This check only runs against Procore's sandbox.");
+    if (req.method === "GET" && queryOf(req).get("status") === "1") return sendJson(res, 200, await signInStatus(req, res, cfg));
     if (req.method === "GET") {
       res.statusCode = 200;
       res.setHeader("Content-Type", "text/html; charset=utf-8");

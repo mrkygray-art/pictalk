@@ -10,7 +10,7 @@
 import { randomBytes } from "node:crypto";
 import { finishDemoAuthorize, PURPOSE as DEMO_AUTHORIZE } from "./demo-authorize.js";
 import {
-  appUrl, checkState, clearCookie, config, exchangeCode, HttpError, queryOf, readBody, readCookies, requireSameOriginJson, redirect, saveSession, sendError, sendJson, STATE_COOKIE,
+  appUrl, BACK_PAGES, checkState, clearCookie, config, exchangeCode, HttpError, queryOf, readBody, readCookies, requireSameOriginJson, redirect, saveSession, sendError, sendJson, STATE_COOKIE,
 } from "../_procore.js";
 
 // The shared part: state check (throws on a bad one), then Procore's answer. Returns where to go.
@@ -19,7 +19,8 @@ async function finish(req, res, cfg, { code, state, error }) {
   clearCookie(res, STATE_COOKIE); // single use, whatever happens next
   const context = checkState(cfg, stateCookie, state);
   const demo = context.purpose === DEMO_AUTHORIZE;
-  if (error) return demo ? "/api/procore/demo-authorize?error=failed" : appUrl(context, "denied"); // e.g. the user said no
+  const back = BACK_PAGES[context.back]; // a sandbox tool page that started the sign-in (fixed list)
+  if (error) return demo ? "/api/procore/demo-authorize?error=failed" : back ? `${back}?signin=denied` : appUrl(context, "denied"); // e.g. the user said no
   if (!code) throw new HttpError(400, "no_code", "Procore didn't send a sign-in code. Start again.");
   if (demo) {
     let tokens;
@@ -35,9 +36,9 @@ async function finish(req, res, cfg, { code, state, error }) {
     saveSession(res, cfg, await exchangeCode(cfg, String(code)));
   } catch (err) {
     console.error("Procore token exchange failed:", err?.status ?? err?.name ?? "Error");
-    return appUrl(context, "error");
+    return back ? `${back}?signin=error` : appUrl(context, "error");
   }
-  return appUrl(context, "connected");
+  return back ?? appUrl(context, "connected");
 }
 
 // Reads a code after '#', takes it out of the address bar and history, and posts it back here

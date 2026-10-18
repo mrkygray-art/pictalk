@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 import process from "node:process";
 import check, { pace } from "../api/procore/demo-check.js";
 import { evaluateProject, levelNum, statusValues, worst, PASS, PARTIAL, FAIL } from "../api/_demoCheck.js";
-import { seal, SESSION_COOKIE } from "../api/_procore.js";
+import { checkState, config, newState, seal, SESSION_COOKIE } from "../api/_procore.js";
+import login from "../api/procore/login.js";
 
 const PM_EMAIL = "pm.owner@example.com";
 const ENV = {
@@ -157,4 +158,35 @@ test("demo check: only the owner, never a guest demo session, sandbox only", asy
   const live = res();
   await check(post(), live);
   assert.equal(live.statusCode, 403);
+});
+
+test("demo check page: says whether you're signed in, the guest demo, or not the owner", async () => {
+  const status = async (headers) => {
+    const out = res();
+    await check({ method: "GET", url: "/api/procore/demo-check?status=1", headers: { host: "sitesnap-procore.vercel.app", ...headers } }, out);
+    return out.json();
+  };
+  assert.deepEqual(await status({}), { signedIn: false });
+  assert.deepEqual(await status({ cookie: `${SESSION_COOKIE}=${cookie({ role: "demo", sid: "x", last: Date.now() })}` }), { signedIn: true, demo: true });
+  const me = await status({ cookie: `${SESSION_COOKIE}=${cookie()}` });
+  assert.equal(me.owner, true);
+  assert.equal(me.name, "Edward Gray");
+  process.env.DEMO_ADMIN_EMAILS = "someone.else@example.com";
+  assert.equal((await status({ cookie: `${SESSION_COOKIE}=${cookie()}` })).owner, false);
+});
+
+test("sign-in from the check page comes back to it; any other back= is ignored", () => {
+  const cfg = config();
+  const go = (q) => {
+    const out = res();
+    login({ method: "GET", url: `/api/procore/login?${q}`, headers: { host: "sitesnap-procore.vercel.app" } }, out);
+    const sc = [].concat(out.headers["set-cookie"]).find((c) => c.startsWith("pc_state="));
+    const state = new URL(out.headers.location).searchParams.get("state");
+    return checkState(cfg, sc.split(";")[0].slice("pc_state=".length), state);
+  };
+  assert.equal(go("back=demo-check").back, "demo-check");
+  assert.equal(go("back=https://evil.example").back, undefined);
+  assert.equal(go("").back, undefined);
+  const { state, cookie: c } = newState(cfg, { back: "nowhere" });
+  assert.equal(checkState(cfg, c, state).back, undefined);
 });

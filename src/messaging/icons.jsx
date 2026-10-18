@@ -99,6 +99,9 @@ export function ExtraWorkIcon() {
 export function QuestionIcon() {
   return <Outline><circle cx="12" cy="12" r="9" /><path d="M12 16v.01M12 13a2 2 0 0 0 .91 -3.78a2 2 0 0 0 -2.41 .48" /></Outline>;
 }
+export function CloseIcon() {
+  return <Outline><path d="M18 6L6 18M6 6l12 12" /></Outline>;
+}
 export function ChevronIcon() {
   return <Outline><path d="M9 6l6 6l-6 6" /></Outline>;
 }

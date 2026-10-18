@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { readEmbed } from "../embedded";
+import { ASK } from "../features";
+import { AskButton, AskPanel } from "./AskGuide";
 import { useProcoreSession } from "./useProcoreSession";
 import Feed from "./Feed";
 import ConversationView from "./ConversationView";
@@ -61,6 +63,12 @@ export default function MessagingApp() {
   const caps = useCapabilities(signedIn ? project : null); // which Procore tools this person can use here
   const badges = useHomeBadges(signedIn ? project : null, view.name === "home" && !choosing);
   const newPill = isNew();
+  // Ask (docs/ask-guide-spec.md): on the sign-in screen and the project home. The panel is made on the first
+  // open and then kept, so the guide's conversation survives closing it.
+  const [ask, setAsk] = useState(""); // "" never opened | "open" | "closed"
+  const askBtn = useRef(null);
+  const askButton = ASK && <AskButton onOpen={() => setAsk("open")} buttonRef={askBtn} />;
+  const askPanel = ASK && ask && <AskPanel open={ask === "open"} onClose={() => setAsk("closed")} returnTo={askBtn} />;
 
   useEffect(() => (signedIn ? startMessageSync() : undefined), [signedIn]);
   useEffect(() => (signedIn ? startPhotoSync() : undefined), [signedIn]); // Snap photos waiting on this phone
@@ -97,6 +105,7 @@ export default function MessagingApp() {
   if (!signedIn) {
     return (
       <main className="app msg-app msg-signin">
+        {askButton && <div className="signin-ask">{askButton}</div>}
         <h1 className="page-title">SiteSnap AI</h1>
         <p className="subtitle">Snap a photo, say what you see, and send it to the right people on your Procore project.</p>
         {result && <p className="procore-note">{result}</p>}
@@ -114,6 +123,7 @@ export default function MessagingApp() {
         )}
         {state.step === "ready" && <p className="procore-note">Signing in…</p>}
         {state.step === "switching" && <p className="procore-note">Signing you out of Procore… A small Procore window opened: don't log in there. It closes by itself in a few seconds, then Procore's login opens here.</p>}
+        {askPanel}
       </main>
     );
   }
@@ -127,6 +137,7 @@ export default function MessagingApp() {
     <DemoContext.Provider value={{ demo, explain }}>
       {demo && <DemoBanner onExit={session.exitDemo} />}
       {children}
+      {askPanel}
       {explaining && <DemoSheet what={explaining} onClose={() => setExplaining("")} />}
     </DemoContext.Provider>
   );
@@ -170,9 +181,12 @@ export default function MessagingApp() {
           </div>
           {projects.length > 1 && <button type="button" className="stop-more" onClick={() => setChoosing(true)}>Switch Project</button>}
         </div>
-        <p className="msg-who">
-          {state.offline ? "Offline · " : ""}<strong>{whoLine}</strong> · <button type="button" className="text-btn inline" onClick={demo ? session.exitDemo : session.signOut}>{demo ? "Exit demo" : "Sign out"}</button>
-        </p>
+        <div className="msg-who-row">
+          <p className="msg-who">
+            {state.offline ? "Offline · " : ""}<strong>{whoLine}</strong> · <button type="button" className="text-btn inline" onClick={demo ? session.exitDemo : session.signOut}>{demo ? "Exit demo" : "Sign out"}</button>
+          </p>
+          {view.name === "home" && askButton}
+        </div>
       </header>
 
       {view.name === "home" && (

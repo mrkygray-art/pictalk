@@ -489,3 +489,15 @@ test("sample messages: each demo project gets For Me, CC, Sent and All Project t
   assert.equal(n, r.threads);
   assert.ok(![...docs.keys()].some((k) => k.includes("/conversations/sample-")));
 });
+
+test("sample messages: a view-only guest's short directory (no emails) is matched by name", async () => {
+  await storeGuest();
+  setWait(async () => {});
+  const { DEMO_PEOPLE } = await import("../api/_demoScenarios.js");
+  globalThis.fetch = async (url, init) => (/\/projects\/\d+\/users/.test(new URL(url).pathname)
+    ? json(DEMO_PEOPLE.map((p, i) => ({ id: 9000 + i, name: `${p.first_name}  ${p.last_name}`, vendor: { name: "Co" } })))
+    : procore(url, init));
+  const r = await loadSampleMessages(config());
+  assert.equal(r.skipped.length, 0, r.skipped.join(" | "));
+  assert.ok(r.threads >= 16);
+});

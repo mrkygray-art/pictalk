@@ -1,8 +1,9 @@
 // Sample messages for the guest demo (docs/guest-demo.md), so every feed tab has something to show the demo guest:
 // For Me (the guest is in To), CC (the guest is CC'd), Sent (the guest started it) and All Project (everyone else's).
 // Loaded and removed from /admin/demo-authorize (owner only). People are the demo staging people
-// (api/_demoScenarios.js DEMO_PEOPLE), looked up by email in each project's Procore directory with the guest's
-// sign-in, so their Procore ids match the real directory; a thread whose people aren't on the project is skipped.
+// (api/_demoScenarios.js DEMO_PEOPLE), looked up in each project's Procore directory with the guest's sign-in (by
+// email, else by full name: a view-only guest gets Procore's short directory, which has no emails), so their
+// Procore ids match the real directory; a thread whose people aren't on the project is skipped.
 // Threads: procoreProjects/{key}/conversations/sample-{id} (sample: true), messages sample-{id}-{n}. Each message
 // goes through the app's own onConversationMessage function like a real one (feed card, to-dos for the people in
 // To), so they're written oldest first, a moment apart, with times from the last half hour.
@@ -94,14 +95,19 @@ export function projectCodes(env = process.env) {
 let wait = (ms) => new Promise((r) => setTimeout(r, ms));
 export const setWait = (fn) => { wait = fn; };
 
+const norm = (v) => String(v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+
+// The project's people, findable by email or by full name
 async function directory(cfg, at, p) {
   const users = await getWithToken(cfg, at, `/rest/v1.0/projects/${p.projectId}/users`, { companyId: p.companyId, query: { per_page: 300 } });
-  const byEmail = new Map();
+  const found = new Map();
   for (const u of Array.isArray(users) ? users : []) {
-    const email = String(u.email_address ?? "").trim().toLowerCase();
-    if (email) byEmail.set(email, { procoreUserId: String(u.id), name: u.name || [u.first_name, u.last_name].filter(Boolean).join(" "), company: u.vendor?.name ?? "", title: u.job_title ?? "" });
+    const name = u.name || [u.first_name, u.last_name].filter(Boolean).join(" ");
+    const person = { procoreUserId: String(u.id), name, company: u.vendor?.name ?? "", title: u.job_title ?? "" };
+    if (u.email_address) found.set(norm(u.email_address), person);
+    if (name) found.set(`name:${norm(name)}`, person);
   }
-  return byEmail;
+  return found;
 }
 
 const threadsCol = (db, key) => db.collection(`procoreProjects/${key}/conversations`);
@@ -145,7 +151,7 @@ export async function loadSampleMessages(cfg) {
     if (!list) continue;
     await removeIn(db, key);
     const dir = await directory(cfg, at, p);
-    const who = (k) => (k === G ? guest : (() => { const d = DEMO_PEOPLE.find((x) => x.key === k); return d ? dir.get(d.email_address) ?? null : null; })());
+    const who = (k) => (k === G ? guest : (() => { const d = DEMO_PEOPLE.find((x) => x.key === k); return d ? dir.get(norm(d.email_address)) ?? dir.get(`name:${norm(fullName(d))}`) ?? null : null; })());
     for (const t of list) {
       const people = [t.from, ...t.to, ...(t.cc ?? []), ...t.msgs.map((m) => m[0])].map(who);
       if (people.some((x) => !x)) {

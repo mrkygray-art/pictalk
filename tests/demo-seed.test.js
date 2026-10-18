@@ -169,7 +169,7 @@ beforeEach(() => {
     calls.push({ url: u, method, body });
     const r = P.route(method, u, body);
     if (!r) throw new Error(`unexpected fetch ${method} ${u}`);
-    return new Response(r.status === 204 ? null : JSON.stringify(r.body), { status: r.status, headers: { "content-type": "application/json" } });
+    return new Response(r.status === 204 ? null : JSON.stringify(r.body), { status: r.status, headers: { "content-type": "application/json", ...(r.headers ?? {}) } });
   };
 });
 afterEach(() => {
@@ -460,4 +460,25 @@ test("tools off in a new project: Seed Everything stops after the projects and s
   const b2 = (await post({ action: "next", skip: [] })).json();
   assert.ok(!b2.blocked);
   assert.equal(b2.id, "trades");
+});
+
+test("Procore's longer limit: the page says when it takes calls again, and a task saves its place", async () => {
+  const reset = String(Math.floor(Date.now() / 1000) + 600);
+  refuse = (method, p) => (p === "/rest/v1.1/projects" ? { status: 429, body: {}, headers: { "x-rate-limit-reset": reset, "x-rate-limit-limit": "3600" } } : null);
+  const out = await post({ action: "state" });
+  assert.equal(out.statusCode, 429);
+  const b = out.json();
+  assert.ok(b.retryAfter > 500 && b.retryAfter <= 600, String(b.retryAfter));
+  assert.match(b.message, /about 10 minutes/);
+  refuse = null;
+  forgetSeedGuards();
+  for (const id of ["project:MH", "company:harborline:MH", "company:beacon:MH", "person:reed:MH", "person:carter:MH"]) await run(id);
+  refuse = (method, p) => (method === "PATCH" && p.includes("observations/items") ? { status: 429, body: {}, headers: { "x-rate-limit-reset": reset } } : null);
+  const r = await run("record:OBS-03");
+  assert.ok(r.rateLimited);
+  assert.ok(r.retryAfter > 500);
+  assert.equal(r.status, "partial");
+  refuse = null;
+  assert.equal((await run("record:OBS-03")).status, "done");
+  assert.equal(Object.values(P.s.observations).length, 1);
 });

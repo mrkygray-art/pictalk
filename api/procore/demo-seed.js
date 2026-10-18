@@ -107,7 +107,7 @@ async function next(req, res, cfg, g, body) {
   for (const code of allMade ? CODES : []) {
     if (!ctx.rows[`project:${code}`]?.made?.toolsOff?.length) continue;
     const again = await runTask(ctx, `project:${code}`);
-    if (again.rateLimited) return { id: `project:${code}`, label: `Project ${PROJECTS[code].name}`, status: again.row.status, rateLimited: true };
+    if (again.rateLimited) return { id: `project:${code}`, label: `Project ${PROJECTS[code].name}`, status: again.row.status, rateLimited: true, retryAfter: again.retryAfter };
     if (again.row.made?.toolsOff?.length) off[code] = again.row.made.toolsOff;
   }
   if (Object.keys(off).length) return { blocked: true, toolsOff: Object.fromEntries(Object.entries(off).map(([c, list]) => [PROJECTS[c].name, list])) };
@@ -116,7 +116,7 @@ async function next(req, res, cfg, g, body) {
   const out = await runTask(ctx, t.id);
   await (await store()).saveMeta({ lastRunAt: Date.now() });
   console.log("SiteSnap demo seed", t.id, out.row.status, out.row.error ?? "");
-  return { id: t.id, label: t.label, status: out.row.status, error: out.row.error, notes: out.row.notes, rateLimited: out.rateLimited };
+  return { id: t.id, label: t.label, status: out.row.status, error: out.row.error, notes: out.row.notes, rateLimited: out.rateLimited, retryAfter: out.retryAfter };
 }
 
 const PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -155,7 +155,10 @@ table{width:100%;border-collapse:collapse;font-size:15px}td,th{padding:4px;text-
 const $=(s)=>document.querySelector(s); let S=null;
 const esc=(s)=>String(s??'').replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const LABEL={done:'Done',not_started:'Not started',failed:'Failed',partial:'Partial'};
-const post=async(body)=>{ const r=await fetch('/api/procore/demo-seed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const b=await r.json().catch(()=>({message:'No answer from the server'})); if(!r.ok){ const e=new Error(b.message||'Failed'); e.status=r.status; throw e; } return b; };
+const post=async(body)=>{ const r=await fetch('/api/procore/demo-seed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const b=await r.json().catch(()=>({message:'No answer from the server'})); if(!r.ok){ const e=new Error(b.message||'Failed'); e.status=r.status; e.retryAfter=b.retryAfter; throw e; } return b; };
+// Procore's limit: wait until it takes calls again (its reset time, else a minute), counting down on the page
+const waitOut=async(secs,el)=>{ const until=Date.now()+Math.min(Math.max(secs||60,20),3900)*1000; const at=new Date(until).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+  while(Date.now()<until){ const s=Math.ceil((until-Date.now())/1000); el.textContent='Procore says too many requests. Waiting until about '+at+' ('+Math.floor(s/60)+':'+String(s%60).padStart(2,'0')+'), then carrying on by itself. Keep this page open.'; await sleep(1000); } };
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 const busy=(t)=>{ $('#busy').textContent=t||''; document.querySelectorAll('button').forEach(b=>b.disabled=!!t); };
 const log=(t,cls)=>{ $('#log').innerHTML+='<div class="'+(cls||'')+'">'+esc(t)+'</div>'; $('#log').scrollTop=1e9; };
@@ -182,15 +185,15 @@ function render(){
 }
 async function refresh(){ S=await post({action:'state'}); render(); }
 async function load(){ try{ await refresh(); $('#who').innerHTML='<small>Signed in as '+esc(S.me.name)+' (Procore admin).</small>'; $('#app').hidden=false; }
-  catch(e){ $('#who').innerHTML=e.status===401?'Not signed in. <a href="/api/procore/login?back=demo-seed">Sign in with Procore</a>.':'<span class="bad">'+esc(e.message)+'</span>'; } }
+  catch(e){ if(e.status===429){ await waitOut(e.retryAfter,$('#who')); return load(); } $('#who').innerHTML=e.status===401?'Not signed in. <a href="/api/procore/login?back=demo-seed">Sign in with Procore</a>.':'<span class="bad">'+esc(e.message)+'</span>'; } }
 // Runs every task not done yet, one per request; a 429 waits a minute and tries again; stops after 6 problems in a row
 $('#all').onclick=async()=>{ $('#log').innerHTML=''; const skip=[]; let bad=0, n=0;
   busy('Seeding… keep this page open (about 10 to 20 minutes the first time).');
-  try{ for(;;){ const b=await post({action:'next',skip});
+  try{ for(;;){ let b; try{ b=await post({action:'next',skip}); }catch(e){ if(e.status!==429) throw e; log('Procore said slow down. Waiting it out…'); await waitOut(e.retryAfter,$('#busy')); continue; }
       if(b.finished){ log('All done.','ok'); break; }
       if(b.blocked){ log('Stopped: turn these tools on in Procore first (each project: Admin → Active Tools), then press Seed Everything again.','bad'); for(const [name,list] of Object.entries(b.toolsOff)) log(name+': '+list.join(', '),'bad'); break; }
       n++; $('#busy').textContent='Seeding… task '+n+': '+b.label;
-      if(b.rateLimited){ log('Procore said slow down. Waiting a minute…'); await sleep(60000); continue; }
+      if(b.rateLimited){ log('Procore said slow down. Waiting it out…'); await waitOut(b.retryAfter,$('#busy')); continue; }
       log((b.status==='done'?'✓ ':b.status==='partial'?'◐ ':'✗ ')+b.label+(b.error?' · '+b.error:''), b.status==='done'?'':b.status==='partial'?'':'bad');
       if(b.status!=='done'){ skip.push(b.id); bad++; } else bad=0;
       if(bad>=6){ log('Stopped after 6 problems in a row. Check the red ones below, fix, and press Seed Everything again.','bad'); break; } }
@@ -245,7 +248,7 @@ export default async function handler(req, res) {
     const t = taskById(String(body.id ?? ""));
     if (!t) throw new HttpError(400, "bad_request", "Unknown task.");
     const ctx = await ctxFor(req, res, cfg, g);
-    if (body.action === "run") { const out = await runTask(ctx, t.id); return sendJson(res, 200, { status: out.row.status, error: out.row.error, rateLimited: out.rateLimited }); }
+    if (body.action === "run") { const out = await runTask(ctx, t.id); return sendJson(res, 200, { status: out.row.status, error: out.row.error, rateLimited: out.rateLimited, retryAfter: out.retryAfter }); }
     if (body.action === "undo" || body.action === "redo") {
       if (!UNDOABLE.includes(t.kind)) throw new HttpError(400, "bad_request", "Setup tasks aren't undone (projects, companies, people, albums and templates stay).");
       const out = await undoTask(ctx, t);

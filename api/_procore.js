@@ -19,11 +19,25 @@ const REFRESH_EARLY_SECONDS = 120; // refresh a little before the 1.5-hour acces
 const ENV = ["PROCORE_CLIENT_ID", "PROCORE_CLIENT_SECRET", "PROCORE_LOGIN_URL", "PROCORE_API_URL", "SESSION_SECRET"];
 
 export class HttpError extends Error {
-  constructor(status, code, message) {
+  constructor(status, code, message, extra = null) {
     super(message);
     this.status = status;
     this.code = code;
+    this.extra = extra; // more fields for the JSON answer (e.g. retryAfter on a 429)
   }
+}
+
+/** Seconds until Procore takes calls again, from its X-Rate-Limit-Reset header (epoch seconds); null when unknown */
+export function retryAfterOf(reset, now = Date.now()) {
+  const n = Number(reset);
+  return Number.isFinite(n) && n > 0 ? Math.max(1, Math.ceil(n - now / 1000)) : null;
+}
+
+/** The 429 refusal. Past a short wait it says when Procore takes calls again (a longer limit, not the 10-second one). */
+export function rateLimited(reset, now = Date.now()) {
+  const retryAfter = retryAfterOf(reset, now);
+  const when = retryAfter && retryAfter > 90 ? `Procore takes calls again in about ${Math.ceil(retryAfter / 60)} minutes.` : "Wait a minute and try again.";
+  return new HttpError(429, "rate_limited", `Procore is busy (too many requests). ${when}`, retryAfter ? { retryAfter } : null);
 }
 
 // Server settings. Missing ones are named (names only, never values).
@@ -112,7 +126,7 @@ export function redirect(res, location) {
 export function sendError(res, err) {
   if (err instanceof HttpError) {
     // Guest demo refusals carry demo: true so the app shows its friendly view-only note, not an error
-    return sendJson(res, err.status, { error: err.code, message: err.message, ...(String(err.code).startsWith("demo") ? { demo: true } : {}) });
+    return sendJson(res, err.status, { error: err.code, message: err.message, ...(err.extra ?? {}), ...(String(err.code).startsWith("demo") ? { demo: true } : {}) });
   }
   console.error("Procore request failed:", err?.name ?? "Error"); // no message: it could hold a token
   return sendJson(res, 502, { error: "procore_failed", message: "Couldn't reach Procore. Try again." });
@@ -303,7 +317,7 @@ export async function procoreGet(req, res, cfg, path, { companyId, query } = {})
     await new Promise((r) => setTimeout(r, waitFor429(resp)));
     resp = await call(tokens);
   }
-  if (resp.status === 429) throw new HttpError(429, "rate_limited", "Procore is busy (too many requests). Wait a minute and try again.");
+  if (resp.status === 429) throw rateLimited(resp.headers?.get?.("x-rate-limit-reset"));
   if (resp.status === 401) throw new HttpError(401, "not_connected", "Connect Procore again.");
   if (resp.status === 403) throw new HttpError(403, "no_access", "Your Procore account doesn't have access to this.");
   if (resp.status === 404) throw new HttpError(404, "not_found", "Procore couldn't find that company or project.");

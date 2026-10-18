@@ -4,7 +4,7 @@
 // developers.procore.com/documentation/rate-limiting). By default a 429 waits out the window and tries once
 // more; { retry429: false } hands the 429 back instead (the demo import stops its batch on one).
 // Endpoints: see the header of api/procore/seed-directory.js.
-import { HttpError, procoreId } from "./_procore.js";
+import { HttpError, procoreId, rateLimited } from "./_procore.js";
 import { procoreSend } from "./_procoreWrite.js";
 import { projectRoleFor, userBody, vendorBody } from "./_seedDirectory.js";
 
@@ -37,7 +37,7 @@ export async function pages(req, res, cfg, path, { companyId, query = {}, retry4
     const r = await api(req, res, cfg, "GET", path, { companyId, query: { ...query, page, per_page: 100 }, retry429 });
     if (r.status === 403 || r.status === 404) return null;
     if (r.status === 401) throw new HttpError(401, "not_connected", "Your Procore sign-in ran out. Sign in with Procore again.");
-    if (r.status === 429) throw new HttpError(429, "rate_limited", "429 rate limited, retry later.");
+    if (r.status === 429) throw rateLimited(r.headers?.["x-rate-limit-reset"]);
     if (!r.ok) throw new HttpError(502, "procore_failed", `Procore answered ${r.status} reading ${path.replace(/\d{3,}/g, "…")}. Wait a minute and run it again.`);
     if (!Array.isArray(r.json)) break;
     out.push(...r.json);

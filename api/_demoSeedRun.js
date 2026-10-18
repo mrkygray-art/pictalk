@@ -21,7 +21,7 @@
 //   * POST /rest/v1.0/checklist/lists/{l}/sections {project_id, section: {…, items_attributes}} (deprecated; fallback)
 //   answers and notes: api/_inspections.js PATHS; * DELETE /rest/v1.0/checklist/lists/{l}?project_id=
 //   * PATCH /rest/v1.0/companies/{c}/users/{id}/invite (else POST): Procore's invite email
-import { HttpError } from "./_procore.js";
+import { HttpError, retryAfterOf } from "./_procore.js";
 import { uploadFile } from "./_procoreWrite.js";
 import { firestore } from "./_firestore.js";
 import { recordUrl } from "./_records.js";
@@ -88,13 +88,17 @@ export async function allRows(st) {
 
 // ---------- context ----------
 
-class Stop extends Error { constructor(message, rateLimited = false) { super(message); this.rateLimited = rateLimited; } }
+class Stop extends Error { constructor(message, rateLimited = false, retryAfter = null) { super(message); this.rateLimited = rateLimited; this.retryAfter = retryAfter; } }
 
 /** One request's context: the company, the saved project ids, and a paced Procore caller that stops on a 429 */
 export function context(req, res, cfg, { companyId, me, rows, projects }) {
   const call = async (method, path, opts = {}) => {
     const r = await api(req, res, cfg, method, path, { companyId, retry429: false, ...opts });
-    if (r.status === 429) throw new Stop("Procore said slow down (429). Wait a minute; the task resumes where it stopped.", true);
+    if (r.status === 429) {
+      const retryAfter = retryAfterOf(r.headers?.["x-rate-limit-reset"]);
+      console.log("SiteSnap demo seed 429", JSON.stringify({ limit: r.headers?.["x-rate-limit-limit"] ?? null, remaining: r.headers?.["x-rate-limit-remaining"] ?? null, retryAfter }));
+      throw new Stop(`Procore said slow down (429)${retryAfter > 90 ? `; it takes calls again in about ${Math.ceil(retryAfter / 60)} minutes` : ""}. The task resumes where it stopped.`, true, retryAfter);
+    }
     if (r.status === 401) throw new HttpError(401, "not_connected", "Your Procore sign-in ran out. Sign in with Procore again.");
     return r;
   };
@@ -134,19 +138,23 @@ export async function runTask(ctx, taskId) {
   row.error = null;
   const note = (s) => row.notes.push(s);
   let rateLimited = false;
+  let retryAfter = null;
   try {
     const out = await RUN[t.kind](ctx, t, row.made, note);
     row.status = out === "partial" ? "partial" : "done";
-  } catch (err) {
+  } catch (caught) {
+    // A 429 from a list read (api/_seedSteps.js pages) counts like ours: save what's made so far, resume later
+    const err = caught instanceof HttpError && caught.status === 429 ? new Stop(caught.message, true, caught.extra?.retryAfter ?? null) : caught;
     if (!(err instanceof Stop)) throw err;
     rateLimited = err.rateLimited;
+    retryAfter = err.retryAfter;
     row.status = madeSomething(row.made) ? "partial" : "failed";
     row.error = err.message;
   }
   row.at = Date.now();
   await st.saveRow(t.id, row);
   ctx.rows[t.id] = row;
-  return { row, rateLimited };
+  return { row, rateLimited, retryAfter };
 }
 
 const RUN = {
@@ -216,7 +224,7 @@ const RUN = {
     if (!vendorId) throw new Stop(`Run "${COMPANIES[p.company].name} on ${t.project}" first.`);
     const steps = await addPerson(ctx.req, ctx.res, ctx.cfg, ctx.companyId, projectId, { vendor: COMPANIES[p.company] }, u, vendorId, (_s, x) => x.templates);
     steps.forEach((s) => note(`${s.ok ? "✓" : "✗"} ${s.name}: ${s.detail}`));
-    if (steps.some((s) => /429/.test(s.detail))) throw new Stop("Procore said slow down (429). Run it again in a minute.", true);
+    if (steps.some((s) => /429/.test(s.detail))) throw new Stop("Procore said slow down (429). It resumes on its own.", true);
     made.email = u.email_address;
     return steps.every((s) => s.ok) ? "done" : "partial";
   },

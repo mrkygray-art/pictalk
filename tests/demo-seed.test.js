@@ -27,7 +27,7 @@ const ENV = {
 };
 const CO = 4291776;
 const ME = 77;
-let calls, saved, db, P, admin, refuse;
+let calls, saved, db, P, admin, refuse, tools;
 
 // ---------- in-memory SiteSnap store (same interface as store() in api/_demoSeedRun.js) ----------
 function memoryStore() {
@@ -72,7 +72,7 @@ function fakeProcore() {
     if (method === "GET" && /\/projects\/\d+\/permission_templates$/.test(p)) return json([{ id: 1, name: "Project Manager - Internal" }, { id: 2, name: "Foreman / Superintendent - Internal" }, { id: 3, name: "Subcontractor - External" }, { id: 4, name: "Owner - External" }]);
     if (method === "GET" && /\/companies\/\d+\/permission_templates\/\d+$/.test(p)) return admin ? json({ id: 1 }) : json({ error: "forbidden" }, 403);
     if (method === "GET" && p === "/rest/v1.0/me") return json({ id: ME, name: "Edward Gray" });
-    if (method === "GET" && p === "/rest/v1.0/settings/permissions") return json({ tools: ["observations", "punch_list", "checklists", "daily_log", "images", "directory"].map((name) => ({ name })) });
+    if (method === "GET" && p === "/rest/v1.0/settings/permissions") return json({ tools: tools.map((name) => ({ name })) });
     // vendors
     if (method === "GET" && p === "/rest/v1.0/vendors") { const term = (q.get("filters[search]") ?? "").toLowerCase(); return json(s.vendors.filter((v) => !term || v.name.toLowerCase().includes(term))); }
     if (method === "GET" && (m = p.match(/^\/rest\/v1\.0\/vendors\/(\d+)$/))) return json(s.vendors.find((v) => String(v.id) === m[1]) ?? {}, s.vendors.some((v) => String(v.id) === m[1]) ? 200 : 404);
@@ -152,7 +152,7 @@ function fakeProcore() {
 }
 
 beforeEach(() => {
-  calls = []; admin = true; refuse = null;
+  calls = []; admin = true; refuse = null; tools = ["observations", "punch_list", "checklists", "daily_log", "images", "directory"];
   db = memoryStore();
   setSeedStore(db);
   forgetSeedGuards();
@@ -441,4 +441,23 @@ test("no email configured: people tasks fail with a plain message, nothing else 
   assert.match(b.error, /DEMO_SEED_EMAIL/);
   assert.equal(P.s.users.length, 0);
   assert.equal(RECORDS.length, 26);
+});
+
+test("tools off in a new project: Seed Everything stops after the projects and says which; on again, it carries on", async () => {
+  tools = ["observations", "punch_list"];
+  const b1 = (await post({ action: "next", skip: [] })).json();
+  assert.equal(b1.id, "project:MH");
+  assert.equal(b1.status, "partial");
+  assert.equal((await post({ action: "next", skip: ["project:MH"] })).json().id, "project:CV");
+  assert.equal((await post({ action: "next", skip: ["project:MH", "project:CV"] })).json().id, "project:DS");
+  const blocked = (await post({ action: "next", skip: ["project:MH", "project:CV", "project:DS"] })).json();
+  assert.ok(blocked.blocked);
+  assert.deepEqual(blocked.toolsOff[PROJECTS.MH.name], ["Inspections", "Daily Log", "Photos", "Directory"]);
+  assert.ok(!calls.some((c) => /(vendors|users)\b/.test(c.url) && c.method !== "GET"), "nothing added while tools are off");
+  const st = (await post({ action: "state" })).json();
+  assert.match(st.copyText, /TOOLS OFF: Inspections, Daily Log, Photos, Directory/);
+  tools = ["observations", "punch_list", "checklists", "daily_log", "images", "directory"];
+  const b2 = (await post({ action: "next", skip: [] })).json();
+  assert.ok(!b2.blocked);
+  assert.equal(b2.id, "trades");
 });

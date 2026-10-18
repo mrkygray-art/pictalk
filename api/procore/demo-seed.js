@@ -60,6 +60,7 @@ async function ctxFor(req, res, cfg, g) {
 export function copyForClaude(list, meta) {
   const lines = [`SiteSnap demo seed · ${new Date().toISOString()} · last run ${meta.lastRunAt ? new Date(meta.lastRunAt).toISOString() : "never"}`];
   const count = (s) => list.filter((t) => t.row.status === s).length;
+  for (const c of CODES) { const r = list.find((t) => t.id === `project:${c}`)?.row; lines.push(`${PROJECTS[c].name}: project ${r?.made?.projectId ?? "not made yet"}${r?.made?.toolsOff?.length ? ` · TOOLS OFF: ${r.made.toolsOff.join(", ")}` : r?.made?.toolsOff ? " · all tools on" : ""}`); }
   lines.push(`Done ${count("done")}, partial ${count("partial")}, failed ${count("failed")}, not started ${count("not_started")} (of ${list.length})`);
   for (const t of list.filter((x) => x.row.status !== "done" || x.row.notes?.length)) {
     if (t.row.status === "not_started") continue;
@@ -99,6 +100,17 @@ async function state(g) {
 async function next(req, res, cfg, g, body) {
   const skip = new Set(Array.isArray(body.skip) ? body.skip.map(String) : []);
   const ctx = await ctxFor(req, res, cfg, g);
+  // Tools off in a project: check again (they may be on now); still off = stop, everything else would be refused
+  // (only once all three projects exist, so the tools can be turned on in one go)
+  const off = {};
+  const allMade = CODES.every((c) => ctx.rows[`project:${c}`]?.made?.projectId);
+  for (const code of allMade ? CODES : []) {
+    if (!ctx.rows[`project:${code}`]?.made?.toolsOff?.length) continue;
+    const again = await runTask(ctx, `project:${code}`);
+    if (again.rateLimited) return { id: `project:${code}`, label: `Project ${PROJECTS[code].name}`, status: again.row.status, rateLimited: true };
+    if (again.row.made?.toolsOff?.length) off[code] = again.row.made.toolsOff;
+  }
+  if (Object.keys(off).length) return { blocked: true, toolsOff: Object.fromEntries(Object.entries(off).map(([c, list]) => [PROJECTS[c].name, list])) };
   const t = tasks().find((x) => ctx.rows[x.id]?.status !== "done" && !skip.has(x.id));
   if (!t) return { finished: true };
   const out = await runTask(ctx, t.id);
@@ -176,6 +188,7 @@ $('#all').onclick=async()=>{ $('#log').innerHTML=''; const skip=[]; let bad=0, n
   busy('Seeding… keep this page open (about 10 to 20 minutes the first time).');
   try{ for(;;){ const b=await post({action:'next',skip});
       if(b.finished){ log('All done.','ok'); break; }
+      if(b.blocked){ log('Stopped: turn these tools on in Procore first (each project: Admin → Active Tools), then press Seed Everything again.','bad'); for(const [name,list] of Object.entries(b.toolsOff)) log(name+': '+list.join(', '),'bad'); break; }
       n++; $('#busy').textContent='Seeding… task '+n+': '+b.label;
       if(b.rateLimited){ log('Procore said slow down. Waiting a minute…'); await sleep(60000); continue; }
       log((b.status==='done'?'✓ ':b.status==='partial'?'◐ ':'✗ ')+b.label+(b.error?' · '+b.error:''), b.status==='done'?'':b.status==='partial'?'':'bad');

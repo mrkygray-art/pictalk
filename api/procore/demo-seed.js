@@ -195,7 +195,8 @@ $('#all').onclick=async()=>{ $('#log').innerHTML=''; const skip=[]; let bad=0, n
       n++; $('#busy').textContent='Seeding… task '+n+': '+b.label;
       if(b.rateLimited){ log('Procore said slow down. Waiting it out…'); await waitOut(b.retryAfter,$('#busy')); continue; }
       log((b.status==='done'?'✓ ':b.status==='partial'?'◐ ':'✗ ')+b.label+(b.error?' · '+b.error:''), b.status==='done'?'':b.status==='partial'?'':'bad');
-      if(b.status!=='done'){ skip.push(b.id); bad++; } else bad=0;
+      // Partial ones are skipped for this run but don't count as problems (later groups don't depend on them)
+      if(b.status!=='done') skip.push(b.id); if(b.status==='failed') bad++; else bad=0;
       if(bad>=6){ log('Stopped after 6 problems in a row. Check the red ones below, fix, and press Seed Everything again.','bad'); break; } }
   }catch(e){ log(e.message,'bad'); }
   busy(''); await refresh(); };

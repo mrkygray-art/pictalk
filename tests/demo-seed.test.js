@@ -144,6 +144,11 @@ function fakeProcore() {
       return json(l, 201);
     }
     if ((m = p.match(/^\/rest\/v1\.0\/checklist\/lists\/(\d+)$/))) { if (method === "DELETE") { delete s.lists[m[1]]; return json({}, 204); } return s.lists[m[1]] ? json(s.lists[m[1]]) : json({}, 404); }
+    if (method === "POST" && (m = p.match(/^\/rest\/v1\.0\/checklist\/lists\/(\d+)\/sections$/))) {
+      const sec = { id: next(), name: body.section.name, items: (body.section.items_attributes ?? []).map((it) => ({ id: next(), name: it.name, position: it.position })) };
+      s.lists[m[1]].sections.push(sec);
+      return json(sec, 201);
+    }
     if (method === "POST" && (m = p.match(/\/checklist\/items\/(\d+)\/item_response$/))) { s.answers.push({ item: Number(m[1]), ...body.item_response }); return json({}, 201); }
     if (method === "POST" && /\/checklist\/lists\/\d+\/comments$/.test(p)) { s.comments.push(body); return json({}, 201); }
     return null;
@@ -481,4 +486,24 @@ test("Procore's longer limit: the page says when it takes calls again, and a tas
   refuse = null;
   assert.equal((await run("record:OBS-03")).status, "done");
   assert.equal(Object.values(P.s.observations).length, 1);
+});
+
+test("delay types refused in a new project: logged without one; template questions refused: the inspection gets them itself", async () => {
+  refuse = (method, p, body) => {
+    if (method === "POST" && /delay_logs$/.test(p) && body.delay_log.delay_type) return { status: 422, body: { errors: { delay_type: ["is not a visible delay log type associated with project"] } } };
+    if (method === "POST" && /list_templates\/\d+\/(items|item_templates)$/.test(p)) return { status: 404, body: {} };
+    return null;
+  };
+  await seedAll();
+  const b = (await post({ action: "state" })).json();
+  const dl = b.tasks.find((t) => t.id === "dailylog:MH:2");
+  assert.equal(dl.status, "done");
+  assert.ok(dl.notes.some((n) => /logged without one/.test(n)));
+  assert.ok(Object.values(P.s.logs).some((e) => e.path === "delay_logs" && !e.delay_log.delay_type && /Rain/.test(e.delay_log.comments)));
+  assert.equal(b.tasks.find((t) => t.id === "template:A").status, "partial");
+  const insA = Object.values(P.s.lists).find((l) => l.name.includes("Pre-pour"));
+  assert.equal(insA.sections.flatMap((x) => x.items).length, 7);
+  const row = b.tasks.find((t) => t.id === "inspection:INSP-A");
+  assert.equal(row.status, "done", JSON.stringify(row));
+  assert.equal([...db.threads.keys()].length, 8, "messages still ran");
 });

@@ -288,7 +288,15 @@ const RUN = {
     const send = async (slot, section, entry) => {
       if (made.entries[slot]) return;
       const fields = procoreFields(section, entry, { date });
-      const r = await ctx.call("POST", `/rest/v1.0/projects/${projectId}/${SECTIONS[section].path}`, { body: { [SECTIONS[section].root]: fields } });
+      const post = (f) => ctx.call("POST", `/rest/v1.0/projects/${projectId}/${SECTIONS[section].path}`, { body: { [SECTIONS[section].root]: f } });
+      let r = await post(fields);
+      // A new project may have no delay types turned on ("is not a visible delay log type"): log it without one
+      if (r.status === 422 && fields.delay_type && JSON.stringify(r.json ?? "").includes("delay_type")) {
+        const rest = { ...fields };
+        delete rest.delay_type;
+        note(`Procore wouldn't take the delay type "${fields.delay_type}" in this project (turn delay types on in the project's Daily Log settings); logged without one.`);
+        r = await post(rest);
+      }
       if (r.status === 403 || r.status === 404) throw new Stop(`Procore answered ${r.status} for the Daily Log: turn the Daily Log tool on for this project.`);
       if (!r.ok || !r.json?.id) throw new Stop(`${SECTIONS[section].label}: ${said(r)}`);
       made.entries[slot] = { section, id: String(r.json.id) };

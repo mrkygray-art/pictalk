@@ -6,6 +6,8 @@
 //   what the thumbnail links need, and the rate-limit headers. Writes a public test album ("SiteSnap test album";
 //   after that one per person, "SiteSnap test album – Name", reused on later runs) and ONE test photo per run;
 //   delete them in Procore afterwards if you like.
+// POST {cleanup:"find"|"delete"} : finds (then deletes) only the SiteSnap test photos in the project (isTestPhoto),
+//   then any "SiteSnap test album" left empty.
 // Run it as an admin, then as a test person with less than Standard on Photos, to see the refusal.
 // Sandbox only (PROCORE_API_URL must be Procore's sandbox). Same-origin JSON for the POST.
 import { config, HttpError, procoreId, requireSameOriginJson, readBody, sendError, sendJson, session } from "../_procore.js";
@@ -39,6 +41,46 @@ function linkShape(u) {
     return { host: url.host, query: names, signed: names.some((n) => /^sig$|signature|expires|token|policy|key-pair/i.test(n)) };
   } catch { return { host: null, query: [], signed: false }; }
 }
+// Test photos = the yellow "SiteSnap AI · API test photo" these sandbox checks upload: by file name, by the
+// "Safe to delete" / length-test description, or anything in a "SiteSnap test album" album.
+const TEST_NAMES = /^SiteSnap(-photos)?-test\.jpg$/i;
+export function isTestPhoto(img) {
+  const names = [img.name, img.filename, img.image_name, img.original_filename].filter((n) => typeof n === "string");
+  const desc = typeof img.description === "string" ? img.description : "";
+  return names.some((n) => TEST_NAMES.test(n)) || /^SiteSnap (test photo\.|length test\.)/.test(desc) || String(img.image_category_name ?? "").startsWith(TEST_ALBUM);
+}
+async function cleanup(send, q, doDelete) {
+  const found = [];
+  for (let page = 1; page <= 50; page++) {
+    const r = await send("GET", "/rest/v1.0/images", { query: q({ per_page: 100, page }) });
+    if (!r.ok) throw new HttpError(r.status === 403 ? 403 : 502, "photos_list", `Procore answered ${r.status} listing photos.`);
+    const list = Array.isArray(r.json) ? r.json : [];
+    for (const img of list) if (isTestPhoto(img)) found.push({ id: img.id, album: img.image_category_name ?? "", at: img.created_at ?? null });
+    if (list.length < 100) break;
+  }
+  if (!doDelete) return { found: found.length, photos: found };
+  let deleted = 0;
+  const failed = [];
+  for (const f of found) {
+    const r = await send("DELETE", `/rest/v1.0/images/${f.id}`, { query: q() });
+    if (r.ok || r.status === 404) deleted++;
+    else failed.push({ id: f.id, status: r.status });
+  }
+  // Then the empty "SiteSnap test album" albums the check made
+  const cats = await send("GET", "/rest/v1.0/image_categories", { query: q() });
+  const albums = (Array.isArray(cats.json) ? cats.json : []).filter((a) => String(a.name ?? "").startsWith(TEST_ALBUM));
+  let albumsDeleted = 0;
+  for (const a of albums) {
+    const left = await send("GET", "/rest/v1.0/images", { query: q({ image_category_id: a.id, per_page: 1 }) });
+    if (!left.ok || (Array.isArray(left.json) && left.json.length)) continue;
+    const r = await send("DELETE", `/rest/v1.0/image_categories/${a.id}`, { query: q() });
+    if (r.ok || r.status === 404) albumsDeleted++;
+    else failed.push({ album: a.name, status: r.status });
+  }
+  console.log("SiteSnap test photo cleanup", JSON.stringify({ found: found.length, deleted, albumsDeleted, failed }));
+  return { found: found.length, deleted, albumsDeleted, failed };
+}
+
 const brief = (r) => (r.ok ? null : typeof r.json === "object" ? JSON.stringify(r.json).slice(0, 300) : String(r.json ?? ""));
 
 const PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -53,6 +95,8 @@ select{font:inherit;font-size:17px;width:100%;padding:12px;border-radius:12px;ba
 <p><small><b>To run it as someone else</b> (a test person with less than Standard on Photos): open this page in a <b>private / incognito window</b>, tap Sign in with Procore, and log in to Procore as that person.</small></p>
 <label for="p">Project</label> <select id="p"></select>
 <button id="run" disabled>Run Check</button>
+<button id="find" disabled style="background:#3a332b;color:#f5efe6">Find test photos to delete</button>
+<button id="del" hidden style="background:#ff5f57;color:#1f1a14"></button>
 <div id="out"></div>
 <script>
 const $=(s)=>document.querySelector(s);
@@ -63,7 +107,7 @@ fetch('/api/procore/projects').then(async(r)=>{
   $('#who').innerHTML='<small>Signed in. '+list.length+' project(s).</small>';
   if(list[0]) fetch('/api/procore/me?companyId='+encodeURIComponent(list[0].companyId)).then(r=>r.json()).then(m=>{ if(m.name) $('#who').innerHTML='Running as <b>'+esc(m.name)+'</b> <small>('+list.length+' project(s))</small>'; }).catch(()=>{});
   for(const p of list){ const o=document.createElement('option'); o.value=p.companyId+'_'+p.projectId; o.textContent=p.name; if(/sandbox test/i.test(p.name)) o.selected=true; $('#p').append(o); }
-  $('#run').disabled=!list.length;
+  $('#run').disabled=$('#find').disabled=!list.length;
 });
 $('#run').onclick=async()=>{
   $('#run').disabled=true; $('#out').innerHTML='<p>Checking… (about 20 seconds)</p>';
@@ -75,6 +119,27 @@ $('#run').onclick=async()=>{
     +(b.thumb?'<p><small>Thumbnail as your browser loads it straight from Procore (a foreman&rsquo;s phone has no Procore sign-in, so this may only work for you):</small><br><img src="'+esc(b.thumb)+'" alt="test photo thumbnail"></p>':'')
     +'<p><small>Copy everything on this page (or take screenshots) and send it to Claude.</small></p><pre style="white-space:pre-wrap;font-size:12px;color:#b8ac9c">'+esc(JSON.stringify(b.raw,null,1))+'</pre>';
   $('#run').disabled=false;
+};
+const clean=async(mode)=>{
+  const [companyId,projectId]=$('#p').value.split('_');
+  const r=await fetch('/api/procore/test-photos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({companyId,projectId,cleanup:mode})});
+  const b=await r.json().catch(()=>({message:'No answer'})); if(!r.ok) throw new Error(b.message||'Failed'); return b;
+};
+$('#p').onchange=()=>{ $('#del').hidden=true; };
+$('#find').onclick=async()=>{
+  $('#find').disabled=true; $('#del').hidden=true; $('#out').innerHTML='<p>Looking for SiteSnap test photos…</p>';
+  try{ const b=await clean('find');
+    $('#out').innerHTML='<p>Found <b>'+b.found+'</b> SiteSnap test photo(s) in this project. Only these are touched; real photos are left alone.</p>';
+    if(b.found){ $('#del').textContent='Delete '+b.found+' test photo(s)'; $('#del').hidden=false; }
+  }catch(e){ $('#out').innerHTML='<p class="bad">'+esc(e.message)+'</p>'; }
+  $('#find').disabled=false;
+};
+$('#del').onclick=async()=>{
+  $('#del').hidden=true; $('#find').disabled=true; $('#out').innerHTML='<p>Deleting… (about half a second per photo)</p>';
+  try{ const b=await clean('delete');
+    $('#out').innerHTML='<p class="'+(b.failed.length?'maybe':'ok')+'">Deleted '+b.deleted+' of '+b.found+' test photo(s) and '+b.albumsDeleted+' empty test album(s).'+(b.failed.length?' Not deleted: '+esc(JSON.stringify(b.failed)):'')+'</p><p><small>They go to the Photos Recycle Bin in Procore.</small></p>';
+  }catch(e){ $('#out').innerHTML='<p class="bad">'+esc(e.message)+'</p>'; }
+  $('#find').disabled=false;
 };
 </script></body></html>`;
 
@@ -109,6 +174,7 @@ export default async function handler(req, res) {
     const step = (name, r, detail) => steps.push({ name, ok: r.ok, status: r.status, detail });
     const p = projectId;
     const q = (extra = {}) => ({ project_id: p, ...extra });
+    if (body.cleanup === "find" || body.cleanup === "delete") return sendJson(res, 200, await cleanup(send, q, body.cleanup === "delete"));
 
     const me = await send("GET", "/rest/v1.0/me", { query: { company_id: companyId } });
     const proj = await send("GET", `/rest/v1.0/projects/${p}`, { query: { company_id: companyId } });

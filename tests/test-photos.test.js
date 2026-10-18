@@ -128,3 +128,41 @@ test("photos check: sandbox only", async () => {
   await check({ method: "GET", url: "/api/procore/test-photos", headers: {} }, out);
   assert.equal(out.statusCode, 403);
 });
+
+test("photos cleanup: finds only SiteSnap test photos, deletes them, then the empty test album", async () => {
+  const imgs = [
+    { id: 1, name: "SiteSnap-photos-test.jpg", image_category_name: "Field photos 2026-10-16" },
+    { id: 2, description: "SiteSnap test photo. Captured by Edward. Safe to delete.", image_category_name: "Unclassified" },
+    { id: 3, name: "IMG_2041.jpg", description: "Rebar at grid C4", image_category_name: "Field photos 2026-10-16" },
+    { id: 4, name: "x.jpg", image_category_name: "SiteSnap test album – Edward Gray" },
+  ];
+  albums.push({ id: 77, name: "SiteSnap test album – Edward Gray", private: false, count: 1 });
+  const deleted = [];
+  const base = reply;
+  const runWith = async (cleanupMode) => {
+    globalThis.fetch = async (url, init = {}) => {
+      const u = String(url), m = init.method ?? "GET";
+      calls.push({ url: u, method: m });
+      let out;
+      if (/\/images\/\d+\?/.test(u) && m === "DELETE") { const id = Number(u.match(/images\/(\d+)/)[1]); deleted.push(id); imgs.splice(imgs.findIndex((i) => i.id === id), 1); out = [204, null]; }
+      else if (/image_categories\/77\?/.test(u) && m === "DELETE") { deleted.push("album77"); out = [204, null]; }
+      else if (/\/images\?/.test(u) && m === "GET") out = [200, /image_category_id=77/.test(u) ? imgs.filter((i) => /SiteSnap test album/.test(i.image_category_name)) : imgs];
+      else out = base(u, init);
+      const [status, body] = out;
+      return new Response(status === 204 ? null : JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    };
+    const o = res();
+    await check({ method: "POST", url: "/api/procore/test-photos", body: { companyId: "4291776", projectId: "373235", cleanup: cleanupMode }, headers: { host: "sitesnap-procore.vercel.app", origin: "https://sitesnap-procore.vercel.app", "content-type": "application/json", cookie: `${SESSION_COOKIE}=${cookie()}` } }, o);
+    return o;
+  };
+  const found = await runWith("find");
+  assert.equal(found.statusCode, 200, found.body);
+  assert.deepEqual(found.json().photos.map((p) => p.id), [1, 2, 4]);
+  assert.equal(deleted.length, 0, "find never deletes");
+  const done = (await runWith("delete")).json();
+  assert.deepEqual(deleted, [1, 2, 4, "album77"]);
+  assert.equal(done.deleted, 3);
+  assert.equal(done.albumsDeleted, 1);
+  assert.deepEqual(imgs.map((i) => i.id), [3], "the real photo stays");
+  assert.ok(!calls.some((c) => c.method === "POST" && /\/images\?/.test(c.url)), "cleanup uploads nothing");
+});

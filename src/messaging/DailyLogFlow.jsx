@@ -31,7 +31,7 @@ function blankEntry(section, opts) {
   return { ...base, text: "", location: null };
 }
 
-// In the guest demo it opens on Past logs only (reading); adding to a day shows the view-only note.
+// In the guest demo everything works (talk, photos, Organize) up to Send, which shows the view-only note.
 export default function DailyLogFlow({ session, onClose, startTab = "new" }) {
   const { project } = session;
   const { demo, explain } = useDemo();
@@ -50,7 +50,7 @@ export default function DailyLogFlow({ session, onClose, startTab = "new" }) {
   const [ask, setAsk] = useState(null); // fix | flags | dup
   const [sheetPhoto, setSheetPhoto] = useState(null);
   const [rows, setRows] = useState([]);
-  const [tab, setTab] = useState(demo ? "past" : startTab); // new | past
+  const [tab, setTab] = useState(startTab); // new | past
   const [pastDay, setPastDay] = useState(null); // the day open in Past logs
   const fileInput = useRef(null);
 
@@ -204,6 +204,7 @@ export default function DailyLogFlow({ session, onClose, startTab = "new" }) {
     }
   };
   const startSend = async () => {
+    if (demo) return explain("Sending these entries to Procore's Daily Log");
     // Photos not given to an entry go with Notes (spec open question 5); with no note yet, one is made for them
     if (photosRef.current.some((p) => !p.attach) && !draftRef.current.log.notes.length) {
       update((d) => ({ ...d, log: { ...d.log, notes: [{ ...blankEntry("notes"), text: "Site photos" }] } }));
@@ -221,7 +222,7 @@ export default function DailyLogFlow({ session, onClose, startTab = "new" }) {
   const back = (to, label) => <button type="button" className="link-btn msg-home-back" onClick={to}><BackIcon /> {label}</button>;
   const dayWord = opts?.today && draft.date === opts.today ? "Today" : opts?.today && draft.date === addDays(opts.today, -1) ? "Yesterday" : "";
   const draftBusy = !!(String(draft.words ?? "").trim() || draft.log || photos.length);
-  const tabs = demo ? null : (
+  const tabs = (
     <div className="dl-tabs" role="tablist" aria-label="Daily log">
       <button type="button" role="tab" aria-selected={tab === "new"} className={tab === "new" ? "is-on" : ""} onClick={() => setTab("new")}>{draftBusy ? "Your draft" : "New log"}</button>
       <button type="button" role="tab" aria-selected={tab === "past"} className={tab === "past" ? "is-on" : ""} onClick={() => { setTab("past"); setPastDay(null); }}>Past logs</button>
@@ -229,7 +230,6 @@ export default function DailyLogFlow({ session, onClose, startTab = "new" }) {
   );
   // Past logs -> "Add to this day": the draft takes that date (only offered when there's no draft for another day)
   const addToDay = (iso) => {
-    if (demo) return explain("Adding to the Daily Log in Procore");
     if (draft.date !== iso) pickDate(iso);
     setTab("new");
     setStep(draftRef.current.log ? "review" : "capture");

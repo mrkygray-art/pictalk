@@ -2,6 +2,7 @@
 // phone first (IndexedDB), then uploaded oldest first by /api/procore/photo-upload. Each capture keeps one id, so
 // a retry never makes a second copy in Procore (the server remembers the id). Signal problems wait and try
 // again (5 s, 10 s, 20 s … up to 5 minutes); a refusal (no permission, private album) waits for Retry.
+import { demoMode } from "./demoMode";
 import { del, get, keys, set } from "idb-keyval";
 import { shrinkPhoto } from "./recordStore";
 import { transcribeVoice, uploadFile } from "./messagingStore";
@@ -44,7 +45,7 @@ export function setAutoFile(on) {
  *  message has already gone; anything that goes wrong shows on the Project photos screen with Retry.
  *  captureBase must be the same on a retried send, so a photo is never filed twice. */
 export function autoFilePhotos({ project, captureBase, photos, words = "", by, link = null, from = "", voicePath = null }) {
-  if (!autoFileOn() || !photos?.length) return Promise.resolve(0);
+  if (demoMode() || !autoFileOn() || !photos?.length) return Promise.resolve(0);
   let chain = Promise.resolve(0);
   photos.forEach((photo, i) => {
     chain = chain.then((n) => queuePhoto({ captureId: `${captureBase}-${i + 1}`, project, albumId: null, albumLabel: "today", words, by, photo, link, from, voicePath })
@@ -56,6 +57,7 @@ export function autoFilePhotos({ project, captureBase, photos, words = "", by, l
 
 /** Save a snapped photo on the phone and start uploading. Throws a plain-language Error for a photo it can't take. */
 export async function queuePhoto({ captureId, project, albumId = null, albumLabel, words = "", wordsPending = false, by, photo, voice = null, voicePath = null, link = null, from = "" }) {
+  if (demoMode()) throw new Error("This is a view-only demo."); // never queued or sent (demoMode.js)
   if (await get(PREFIX + captureId)) return; // already waiting (a retried send)
   const small = await shrinkPhoto(photo, PHOTO_MAX_SIDE, PHOTO_QUALITY);
   if (!/^image\/(jpeg|png|webp)$/.test(small.type)) throw new Error("This kind of photo can't be saved. Take it with the camera instead.");
@@ -100,7 +102,7 @@ const backoff = (attempts) => Math.min(5 * 60_000, 5000 * 2 ** Math.max(0, attem
 
 /** Upload what's waiting, oldest first. One at a time; stops at the first one that has to wait (keeps the order). */
 export async function syncPhotos({ now = false } = {}) {
-  if (running) return;
+  if (running || demoMode()) return;
   running = true;
   try {
     for (const p of await all()) {

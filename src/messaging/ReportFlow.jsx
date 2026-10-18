@@ -4,6 +4,7 @@ import { formatTime, useRecorder } from "./useRecorder";
 import RecipientSearch from "./RecipientSearch";
 import { newId, queueMessage, splitRecipients, transcribeVoice, uploadFile, voicePathFor } from "./messagingStore";
 import { autoFilePhotos } from "./photoQueue";
+import { useDemo } from "./demo";
 import { recipientOf } from "../directorySearch";
 import { cantGet, draftRecord, managersFor, MAX_PHOTOS, projectAccess, RECORD_HINT, RECORD_LABEL, RECORD_TOOL, recordOptions, sendRecord } from "./recordStore";
 
@@ -14,6 +15,7 @@ import { cantGet, draftRecord, managersFor, MAX_PHOTOS, projectAccess, RECORD_HI
 const PRIORITIES = [["low", "Low"], ["medium", "Medium"], ["high", "High"]];
 
 export default function ReportFlow({ session, onClose, onOpenThread }) {
+  const { demo, explain } = useDemo();
   const { project, me } = session;
   const key = `${project.companyId}_${project.projectId}`;
   const ids = useRef({ cid: newId(), mid: newId() });
@@ -113,6 +115,7 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
     setError("");
     if (!card.title.trim()) return setError("Add a short title.");
     if (card.recordType === "observation" && !card.observationTypeId) return setError("Pick what kind of observation it is.");
+    if (demo) return explain(`Sending this ${card.recordType === "punch_item" ? "Punch Item" : "Observation"} to Procore`);
     setStep("sending");
     try {
       const made = await sendRecord(project, {

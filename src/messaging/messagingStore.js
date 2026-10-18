@@ -6,6 +6,7 @@
 // Storage: messages/{key}/{cid}/{mid}/photo-{n}.{ext} and voice.{ext}.
 // Sending is offline-first, like stops: a message is saved on this phone (IndexedDB, with its photos and
 // voice note) and uploaded when there's signal; files first, then the Firestore docs.
+import { demoMode } from "./demoMode";
 import {
   collection, doc, getDoc, limit, onSnapshot, orderBy, query, setDoc, updateDoc, where, arrayUnion, writeBatch,
 } from "firebase/firestore";
@@ -176,6 +177,7 @@ export async function pendingMessages() {
  * status: a quick reply { code, label, reason?, newDate? } | null (on its own, it's a one-tap answer).
  */
 export async function queueMessage({ key, cid, mid = newId(), me, newConversation = null, text = "", transcript = "", transcriptDone = false, photos = [], voice = null, aiDescription = null, status = null }) {
+  if (demoMode()) throw new Error("This is a view-only demo."); // never queued or sent (demoMode.js)
   const entry = {
     key, cid, mid, me, newConversation, text, transcript, transcriptDone, aiDescription, status,
     photos: photos.map((p, i) => ({ blob: p.blob, path: p.path ?? photoPathFor(key, cid, mid, i + 1, p.blob.type), uploaded: !!p.path })),
@@ -191,6 +193,7 @@ export async function queueMessage({ key, cid, mid = newId(), me, newConversatio
 
 let syncing = null;
 export function syncMessages() {
+  if (demoMode()) return Promise.resolve();
   if (!syncing) syncing = run().finally(() => { syncing = null; });
   return syncing;
 }

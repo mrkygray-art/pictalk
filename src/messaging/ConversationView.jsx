@@ -122,7 +122,7 @@ function Tracking({ conv }) {
 
 export default function ConversationView({ session, projectKey, cid, pending, onBack }) {
   const { me } = session;
-  const { demo } = useDemo();
+  const { demo, explain } = useDemo();
   const guard = useDemoGuard();
   const [conv, setConv] = useState(undefined);
   const [messages, setMessages] = useState([]);
@@ -214,6 +214,7 @@ export default function ConversationView({ session, projectKey, cid, pending, on
           projectName={session.project.name} selected={more} onChange={setMore} alreadyTagged={[...(conv.taggedIds ?? []), ...(conv.ccIds ?? [])]}
           doneLabel="Add to Message" allowCc
           onDone={async () => {
+            if (demo) return explain("Adding people to the message");
             try { await addPeople(projectKey, conv, more); } catch { setError("Couldn't add them. Check your signal."); }
             setMore([]);
             setAdding(false);
@@ -247,7 +248,7 @@ export default function ConversationView({ session, projectKey, cid, pending, on
         <p>To: <strong>{tagged.length ? namesLine(tagged, 6) : "no one yet"}</strong></p>
         {ccOf(conv).length > 0 && <p>CC: <strong>{namesLine(ccOf(conv), 6)}</strong></p>}
         {conv && <Tracking conv={conv} />}
-        {conv && !closed && <button type="button" className="stop-more" onClick={guard("Adding people to a message", () => setAdding(true))}>Add People</button>}
+        {conv && !closed && <button type="button" className="stop-more" onClick={() => setAdding(true)}>Add People</button>}
       </div>
       {error && <p className="error" role="alert">{error}</p>}
 
@@ -272,7 +273,7 @@ export default function ConversationView({ session, projectKey, cid, pending, on
         <>
           {sentToMe && <QuickReplyBar onPick={pick} />}
           {sent && <p className="msg-status" role="status">{sent}</p>}
-          <button type="button" className="save-btn msg-reply-btn" onClick={guard("Replying", () => setReplying(true))}>Reply</button>
+          <button type="button" className="save-btn msg-reply-btn" onClick={() => setReplying(true)}>Reply</button>
         </>
       )}
       {conv && !closed && replying && (

@@ -3,12 +3,14 @@ import { MicIcon, StopIcon } from "./icons";
 import { formatTime, useRecorder } from "./useRecorder";
 import { transcribeVoice, uploadFile } from "./messagingStore";
 import { loadAlbums, dayOf } from "./photosStore";
+import { useDemo } from "./demo";
 import { lastSavedPhoto, onPhotoQueueChange, pendingPhotos, queuePhoto, retryPhoto, voicePathForPhoto } from "./photoQueue";
 
 // Snap (docs/sitesnap-project-home-and-photos-spec.md 2.2): the photo is already taken (the Snap button opens the
 // camera straight away). Optional voice note or typed words, the album (that day's "Field photos" album unless
 // another is picked), Save Photo. The photo is kept on the phone until Procore has it.
 export default function SnapFlow({ session, photo, timeZone, onSnapAnother, onDone }) {
+  const { demo, explain } = useDemo();
   const { project, me } = session;
   const key = `${project.companyId}_${project.projectId}`;
   const [captureId] = useState(() => crypto.randomUUID());
@@ -72,6 +74,7 @@ export default function SnapFlow({ session, photo, timeZone, onSnapAnother, onDo
 
   const save = async () => {
     setError("");
+    if (demo) return explain("Saving this photo to Procore's Photos tool");
     setStage("saving");
     try {
       await queuePhoto({

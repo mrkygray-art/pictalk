@@ -59,7 +59,7 @@ exports.classifyCapture = onCall(
   piccoloCallable({ region: "us-west2", secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 60, memory: "512MiB" }),
   async (request) => {
     const { key, transcript, context } = request.data ?? {};
-    await requireMember(request, key);
+    await requireMember(request, key, { demoAi: true }); // the guest demo may Fill It In (limited)
     const words = String(transcript ?? "").slice(0, 8000);
     if (!words.trim()) throw new HttpsError("invalid-argument", "Say or type what you see first.");
     return classify(words, cleanContext(context));

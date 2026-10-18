@@ -9,6 +9,7 @@ import {
   describePhoto, newId, photoPathFor, queueMessage, splitRecipients, transcribeVoice, uploadFile, voicePathFor,
 } from "./messagingStore";
 import { autoFilePhotos } from "./photoQueue";
+import { useDemo } from "./demo";
 
 const MAX_PHOTOS = 10;
 
@@ -17,6 +18,7 @@ const MAX_PHOTOS = 10;
 // person (new) and a quick reply, a photo, a voice note, or words. Words for a voice note and the AI photo description come first when
 // there's signal; neither ever blocks sending (with no signal, the server writes the words down later).
 export default function Composer({ mode = "new", session, conversation = null, onSent, onCancel, quickReplies = false }) {
+  const { demo, explain } = useDemo();
   const { project, me, dir, dirError, loadingDir, refreshDirectory } = session;
   const key = `${project.companyId}_${project.projectId}`;
   const ids = useRef({ cid: conversation?.id ?? newId(), mid: newId() });
@@ -82,6 +84,7 @@ export default function Composer({ mode = "new", session, conversation = null, o
   const describe = async () => {
     const first = photos[0];
     if (!first) return;
+    if (demo) return explain("Describing a photo with AI");
     setDesc({ status: "working", text: "" });
     try {
       const path = first.path ?? await uploadFile(photoPathFor(key, ids.current.cid, ids.current.mid, 1, first.blob.type), first.blob);
@@ -99,6 +102,7 @@ export default function Composer({ mode = "new", session, conversation = null, o
     if (mode === "new" && !tagged.length) return setError(cc.length ? "Pick at least one person as To (CC alone isn't enough). Tap To: to change it." : "Tag at least one person first. Tap To: to pick who it's for.");
     if (!hasContent) return setError(quickReplies ? "Tap a quick reply, or add a photo, a voice note, or a few words." : "Add a photo, a voice note, or a few words.");
     if (recorder.recording) return setError("Stop the recording first.");
+    if (demo) return explain(mode === "new" ? "Sending a message" : "Sending a reply");
     setSending(true);
     try {
       await queueMessage({

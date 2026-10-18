@@ -12,6 +12,7 @@ import {
 } from "./inspectionStore";
 import { voiceCommand } from "./inspectionVoice";
 import { useDemo, useDemoGuard } from "./demo";
+import { demoMode } from "./demoMode";
 
 // Inspections (sitesnap-inspections-spec.md): run a Procore inspection one question at a time, by voice and photo.
 // Screens: list (A) -> sections (A2) -> item (B) -> fail (C, a failed item becomes an Observation) -> finish (D).
@@ -223,6 +224,7 @@ function SyncLine({ sync, offline, runKey }) {
       </div>
     );
   }
+  if (demoMode()) return <p className="insp-saved">Demo: your answers stay on this phone</p>;
   return <p className={`insp-saved${sync.waiting ? " is-waiting" : ""}`}>{sync.waiting ? `Not synced yet · ${sync.waiting} waiting${navigator.onLine ? "" : " for signal"}` : offline ? "Saved on this phone · no signal" : "Saved"}</p>;
 }
 
@@ -235,7 +237,6 @@ function withNumbers(sync, view) {
 // ---------- Screen A2: sections ----------
 
 function SectionOverview({ run, runKey, view, sync, offline, onBack, onItem, onFinish, setToast }) {
-  const guard = useDemoGuard();
   const [askNa, setAskNa] = useState(null); // a section to confirm
   const [showDetails, setShowDetails] = useState(false);
   const insp = run.snapshot;
@@ -269,7 +270,7 @@ function SectionOverview({ run, runKey, view, sync, offline, onBack, onItem, onF
                 </span>
               )}
             </button>
-            <button type="button" className="insp-na-btn" onClick={guard("Setting a section N/A", () => setAskNa(s))}>
+            <button type="button" className="insp-na-btn" onClick={() => setAskNa(s)}>
               {s.na ? "Undo N/A" : "Set N/A"}
             </button>
           </li>
@@ -334,9 +335,6 @@ function ItemScreen({ session, run, runKey, view, sync, offline, itemId, onGo, o
   const [error, setError] = useState("");
   const fileInput = useRef(null);
   const insp = run.snapshot;
-  const { demo, explain } = useDemo();
-  const guard = useDemoGuard();
-
   const { recorder, state: voiceState } = useVoice(key, (words) => {
     const cmd = voiceCommand(words);
     if (cmd?.section) return setAskNa(true);
@@ -359,7 +357,6 @@ function ItemScreen({ session, run, runKey, view, sync, offline, itemId, onGo, o
   const hasPhoto = photoCount > 0 || photos.length > 0;
 
   async function answer(a) {
-    if (demo) return explain(`Answering item ${item.number} in Procore`);
     setError("");
     const counts = a.counts ?? (item.kind === "passfail" || item.kind === "choice" ? null : "neutral");
     if (counts !== "fail" && counts !== "na") {
@@ -390,7 +387,7 @@ function ItemScreen({ session, run, runKey, view, sync, offline, itemId, onGo, o
     <section className="insp insp-item" aria-label={`Item ${item.number}`}>
       <div className="insp-top">
         <button type="button" className="link-btn" onClick={() => (prev ? onGo(prev) : onExit())} aria-label={prev ? `Back to item ${prev.number}` : "Back to sections"}><BackIcon /> {prev ? prev.number : "Sections"}</button>
-        <button type="button" className="text-btn inline" onClick={async () => { if (notePending && !demo) await saveNote(runKey, item, note); onExit(); }}>{demo ? "Exit" : "Save and Exit"}</button>
+        <button type="button" className="text-btn inline" onClick={async () => { if (notePending) await saveNote(runKey, item, note); onExit(); }}>Save and Exit</button>
       </div>
       <p className="insp-where">{item.section.name}, {item.section.items.findIndex((x) => x.id === item.id) + 1} of {item.section.items.length}</p>
       <h2 className="insp-title">{insp.title}</h2>
@@ -438,10 +435,10 @@ function ItemScreen({ session, run, runKey, view, sync, offline, itemId, onGo, o
       )}
 
       <div className="insp-tools">
-        <button type="button" className={`insp-tool${recorder.recording ? " is-recording" : ""}`} onClick={guard("Answering by voice", recorder.toggle)} aria-pressed={recorder.recording}>
+        <button type="button" className={`insp-tool${recorder.recording ? " is-recording" : ""}`} onClick={recorder.toggle} aria-pressed={recorder.recording}>
           {recorder.recording ? <StopIcon /> : <MicIcon />}{recorder.recording ? `Stop ${formatTime(recorder.seconds)}` : "Speak"}
         </button>
-        <button type="button" className="insp-tool" onClick={() => (demo ? explain("Adding a photo to the item") : fileInput.current.click())}><CameraIcon />Photo{photoCount ? ` · ${photoCount}` : ""}</button>
+        <button type="button" className="insp-tool" onClick={() => fileInput.current.click()}><CameraIcon />Photo{photoCount ? ` · ${photoCount}` : ""}</button>
         <input ref={fileInput} type="file" accept="image/*" capture="environment" hidden onChange={addPhoto} />
       </div>
       <p className="insp-help">{voiceState === "working" ? "Writing it down…" : voiceState === "failed" ? "Couldn't write that down. Try again or type it." : voiceState === "offline" ? "No signal: tap the buttons or type a note." : item.kind === "passfail" ? "Say pass, fail, or add a note" : "Say a note, or tap an answer"}</p>
@@ -453,7 +450,7 @@ function ItemScreen({ session, run, runKey, view, sync, offline, itemId, onGo, o
           {run.notes[item.id]?.notInProcore && <small className="msg-status">Procore didn't take notes on this item. It's kept in SiteSnap and goes into an Observation if the item fails.</small>}
         </label>
       ) : (
-        <button type="button" className="text-btn" onClick={guard("Adding a note to the item", () => setNoteOpen(true))}>Type a note</button>
+        <button type="button" className="text-btn" onClick={() => setNoteOpen(true)}>Type a note</button>
       )}
       {error && <p className="error" role="alert">{error}</p>}
       {askNa && (
@@ -487,6 +484,7 @@ function FailScreen({ session, run, runKey, view, itemId, startPhotos, startWord
   const key = `${project.companyId}_${project.projectId}`;
   const item = view.all.find((it) => it.id === itemId);
   const insp = run.snapshot;
+  const { demo, explain } = useDemo();
   const [photos, setPhotos] = useState(() => startPhotos.map((blob) => ({ blob, url: URL.createObjectURL(blob) })));
   const [words, setWords] = useState(startWords);
   const [who, setWho] = useState([]); // people from the project directory
@@ -514,6 +512,12 @@ function FailScreen({ session, run, runKey, view, itemId, startPhotos, startWord
 
   const create = async () => {
     setError("");
+    if (demo) {
+      // The note, then the item counts as Fail on this phone so the walk goes on
+      explain("Creating this Observation in Procore");
+      await saveAnswer(runKey, item, { counts: "fail" });
+      return onDone(`${item.number} Fail (kept on this phone in the demo)`);
+    }
     setBusy(true);
     const said = words.trim();
     const story = [`Failed: ${item.text}`, said].filter(Boolean).join(". ");

@@ -1,7 +1,8 @@
 // SiteSnap guest demo (docs/guest-demo.md) at phone width, against the emulators, with /api/procore/* mocked in
 // the browser (the dev server has no /api). The visitor arrives at /?demo=1 (where /demo redirects) already
-// signed in as the guest: picker first, the banner on every screen, the view-only note instead of writes, and
-// Exit demo back to the sign-in screen with "Explore as a guest".
+// signed in as the guest: picker first, the banner on every screen, every feature usable up to its send button
+// (Report an issue through Fill It In; New Message and Reply through Send), the view-only note at the send, nothing
+// sent, and Exit demo back to the sign-in screen with "Explore as a guest".
 // Needs: npm run emulators, and npx vite --port 5178. Screenshots: e2e/demo-shots/.
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
@@ -65,6 +66,8 @@ const PEOPLE = [
     }
     if (u.pathname === "/api/procore/directory") return json(200, { people: PEOPLE, canTag: false, labels: [], compact: false, rolesAvailable: true });
     if (u.pathname === "/api/procore/photos") return json(200, { albums: [], photos: [], nextPage: null, timeZone: "America/Los_Angeles" });
+    if (u.pathname === "/api/procore/record-options") return json(200, { observationTypes: [{ id: 5, name: "Deficiency", category: "quality" }, { id: 6, name: "Safety", category: "safety" }], trades: [], locations: [], canObservations: true, tradesReadable: true });
+    if (u.pathname === "/api/procore/access") return json(200, { people: [], levelsKnown: false, levelsAt: null, observationList: true });
     return json(404, { error: "not_found" });
   });
   const shot = (n) => page.screenshot({ path: path.join(OUT, `${n}.png`) });
@@ -89,23 +92,50 @@ const PEOPLE = [
   check("home: no phone-alert switch in the demo", !/alert/i.test(t.split("Project photos")[1] ?? ""));
   await shot("2-home");
 
+  // Report an issue: the whole flow, then the note at Send to Procore
   await click("::-p-text(Report an issue)");
+  await page.waitForSelector('textarea[placeholder="Or type it here"]', { timeout: 15000 });
+  check("Report an issue opens the real capture screen", !(await text()).includes("This is a view-only demo"));
+  await page.type('textarea[placeholder="Or type it here"]', "Exposed wires at the panel in room 204, needs a cover before Friday");
+  await click("::-p-text(Fill It In)");
+  await waitText("Send to Procore", 40000);
+  check("Fill It In works in the demo (a card to check)", (await text()).includes("Send to Procore"));
+  await shot("3-report-card");
+  await click("::-p-text(Send to Procore)");
   t = await sheetSays();
-  check("Report an issue shows the view-only note", t.includes("Reporting an issue") && t.includes("nothing is sent to Procore"));
-  await shot("3-report-note").catch(() => {});
+  check("Send to Procore shows the view-only note", /Sending this (Observation|Punch Item) to Procore/.test(t) && t.includes("nothing is sent to Procore"));
+  const usage = await getFirestore().collection("sitesnapDemo/aiUsage/days").get();
+  check("the demo AI step was counted against the daily limit", usage.docs.some((d) => (d.get("count") ?? 0) >= 1));
+  await click("::-p-text(Home)").catch(() => {});
+  await click("::-p-text(Cancel)").catch(() => {});
+  await page.goto(`${APP}?companyId=${COMPANY}&projectId=${PROJECTS[0].projectId}`, { waitUntil: "networkidle2" });
+  await waitText("Report an issue");
 
   await click("::-p-text(Message)");
   await waitText("Panel L2 cover");
   check("feed: the demo thread is readable", (await text()).includes("Panel L2 cover"));
   await click("::-p-text(New Message)");
-  check("New Message shows the view-only note", (await sheetSays()).includes("Sending a new message"));
+  await waitText("Tyler Brandt");
+  await click("::-p-text(Tyler Brandt)");
+  await click("::-p-text(Done)").catch(() => {});
+  await page.waitForSelector('textarea[placeholder="Type a message"]', { timeout: 15000 });
+  await page.type('textarea[placeholder="Type a message"]', "Can you send the panel schedule?");
+  await click(".msg-send");
+  check("New Message: Send shows the view-only note", (await sheetSays()).includes("Sending a message"));
+  await click("::-p-text(Cancel)").catch(() => {});
+  await waitText("Panel L2 cover");
   await click("::-p-text(Panel L2 cover)");
   await waitText("Please put it back");
   await shot("4-thread");
   await click(".msg-reply-btn");
+  await page.waitForSelector('textarea[placeholder="Type a message"]', { timeout: 15000 });
+  await page.type('textarea[placeholder="Type a message"]', "On my way to check it.");
+  await click(".msg-send");
   await waitText("This is a view-only demo");
   await shot("5-reply-note");
-  check("Reply shows the view-only note", (await sheetSays()).includes("Replying"));
+  check("Reply: Send shows the view-only note", (await sheetSays()).includes("Sending a reply"));
+  const msgs = await getFirestore().collection(`procoreProjects/${KEY}/conversations/demo-t1/messages`).get();
+  check("nothing was posted to the thread", msgs.size === 1);
   const reads = await getFirestore().collection(`procoreProjects/${KEY}/members/${GUEST}/reads`).get();
   check("no read marks written for the guest", reads.empty);
 

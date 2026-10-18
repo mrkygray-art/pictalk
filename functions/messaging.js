@@ -33,16 +33,43 @@ const fake = () => process.env.FUNCTIONS_EMULATOR === "true" && process.env.PICT
 const KEY_RE = /^\d{1,20}_\d{1,20}$/;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
-/** The caller's Procore id, and that they're a member of the project; else throws. */
-async function requireMember(request, key) {
+/**
+ * The caller's Procore id, and that they're a member of the project; else throws.
+ * The guest demo (docs/guest-demo.md, claim demo: true) only gets the AI steps before a send (opts.demoAi:
+ * writing down a voice note, Fill It In, Organize), within reserveDemoAi's limits; everything else is refused.
+ */
+async function requireMember(request, key, { demoAi = false } = {}) {
   const pid = request.auth?.token?.procoreUserId;
   if (!pid) throw new HttpsError("unauthenticated", "Sign in with Procore first.");
-  // The guest demo (docs/guest-demo.md) is view only: no AI, transcription or task changes on its behalf
-  if (request.auth.token.demo === true) throw new HttpsError("permission-denied", "This is a view-only demo.");
+  const demo = request.auth.token.demo === true;
+  if (demo && !demoAi) throw new HttpsError("permission-denied", "This is a view-only demo.");
   if (!KEY_RE.test(String(key ?? ""))) throw new HttpsError("invalid-argument", "Unknown project.");
   const member = await db().doc(`procoreProjects/${key}/members/${pid}`).get();
   if (!member.exists) throw new HttpsError("permission-denied", "You're not on this Procore project.");
+  if (demo) await reserveDemoAi(request);
   return String(pid);
+}
+
+// Guest demo AI limits (Ky, 2026-10-17): DEMO_AI_DAILY a day for all demo visitors together (Pacific days), and
+// DEMO_AI_HOURLY an hour per visitor (hashed IP address; every visitor shares the guest's sign-in). Server only.
+const DEMO_AI_DAILY = 50;
+const DEMO_AI_HOURLY = 15;
+async function reserveDemoAi(request) {
+  const ip = String(request.rawRequest?.headers?.["x-forwarded-for"] ?? request.rawRequest?.ip ?? "unknown").split(",")[0].trim();
+  const who = require("node:crypto").createHash("sha256").update(`sitesnap-demo|${ip}`).digest("hex").slice(0, 32);
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
+  const hour = Math.floor(Date.now() / 3_600_000);
+  const dayRef = db().doc(`sitesnapDemo/aiUsage/days/${day}`);
+  const whoRef = db().doc(`sitesnapDemo/aiUsage/visitors/${who}`);
+  await db().runTransaction(async (tx) => {
+    const [d, w] = [await tx.get(dayRef), await tx.get(whoRef)];
+    const used = d.get("count") ?? 0;
+    const mine = w.get("hour") === hour ? (w.get("count") ?? 0) : 0;
+    if (used >= DEMO_AI_DAILY) throw new HttpsError("resource-exhausted", "The demo's AI has done its share for today. Type the words instead, or try again tomorrow.");
+    if (mine >= DEMO_AI_HOURLY) throw new HttpsError("resource-exhausted", "That's a lot of demo AI for one hour. Type the words instead, or try again later.");
+    tx.set(dayRef, { count: used + 1 }, { merge: true });
+    tx.set(whoRef, { hour, count: mine + 1 });
+  });
 }
 
 // The typed words and what was said; once only when they say the same thing (a report's description often does)
@@ -308,16 +335,20 @@ exports.transcribeMessageVoice = onCall(
   piccoloCallable({ region: REGION, secrets: [DEEPGRAM_API_KEY], timeoutSeconds: 120, memory: "512MiB" }),
   async (request) => {
     const { key, path, type } = request.data ?? {};
-    await requireMember(request, key);
     if (typeof path !== "string" || !path.startsWith(`messages/${key}/`) || !/\/voice\.[a-z0-9]{2,5}$/.test(path)) {
       throw new HttpsError("invalid-argument", "Unknown voice note.");
     }
+    await requireMember(request, key, { demoAi: true });
+    const demo = request.auth?.token?.demo === true;
     try {
       const out = await transcribeAt(path, typeof type === "string" ? type : undefined);
       return { text: out.text };
     } catch (err) {
       logger.error("Composer transcription failed", { key, error: err.message });
       throw new HttpsError("unavailable", "Couldn't write down the voice note. You can still send it.");
+    } finally {
+      // A demo visitor's recording is never sent anywhere, so it isn't kept
+      if (demo) await getStorage().bucket().file(path).delete().catch(() => {});
     }
   },
 );

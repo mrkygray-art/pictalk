@@ -132,10 +132,11 @@ test("message files: members of that project upload and read photos and voice no
   await assertFails(uploadBytes(ref(st("104"), `messages/${KEY}/c1/m9/photo-1.jpg`), new Uint8Array([1]), { contentType: "image/jpeg" }));
   await assertFails(uploadBytes(ref(st("102"), `messages/${KEY}/c1/m9/photo-1.jpg`), new Uint8Array([1]), { contentType: "text/html" }), "photos must be images");
   await assertFails(uploadBytes(ref(st("102"), `messages/${KEY}/c1/m9/notes.txt`), new Uint8Array([1]), { contentType: "text/plain" }), "only photo-* and voice.*");
-  // The guest demo (claim demo: true) reads the files but uploads nothing
+  // The guest demo (claim demo: true) reads the files and may upload a voice note to have it written down; no photos
   const demoSt = senv.authenticatedContext("procore_103", { procoreUserId: "103", demo: true }).storage();
   await assertSucceeds(getBytes(ref(demoSt, photo)));
-  await assertFails(uploadBytes(ref(demoSt, `messages/${KEY}/c1/m8/photo-1.jpg`), new Uint8Array([1]), { contentType: "image/jpeg" }), "demo is view only");
+  await assertSucceeds(uploadBytes(ref(demoSt, `messages/${KEY}/c1/m8/voice.webm`), new Uint8Array([1]), { contentType: "audio/webm" }));
+  await assertFails(uploadBytes(ref(demoSt, `messages/${KEY}/c1/m8/photo-1.jpg`), new Uint8Array([1]), { contentType: "image/jpeg" }), "no demo photos");
   await senv.cleanup();
 });
 

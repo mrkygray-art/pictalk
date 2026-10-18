@@ -17,6 +17,7 @@ import { startPhotoSync } from "./photoQueue";
 import { BackIcon } from "./icons";
 import { readBeta } from "./beta";
 import { DemoContext } from "./demo";
+import { setDemoMode } from "./demoMode";
 import { DemoBanner, DemoSheet } from "./DemoBanner";
 import { isUnread, onQueueChange, pendingMessages, startMessageSync, watchFeed, watchReads } from "./messagingStore";
 
@@ -24,7 +25,8 @@ import { isUnread, onQueueChange, pendingMessages, startMessageSync, watchFeed, 
 // Procore, pick a project, and land on the project home: Report an issue, Message (the conversation feed;
 // New Message: tag people, take photos, talk, send) and Project photos (Procore's Photos tool). The old job / stop screens are kept in the code behind VITE_FEATURE_JOBS=1 (src/features.js).
 // Guest demo (/demo, docs/guest-demo.md): the visitor arrives at /?demo=1 signed in as the view-only guest, sees the
-// project picker first, a "Demo mode: view only" banner on every screen, and a friendly note for anything that writes.
+// project picker first, a "Demo mode: view only" banner on every screen. Every feature works up to its send button
+// (photos, voice notes written down, Fill It In, Organize, inspection answers on the phone); the send shows a note.
 const RESULT = { denied: "Procore sign-in was cancelled.", error: "Procore sign-in didn't work. Try again." };
 
 export default function MessagingApp() {
@@ -47,6 +49,7 @@ export default function MessagingApp() {
   const [explaining, setExplaining] = useState(""); // what a demo visitor tried to do
   const key = project ? `${project.companyId}_${project.projectId}` : null;
   const { demo } = session;
+  setDemoMode(demo); // the background senders never send in the demo (demoMode.js)
   const explain = (what) => setExplaining(what);
 
   useEffect(() => (signedIn ? startMessageSync() : undefined), [signedIn]);
@@ -166,7 +169,7 @@ export default function MessagingApp() {
         <>
           <ProjectHome
             unread={forMe.filter((c) => isUnread(c, me.procoreUserId, reads)).length}
-            onReport={() => (demo ? explain("Reporting an issue (a photo and voice note that becomes a Procore Observation or Punch Item)") : setView({ name: "report" }))}
+            onReport={() => setView({ name: "report" })}
             onMessages={() => setView({ name: "feed" })}
             onInspections={() => setView({ name: "inspections" })}
             onPhotos={() => setView({ name: "photos" })}
@@ -186,7 +189,7 @@ export default function MessagingApp() {
           <div className="msg-title-row">
             <h2 className="page-title">Messages</h2>
           </div>
-          <button type="button" className="big-btn photo-btn msg-new" onClick={() => (demo ? explain("Sending a new message") : setView({ name: "compose" }))}>New Message</button>
+          <button type="button" className="big-btn photo-btn msg-new" onClick={() => setView({ name: "compose" })}>New Message</button>
           <p className="msg-new-hint">Stays in SiteSnap. Nothing goes to Procore.</p>
           <Feed projectKey={key} me={me.procoreUserId} reads={reads} pending={pending} onOpen={(cid) => setView({ name: "conversation", cid })} />
           <p className="msg-footnote">Only people on this Procore project can see its messages. Everyone on a message can see when it was sent, seen and answered.</p>

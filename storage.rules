@@ -58,8 +58,9 @@ service firebase.storage {
     }
     match /messages/{key}/{conversationId}/{messageId}/{file} {
       allow read: if procoreMember(key);
-      // the guest demo (token claim demo: true, docs/guest-demo.md) is view only
-      allow create: if procoreMember(key) && request.auth.token.get('demo', false) != true
+      // the guest demo (token claim demo: true, docs/guest-demo.md) may only upload a voice note to have it written
+      // down (the function deletes it right after); no photos
+      allow create: if procoreMember(key) && (request.auth.token.get('demo', false) != true || file.matches('voice[.].*'))
         && ((file.matches('photo-.*') && request.resource.size < 15 * 1024 * 1024 && request.resource.contentType.matches('image/.*'))
             || (file.matches('voice[.].*') && request.resource.size < 20 * 1024 * 1024 && request.resource.contentType.matches('audio/.*')));
     }

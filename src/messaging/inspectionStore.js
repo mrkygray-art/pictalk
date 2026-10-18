@@ -5,6 +5,7 @@
 // One record per inspection: sitesnap-inspection-run:{companyId}_{projectId}:{listId}
 //   { snapshot (the last read, so it opens without signal), myId, local {itemId: answer}, notes {itemId: {text, saved}},
 //     sectionNa {sectionId: na}, observations {itemId: {id, number, url} | {skipped} | {queued}}, photos {itemId: n}, ops [] }
+import { demoMode } from "./demoMode";
 import { del, get, keys, set } from "idb-keyval";
 import { shrinkPhoto } from "./recordStore";
 
@@ -227,7 +228,7 @@ function applyResult(run, op, out) {
 
 /** Send what's waiting, oldest first, one inspection at a time; an inspection stops at the first op that has to wait. */
 export async function syncInspections({ now = false } = {}) {
-  if (running) return;
+  if (running || demoMode()) return; // the guest demo keeps answers on the phone
   running = true;
   try {
     const runKeys = (await keys()).filter((k) => String(k).startsWith(PREFIX));

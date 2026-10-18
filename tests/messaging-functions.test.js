@@ -170,7 +170,27 @@ test("a Closed line updates the card and flags no tasks", async () => {
   assert.equal((await conv("/messages/e1").get()).data().tasksStatus, undefined, "nothing flagged");
 });
 
-test("guest demo: the callables (AI, transcription, to-dos) refuse a demo sign-in before reading anything", async () => {
+test("guest demo: callables refuse a demo sign-in unless they're an AI step before a send", async () => {
   const { requireMember } = fnRequire("./messaging.js");
   await assert.rejects(requireMember({ auth: { uid: "procore_777", token: { procoreUserId: "777", demo: true } } }, "4291776_373235"), (e) => e.code === "permission-denied" && /view-only demo/.test(e.message));
+});
+
+test("guest demo: AI steps are limited to 50 a day for all demo visitors and 15 an hour per visitor", async () => {
+  const { requireMember } = fnRequire("./messaging.js");
+  const key = `88${Date.now() % 100000}_1`;
+  const ip = `10.0.${Date.now() % 250}.1`;
+  await db().doc(`procoreProjects/${key}/members/778`).set({ procoreUserId: "778", name: "Guest", at: 1 });
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
+  const dayRef = db().doc(`sitesnapDemo/aiUsage/days/${day}`);
+  const req = (ip) => ({ auth: { uid: "procore_778", token: { procoreUserId: "778", demo: true } }, rawRequest: { headers: { "x-forwarded-for": ip } } });
+  await dayRef.set({ count: 0 });
+  assert.equal(await requireMember(req(ip), key, { demoAi: true }), "778");
+  assert.equal((await dayRef.get()).get("count"), 1);
+  // one visitor: 15 an hour
+  for (let i = 1; i < 15; i++) await requireMember(req(ip), key, { demoAi: true });
+  await assert.rejects(requireMember(req(ip), key, { demoAi: true }), (e) => e.code === "resource-exhausted");
+  // everyone together: 50 a day
+  await dayRef.set({ count: 50 });
+  await assert.rejects(requireMember(req(`10.1.9.2`), key, { demoAi: true }), (e) => e.code === "resource-exhausted" && /today/.test(e.message));
+  await dayRef.set({ count: 0 });
 });

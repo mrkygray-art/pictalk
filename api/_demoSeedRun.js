@@ -151,11 +151,11 @@ export async function runTask(ctx, taskId) {
 
 const RUN = {
   // The project: found by its exact name in the company, else made
-  async project(ctx, t, made) {
+  async project(ctx, t, made, note) {
     const name = PROJECTS[t.project].name;
     if (made.projectId) {
       const r = await ctx.call("GET", `/rest/v1.0/projects/${made.projectId}`, { query: { company_id: ctx.companyId } });
-      if (r.ok && lower(r.json?.name) === lower(name)) return toolsCheck(ctx, made);
+      if (r.ok && lower(r.json?.name) === lower(name)) return toolsCheck(ctx, made, note);
     }
     const list = (await pages(ctx.req, ctx.res, ctx.cfg, "/rest/v1.0/projects", { companyId: ctx.companyId, query: { company_id: ctx.companyId }, retry429: false })) ?? [];
     const hit = list.find((p) => lower(p.name) === lower(name));
@@ -166,7 +166,7 @@ const RUN = {
       made.projectId = String(r.json.id);
       made.created = true;
     }
-    return toolsCheck(ctx, made);
+    return toolsCheck(ctx, made, note);
   },
 
   // Trades for the punch list: only the ones missing; refused = trades just stay in the description
@@ -306,11 +306,13 @@ const RUN = {
 };
 
 // Which of the required tools are on (Procore's permission manifest lists only the tools on for the project)
-async function toolsCheck(ctx, made) {
+async function toolsCheck(ctx, made, note) {
+  note(`Procore project ${made.projectId}${made.created ? " (made by this page)" : ""}.`);
   const r = await ctx.call("GET", "/rest/v1.0/settings/permissions", { query: { project_id: made.projectId } });
-  if (!r.ok) { made.tools = null; return "done"; }
+  if (!r.ok) { made.toolsOff = null; note(`Couldn't read which tools are on (${said(r)}).`); return "done"; }
   const on = new Set((r.json?.tools ?? []).map((x) => lower(x.name)));
   made.toolsOff = Object.entries(REQUIRED_TOOLS).filter(([k]) => !on.has(k)).map(([, label]) => label);
+  if (made.toolsOff.length) note(`Tools off: ${made.toolsOff.join(", ")}. Turn them on in Procore (the project's Admin tool, Active Tools); nothing else runs in this project until then.`);
   return made.toolsOff.length ? "partial" : "done";
 }
 

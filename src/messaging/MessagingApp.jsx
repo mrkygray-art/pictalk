@@ -6,6 +6,7 @@ import ConversationView from "./ConversationView";
 import Composer from "./Composer";
 import ReportFlow from "./ReportFlow";
 import ReportPicker from "./ReportPicker";
+import MyItems from "./MyItems";
 import { isNew, pickerRows, showMyItems, useCapabilities } from "./capabilities";
 import { useHomeBadges } from "./homeBadges";
 import AccessList from "./AccessList";
@@ -217,13 +218,7 @@ export default function MessagingApp() {
           onPick={(row) => setView({ name: "report", type: row.id, via: row.via })}
         />
       )}
-      {view.name === "myitems" && (
-        <section className="rp">
-          <button type="button" className="link-btn msg-home-back" onClick={() => setView({ name: "home" })}><BackIcon /> Home</button>
-          <h2 className="page-title">My items</h2>
-          <p className="rp-empty">Coming next: Observations and Punch Items assigned to you, with voice close-out.</p>
-        </section>
-      )}
+      {view.name === "myitems" && <MyItems key={key} session={session} onBack={() => setView({ name: "home" })} onOpenThread={(cid) => setView({ name: "conversation", cid })} />}
       {view.name === "report" && (
         <ReportFlow session={session} onClose={() => setView({ name: "home" })} onOpenThread={(cid) => setView({ name: "conversation", cid })} />
       )}

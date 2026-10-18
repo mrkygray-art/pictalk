@@ -20,6 +20,28 @@ Spec: `sitesnap-report-picker-my-items-spec.md` (Ky, 2026-10-17). Branch `featur
   are left out; if none is left, a plain "Ask your project admin" line. Guest demo: every built row shows.
 - **My items** tile: hidden only when Procore refuses both Observations and Punch List; opens a placeholder.
 
+## Done: build step 3, My items (branch only)
+
+- `GET /api/procore/my-items` (`api/procore/my-items.js`, plain functions in `api/_myItems.js`): Observations with
+  `filters[assignee_id][]=me`, Punch Items with `filters[status]=open` (no assignee filter is documented), up to 5
+  pages of 100 each; every row is also checked as "assigned to me" on our side, so an ignored filter never shows
+  other people's items. Grouped Overdue (due before the project's today) / Open / Ready for review, due date first,
+  closed left out. One tool refused = the other's items, no error; both refused = plain "Ask your project admin".
+  `&type=&id=` = one item for the detail (description, image attachments, who assigned it).
+- Badge: `{ open, overdue }` from the same answer (`myItemsStore.js`, 60 s), red only when overdue > 0.
+- Phone: `MyItems.jsx` (list, detail, Mark fixed). **Mark fixed reuses the existing close-out**: the same Composer
+  (photo, Tap to Talk, note) with the Done quick reply already picked, then the same Procore change as Done in a
+  thread (Ready for review). Item with a SiteSnap thread: reply there, then `record-status` with the cid. No thread:
+  a new thread that follows the record (`procore` link, nobody on To, whoever assigned it on CC, so no to-dos are
+  made), then `record-status` by record id (new: `{ recordType, recordId, action: "done" }`, done only). After
+  that, the list and badge read Procore again. Guest demo: everything up to Send, where Composer shows the note.
+- Composer gained three optional props (`initialStatus`, `initialPicked`, `procoreLink`); everything else unchanged.
+- Check page: `/api/procore/test-my-items` (sandbox only): filtered vs unfiltered counts, first-row field names,
+  assignee / assignment shapes, attachment fields.
+
+Not confirmed in the sandbox yet: the Observation `assignee_id` filter, Punch Item `assignees` / `assignments`
+field names, attachment fields on a full read (photo hosts must be *.procore.com for the photo proxy).
+
 ## Sandbox results
 
 **2026-10-17, Edward (admin), 4 projects (HP 373715, WG 373716, LV 373717, sandbox test 373212):**

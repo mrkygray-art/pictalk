@@ -17,14 +17,16 @@ const MAX_PHOTOS = 10;
 // a quick reply and / or the same capture tools under a conversation). Send needs at least one tagged
 // person (new) and a quick reply, a photo, a voice note, or words. Words for a voice note and the AI photo description come first when
 // there's signal; neither ever blocks sending (with no signal, the server writes the words down later).
-export default function Composer({ mode = "new", session, conversation = null, onSent, onCancel, quickReplies = false }) {
+// My items' Mark fixed reuses it: initialStatus (Done picked), initialPicked (who assigned it, on CC), and
+// procoreLink, which starts a thread that follows that Procore record (no To needed, like Report an issue's).
+export default function Composer({ mode = "new", session, conversation = null, onSent, onCancel, quickReplies = false, initialStatus = null, initialPicked = null, procoreLink = null }) {
   const { demo, explain } = useDemo();
   const { project, me, dir, dirError, loadingDir, refreshDirectory } = session;
   const key = `${project.companyId}_${project.projectId}`;
   const ids = useRef({ cid: conversation?.id ?? newId(), mid: newId() });
-  const [picked, setPicked] = useState([]); // To and CC (cc: true), split when sent
+  const [picked, setPicked] = useState(initialPicked ?? []); // To and CC (cc: true), split when sent
   const { tagged, cc } = splitRecipients(picked);
-  const [searching, setSearching] = useState(mode === "new");
+  const [searching, setSearching] = useState(mode === "new" && !procoreLink && !initialPicked?.length);
   const [photos, setPhotos] = useState([]); // [{ blob, url, path? }]
   const [voice, setVoice] = useState(null); // { blob, url, path? }
   const [transcript, setTranscript] = useState("");
@@ -33,7 +35,7 @@ export default function Composer({ mode = "new", session, conversation = null, o
   const [desc, setDesc] = useState(null); // null | { status: "working" | "done" | "failed", text }
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
-  const [status, setStatus] = useState(null); // a quick reply going with this message
+  const [status, setStatus] = useState(initialStatus); // a quick reply going with this message
   const [askDelay, setAskDelay] = useState(false);
   const pickReply = (r) => {
     if (status?.code === r.code) return setStatus(null);
@@ -99,7 +101,7 @@ export default function Composer({ mode = "new", session, conversation = null, o
   const hasContent = photos.length > 0 || !!voice || text.trim() || transcript.trim() || !!status;
   const send = async () => {
     setError("");
-    if (mode === "new" && !tagged.length) return setError(cc.length ? "Pick at least one person as To (CC alone isn't enough). Tap To: to change it." : "Tag at least one person first. Tap To: to pick who it's for.");
+    if (mode === "new" && !tagged.length && !procoreLink) return setError(cc.length ? "Pick at least one person as To (CC alone isn't enough). Tap To: to change it." : "Tag at least one person first. Tap To: to pick who it's for.");
     if (!hasContent) return setError(quickReplies ? "Tap a quick reply, or add a photo, a voice note, or a few words." : "Add a photo, a voice note, or a few words.");
     if (recorder.recording) return setError("Stop the recording first.");
     if (demo) return explain(mode === "new" ? "Sending a message" : "Sending a reply");
@@ -110,7 +112,7 @@ export default function Composer({ mode = "new", session, conversation = null, o
         cid: ids.current.cid,
         mid: ids.current.mid,
         me,
-        newConversation: mode === "new" ? { tagged, cc } : null,
+        newConversation: mode === "new" ? { tagged, cc, ...(procoreLink ? { procore: procoreLink } : {}) } : null,
         text,
         transcript,
         transcriptDone: words === "done",
@@ -121,7 +123,7 @@ export default function Composer({ mode = "new", session, conversation = null, o
       });
       // Spec section 4: also into the day's album (in the background; never blocks the message)
       autoFilePhotos({ project, captureBase: `m-${ids.current.mid}`, photos: photos.map((p) => p.blob), words: [text, transcript].map((x) => x.trim()).filter(Boolean).join(" "), by: me.name, from: "SiteSnap message", voicePath: voice?.path ?? null });
-      onSent?.(ids.current.cid);
+      onSent?.(ids.current.cid, status);
     } catch {
       setError("Couldn't save this message. Please try again.");
       setSending(false);
@@ -145,7 +147,7 @@ export default function Composer({ mode = "new", session, conversation = null, o
       {mode === "new" && (
         <button type="button" className="to-line to-btn" onClick={() => setSearching(true)}>
           <p>
-            To: <strong>{tagged.length ? tagged.map((r) => r.name).join(", ") : "pick people"}</strong>
+            To: <strong>{tagged.length ? tagged.map((r) => r.name).join(", ") : procoreLink ? "no one (optional)" : "pick people"}</strong>
             {cc.length > 0 && <><br />CC: <strong>{cc.map((r) => r.name).join(", ")}</strong></>}
           </p>
           <span className="stop-more">{picked.length ? "Change" : "Pick"}</span>

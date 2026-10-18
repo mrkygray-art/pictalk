@@ -4,6 +4,9 @@
 // POST /api/procore/record-status { companyId, projectId, cid, action: done | close | reopen } : changes the
 //      record in Procore with the signed-in person's own sign-in (Procore decides who may: if they can't,
 //      the answer says so plainly and nothing changes), then updates the thread.
+// POST { companyId, projectId, recordType, recordId, action: "done" } (no cid): My items' Mark fixed on a record
+//      that had no SiteSnap thread when the person started; only "done" (Ready for review), same PATCH, no thread
+//      update (a thread started for it syncs when it's opened).
 // The thread is written with firebase-admin (server-only fields procoreStatus, status, and the line).
 import { config, HttpError, procoreGet, procoreId, queryOf, readBody, requireSameOriginJson, sendError, sendJson } from "../_procore.js";
 import { firestore } from "../_firestore.js";
@@ -27,6 +30,20 @@ function eventLine(db, key, cid, event, who) {
   });
 }
 
+// Mark fixed on a record with no thread: the same Procore change as Done in a thread
+async function markByRecord(req, res, cfg, { companyId, projectId, recordType, recordId }) {
+  const { path, body } = updateBody(recordType, "done", projectId);
+  const r = await procoreSend(req, res, cfg, "PATCH", `${path}/${recordId}`, { companyId, body });
+  if (!r.ok) {
+    const why = procoreError(r);
+    if (r.status === 403) throw new HttpError(403, "procore_refused", "Your role on this project doesn't include this. Ask your project admin.");
+    throw new HttpError(r.status === 401 ? 401 : 422, "procore_refused", `Procore didn't change it${why ? `: ${why}` : "."}`);
+  }
+  const now = await procoreSend(req, res, cfg, "GET", `${readPath(recordType)}/${recordId}`, { companyId, query: { project_id: projectId } });
+  console.log("SiteSnap record-status by record", JSON.stringify({ projectId, recordType, recordId, patch: r.status, read: now.status }));
+  return { status: now.ok ? statusOf(recordType, now.json) : { value: "ready_for_review", label: "Ready for review", closed: false } };
+}
+
 export default async function handler(req, res) {
   try {
     const cfg = config();
@@ -43,7 +60,9 @@ export default async function handler(req, res) {
     const projectId = procoreId(String(input.projectId ?? ""));
     const cid = String(input.cid ?? "");
     const action = post ? String(input.action ?? "") : null;
-    if (!companyId || !projectId || !ID_RE.test(cid)) throw new HttpError(400, "missing_ids", "Unknown thread.");
+    const byRecord = post && !cid && ["observation", "punch_item"].includes(input.recordType) && procoreId(String(input.recordId ?? ""));
+    if (!companyId || !projectId || (!byRecord && !ID_RE.test(cid))) throw new HttpError(400, "missing_ids", "Unknown thread.");
+    if (byRecord && action !== "done") throw new HttpError(400, "bad_request", "Only Mark fixed works without a thread.");
     if (post && !ACTIONS.includes(action)) throw new HttpError(400, "bad_request", "Unknown change.");
     const key = `${companyId}_${projectId}`;
 
@@ -52,6 +71,7 @@ export default async function handler(req, res) {
     const who = { id: String(me?.id ?? ""), name: me?.name || me?.login?.split("@")[0] || "Someone" };
     const db = await firestore();
     if (!(await db.doc(`procoreProjects/${key}/members/${who.id}`).get()).exists) throw new HttpError(403, "no_access", "You're not on this project.");
+    if (byRecord) return sendJson(res, 200, await markByRecord(req, res, cfg, { companyId, projectId, recordType: input.recordType, recordId: byRecord }));
     const convRef = db.doc(`procoreProjects/${key}/conversations/${cid}`);
     const conv = (await convRef.get()).data();
     const link = conv?.procore;

@@ -3,7 +3,9 @@
 // home 3x2 (Report something | Message, My items | Inspection, Daily log | Project photos), "2 assigned" on
 // Inspection, no badge on My items yet, no tile moves while the counts load, New pill, picker -> Issue -> the
 // existing Report an Issue screen, back to home; then a person Procore refuses Observations and Punch List
-// (My items gone, picker explains); then the guest demo (picker still shows Issue).
+// (My items gone, picker explains); then the guest demo (picker still shows Issue). My items (step 3): badge,
+// groups, detail, Mark fixed through the existing composer (Done picked, assigner on CC, record-status by id,
+// a thread that follows the record), the list and badge after; the empty state.
 // Needs: npm run emulators, and npx vite --port 5178. Screenshots: e2e/picker-shots/.
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
@@ -32,6 +34,17 @@ const ME = "111";
 const PROJECTS = [{ companyId: COMPANY, companyName: "Kyco", projectId: PROJECT, name: "Westgate Distribution Center" }];
 const TOOLS = ["observations", "punch_list", "rfis", "change_events", "daily_log", "incidents", "inspections", "directory", "photos"];
 const caps = (denied = []) => ({ tools: Object.fromEntries(TOOLS.map((t) => [t, { state: denied.includes(t) ? "denied" : "available", canCreate: null, source: "probe" }])), manifest: { status: 404 } });
+// My items (spec section 6): one overdue Observation, one open Punch Item, one ready for review
+const TODAY = "2026-10-17";
+const row = (type, id, title, extra = {}) => ({ type, id, number: id, title, location: "Level 2", due: null, createdAt: "2026-10-12T15:00:00Z", stage: "open", status: "Open", assignedBy: "Marcus Ortega", assignedById: "8", kind: null, url: `https://sandbox.procore.test/${id}`, ...extra });
+function myItemsAnswer(fixed, empty) {
+  if (empty) return { groups: { overdue: [], open: [], ready: [] }, counts: { open: 0, overdue: 0 }, today: TODAY, tools: { observations: "ok", punch: "ok" } };
+  const obs = row("observation", "41", "Cracked tile at the east door", { due: "2026-10-14", overdue: true });
+  const p = row("punch_item", "7", "Touch up paint in 204", { due: "2026-10-20" });
+  const ready = row("punch_item", "5", "Replace ceiling tile", { stage: "ready", status: "Ready for review" });
+  const groups = fixed ? { overdue: [], open: [p], ready: [{ ...obs, overdue: false, stage: "ready", status: "Ready for review" }, ready] } : { overdue: [obs], open: [p], ready: [ready] };
+  return { groups, counts: { open: groups.overdue.length + groups.open.length, overdue: groups.overdue.length }, today: TODAY, tools: { observations: "ok", punch: "ok" } };
+}
 const insp = (id, closed = false) => ({ id, number: Number(id), title: `Inspection #${id}`, closed, inspectors: [{ id: ME, name: "Edward Morton" }], progress: { done: 0, total: 3 } });
 
 async function run(browser, mode) {
@@ -41,7 +54,9 @@ async function run(browser, mode) {
   const errors = [];
   page.on("pageerror", (e) => { errors.push(e.message); console.log("PAGE ERROR:", e.message); });
   let signedIn = false;
+  let fixed = false;
   const capCalls = [];
+  const statusPosts = [];
   await page.setRequestInterception(true);
   page.on("request", async (r) => {
     const u = new URL(r.url());
@@ -50,7 +65,7 @@ async function run(browser, mode) {
     if (u.pathname === "/api/procore/login") { signedIn = true; return r.respond({ status: 302, headers: { location: "/?procore=connected" } }); }
     if (!signedIn) return json(401, { error: "not_connected" });
     if (u.pathname === "/api/procore/session") return json(200, { token: await getAuth().createCustomToken(`procore_${ME}`, { procoreUserId: ME, ...(mode === "demo" ? { demo: true } : {}) }), me: { procoreUserId: ME, name: mode === "demo" ? "Guest" : "Edward Morton" }, projects: PROJECTS, demo: mode === "demo" });
-    if (u.pathname === "/api/procore/directory") return json(200, { people: [{ id: 111, name: "Edward Morton", company: "SiteSnap AI", title: "Developer" }], canTag: false, labels: [], compact: false, rolesAvailable: true });
+    if (u.pathname === "/api/procore/directory") return json(200, { people: [{ id: 111, name: "Edward Morton", company: "SiteSnap AI", title: "Developer" }, { id: 8, name: "Marcus Ortega", company: "Ironbridge", title: "Superintendent" }], canTag: false, labels: [], compact: false, rolesAvailable: true });
     if (u.pathname === "/api/procore/capabilities") {
       capCalls.push(u.search);
       return json(200, mode === "nopunch" ? caps(["observations", "punch_list"]) : mode === "demo" ? caps(["change_events", "daily_log"]) : caps());
@@ -58,6 +73,15 @@ async function run(browser, mode) {
     if (u.pathname === "/api/procore/inspections") {
       await sleep(1200); // counts arrive after the tiles are drawn
       return json(200, { access: true, myCompany: null, groups: { mine: [insp("1"), insp("2"), insp("3", true)], company: [], open: [] } });
+    }
+    if (u.pathname === "/api/procore/my-items") {
+      if (u.searchParams.get("type")) return json(200, { item: { ...row("observation", "41", "Cracked tile at the east door", { due: "2026-10-14" }), description: "Corner tile cracked where the pallet jack turns.", photos: [], kind: "Quality" } });
+      return json(200, myItemsAnswer(fixed, mode === "empty"));
+    }
+    if (u.pathname === "/api/procore/record-status" && r.method() === "POST") {
+      statusPosts.push(JSON.parse(r.postData() || "{}"));
+      fixed = true;
+      return json(200, { status: { value: "ready_for_review", label: "Ready for review", closed: false } });
     }
     if (u.pathname === "/api/procore/record-options") return json(200, { observationTypes: [{ id: 1, name: "Deficiency", category: "Quality" }], trades: [], locations: [] });
     if (u.pathname === "/api/procore/access") return json(200, { people: {}, levelsKnown: false });
@@ -86,7 +110,8 @@ async function run(browser, mode) {
     const after = await tiles();
     check("home: Inspection shows 2 assigned (open ones only)", (await page.$eval(".home-tile.is-inspect", (e) => e.innerText)).includes("2 assigned"));
     check("home: no tile moved or changed height when the counts arrived", JSON.stringify(before) === JSON.stringify(after), JSON.stringify(after.map((t) => t.h)));
-    check("home: My items has no count yet (hidden, not 0)", !(await page.$eval(".home-tile.is-new", (e) => e.innerText)).match(/\d+ open/));
+    const myTile = await page.$eval(".home-tile.is-new", (e) => ({ text: e.innerText, red: !!e.querySelector(".home-tile-status.is-alert") }));
+    check("home: My items badge 2 open \u00b7 1 overdue, red because something is overdue", myTile.text.includes("2 open \u00b7 1 overdue") && myTile.red, myTile.text);
     check("home: Daily log keeps Not sent today", (await page.$eval(".home-tile.is-log", (e) => e.innerText)).includes("Not sent today"));
     await shot("0-home");
 
@@ -108,8 +133,8 @@ async function run(browser, mode) {
     await page.goto(APP, { waitUntil: "domcontentloaded" });
     await waitText("Report something");
     await click(".home-tile.is-new");
-    await waitText("Coming next");
-    check("My items: placeholder screen until Step 3", true);
+    await waitText("Cracked tile at the east door");
+    check("My items tile opens the list", true);
   }
 
   if (mode === "nopunch") {
@@ -118,6 +143,56 @@ async function run(browser, mode) {
     await waitText("What are you reporting?");
     check("no usable type: plain ask-your-admin line, no greyed rows", (await page.$$(".rp-row")).length === 0 && (await text()).includes("Ask your project admin"));
     await shot("1-picker");
+  }
+
+  if (mode === "items") {
+    await click(".home-tile.is-new");
+    await waitText("Cracked tile at the east door");
+    const heads = await page.$$eval(".mi-group h3", (h) => h.map((x) => x.childNodes[0].textContent.trim()));
+    check("My items: Overdue, Open, Ready for review, in that order", heads.join("|") === "Overdue|Open|Ready for review", heads.join("|"));
+    let t = await text();
+    check("My items: rows say kind, number, place, how late, status", t.includes("Observation #41 \u00b7 Level 2") && t.includes("3 days overdue") && t.includes("Punch Item #7"));
+    check("My items: list count matches the badge (2 not done, 1 overdue)", (await page.$$(".mi-group:not(:last-of-type) .rp-row")).length === 2);
+    await shot("2-my-items");
+    await click(".mi-row.is-overdue");
+    await waitText("Corner tile cracked");
+    t = await text();
+    check("detail: description, due, where, who assigned it, Open in Procore", t.includes("Assigned by") && t.includes("Marcus Ortega") && t.includes("Level 2") && t.includes("Open in Procore"));
+    await shot("3-detail");
+    await click("button::-p-text(Mark Fixed)");
+    await waitText("Sending with");
+    t = await text();
+    check("Mark fixed: the existing composer, Done already picked", t.includes("Sending with: Marked done") && t.includes("Take Photo") && t.includes("Tap to Talk"));
+    check("Mark fixed: no thread yet, so whoever assigned it is on CC", t.includes("CC: Marcus Ortega"), t.slice(0, 300));
+    await page.type("textarea[placeholder='Type a message']", "Replaced the tile and grouted it.");
+    await shot("4-fix");
+    await click("button.msg-send");
+    await waitText("Ready for review in Procore");
+    check("Mark fixed: Procore told Ready for review for that record (by id, no thread yet)", statusPosts.length === 1 && statusPosts[0].recordType === "observation" && statusPosts[0].recordId === "41" && statusPosts[0].action === "done" && !statusPosts[0].cid, JSON.stringify(statusPosts));
+    await shot("5-fixed");
+    let conv = null;
+    for (let i = 0; i < 40 && !conv; i++) {
+      const snap = await getFirestore().collection(`procoreProjects/${KEY}/conversations`).where("procore.id", "==", 41).get();
+      conv = snap.docs[0]?.data() ?? null;
+      if (!conv) await sleep(250);
+    }
+    check("Mark fixed: a thread that follows the record, Marcus on CC, no To", !!conv && conv.procore.recordType === "observation" && (conv.ccIds ?? []).includes("8") && conv.taggedIds.length === 0, JSON.stringify(conv?.procore ?? null));
+    await click("button::-p-text(Back to My Items)");
+    await waitText("Touch up paint");
+    check("after Mark fixed: the item moved to Ready for review and the list read Procore again", !(await page.$(".mi-row.is-overdue")));
+    await click(".msg-home-back");
+    await waitText("Report something");
+    await page.waitForFunction(() => document.querySelector(".home-tile.is-new")?.innerText.includes("1 open"), { timeout: 10000 }).catch(() => {});
+    const after = await page.$eval(".home-tile.is-new", (e) => ({ text: e.innerText, red: !!e.querySelector(".home-tile-status.is-alert") }));
+    check("home: badge updates right away to 1 open, not red", after.text.includes("1 open") && !after.text.includes("overdue") && !after.red, after.text);
+  }
+
+  if (mode === "empty") {
+    check("nothing assigned: My items badge hidden", !(await page.$eval(".home-tile.is-new", (e) => e.innerText)).match(/\d+ open/));
+    await click(".home-tile.is-new");
+    await waitText("Nothing assigned to you on this project.");
+    check("nothing assigned: plain empty line", true);
+    await shot("2-empty");
   }
 
   if (mode === "demo") {
@@ -135,7 +210,7 @@ async function run(browser, mode) {
   await getFirestore().doc(`procoreProjects/${KEY}/members/${ME}`).set({ procoreUserId: ME, name: "Edward Morton", at: Date.now() });
   const browser = await puppeteer.launch({ executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true });
   try {
-    for (const mode of ["full", "nopunch", "demo"]) await run(browser, mode);
+    for (const mode of ["full", "items", "empty", "nopunch", "demo"]) await run(browser, mode);
   } catch (err) {
     console.log("FAIL  crashed:", err.message);
     results.push(false);

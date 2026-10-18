@@ -175,3 +175,30 @@ test("a record thread's first message: one to-do per assignee, the record's titl
   assert.equal(recordTasks({ procore: { title: "X", due: "soon" }, tagged: [{ procoreUserId: 1 }] }, "m2")[0].due, "");
   assert.deepEqual(recordTasks({ procore: { title: "X" } }, "m3"), []);
 });
+
+// My items' Mark fixed on a record with no thread (sitesnap-report-picker-my-items-spec.md, section 6)
+const fix = (body) => run(req("POST", "/api/procore/record-status", { companyId: "4291776", projectId: "373235", ...body }));
+
+test("Mark fixed by record id: the same Ready for review change, no thread touched", async () => {
+  on("PATCH", /\/rest\/v1\.0\/observations\/items\/555$/, { body: {} });
+  on("GET", /\/rest\/v1\.0\/observations\/items\/555\?/, { body: { id: 555, status: "ready_for_review" } });
+  const out = await fix({ recordType: "observation", recordId: "555", action: "done" });
+  assert.equal(out.statusCode, 200);
+  assert.deepEqual(out.json().status, { value: "ready_for_review", label: "Ready for review", closed: false });
+  const patch = calls.find((c) => c.method === "PATCH");
+  assert.deepEqual(JSON.parse(patch.body), { project_id: 373235, observation: { status: "ready_for_review" } });
+  assert.equal(added.length, 0);
+  assert.equal(docs.get(CONV).procoreStatus, undefined);
+});
+
+test("Mark fixed by record id: only done, only real record types, members only, Procore's 403 in plain words", async () => {
+  assert.equal((await fix({ recordType: "observation", recordId: "555", action: "close" })).statusCode, 400);
+  assert.equal((await fix({ recordType: "rfi", recordId: "555", action: "done" })).statusCode, 400);
+  on("PATCH", /\/rest\/v1\.1\/punch_items\/777$/, { status: 403, body: { errors: "Forbidden" } });
+  const refused = await fix({ recordType: "punch_item", recordId: "777", action: "done" });
+  assert.equal(refused.statusCode, 403);
+  assert.match(refused.json().message, /Ask your project admin/);
+  assert.doesNotMatch(refused.json().message, /Forbidden/);
+  docs.delete(`procoreProjects/${KEY}/members/481274`);
+  assert.equal((await fix({ recordType: "punch_item", recordId: "777", action: "done" })).statusCode, 403);
+});

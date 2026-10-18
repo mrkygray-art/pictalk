@@ -137,6 +137,18 @@ export async function recordAction(project, cid, action) {
   return body;
 }
 
+/** My items' Mark fixed on a record that has no thread yet: Ready for review in Procore, by the record's id */
+export async function markFixedByRecord(project, recordType, recordId) {
+  const r = await fetch("/api/procore/record-status", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ companyId: project.companyId, projectId: project.projectId, recordType, recordId, action: "done" }),
+  });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(body.message ?? "Couldn't change it in Procore. Try again."), { status: r.status });
+  return body;
+}
+
 export const RECORD_LABEL = { observation: "Observation", punch_item: "Punch Item" };
 /** Where each kind lands in Procore, in the words of Procore's own menu */
 export const RECORD_TOOL = { observation: "Observations", punch_item: "Punch List" };

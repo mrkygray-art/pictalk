@@ -8,7 +8,7 @@
 // voice note) and uploaded when there's signal; files first, then the Firestore docs.
 import { demoMode } from "./demoMode";
 import {
-  collection, doc, getDoc, limit, onSnapshot, orderBy, query, setDoc, updateDoc, where, arrayUnion, writeBatch,
+  collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, setDoc, updateDoc, where, arrayUnion, writeBatch,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { httpsCallable } from "firebase/functions";
@@ -37,6 +37,13 @@ export function watchFeed(key, tab, me, callback) {
       ? query(base, where("createdBy.procoreUserId", "==", me), orderBy("lastActivityAt", "desc"), limit(FEED_SIZE))
       : query(base, orderBy("lastActivityAt", "desc"), limit(FEED_SIZE));
   return onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })), null), (err) => callback(null, err));
+}
+
+/** The SiteSnap thread that follows a Procore record (Report an issue made it, or My items' Mark fixed), or null */
+export async function findRecordThread(key, recordType, id) {
+  const snap = await getDocs(query(convCol(key), where("procore.id", "==", Number(id)), limit(5)));
+  const hit = snap.docs.map((d) => ({ id: d.id, ...d.data() })).find((c) => c.procore?.recordType === recordType);
+  return hit ?? null;
 }
 
 export const watchConversation = (key, cid, callback) =>

@@ -27,17 +27,23 @@ async function requireOwner(req, res, cfg, s) {
   }
 }
 
+// Why an authorize attempt saved nothing, in the logs too (a short code, never a token or an email)
+const refused = (code) => {
+  console.error("SiteSnap demo authorize refused:", code);
+  return `${PAGE}?error=${code}`;
+};
+
 // Called by the callback with the guest's fresh tokens. Returns where to send the browser.
 export async function finishDemoAuthorize(cfg, tokens, s = demoSettings()) {
   try {
     const problem = demoProblem({ ...s, enabled: true });
-    if (problem) return `${PAGE}?error=settings`;
+    if (problem) return refused("settings");
     const me = await getWithToken(cfg, tokens.at, "/rest/v1.0/me");
-    if (me?.id == null) return `${PAGE}?error=who`;
+    if (me?.id == null) return refused("who");
     // Ky's own account would turn the demo into Ky (with his admin rights): refuse it
-    if (s.admins.includes(String(me.login ?? "").trim().toLowerCase())) return `${PAGE}?error=owner_account`;
+    if (s.admins.includes(String(me.login ?? "").trim().toLowerCase())) return refused("owner_account");
     const { projects, missing } = await allowedProjectsFor(cfg, tokens.at, s);
-    if (!projects.length) return `${PAGE}?error=no_projects`;
+    if (!projects.length) return refused("no_projects");
     await saveGuestAuth({ tokens, guestUserId: me.id, projects, missing }, s);
     console.log("SiteSnap demo: guest authorized · projects", projects.length, "· missing", missing.length);
     return `${PAGE}?done=1`;

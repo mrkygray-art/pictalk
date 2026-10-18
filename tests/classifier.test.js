@@ -155,3 +155,41 @@ test("the emulator stand-in follows the same rules (used by later end-to-end tes
   assert.deepEqual(r.assignees, [{ id: 900, name: "Lisa Hubbard" }]);
   assert.equal(r.due_date, "2026-10-16");
 });
+
+// ---------- full-loop demo spec step B: who it's for, the follow-up question ----------
+
+test("'Cracked drywall at the east stairwell … drywall sub' -> the project's drywall company, nobody invented", () => {
+  const r = run("Cracked drywall at the east stairwell, needs fixing before paint Thursday, drywall sub.", {
+    title: "Cracked drywall at east stairwell", description: "Cracked drywall at the east stairwell needs fixing before paint on Thursday.",
+    observation_type: "Deficiency", trade: "Drywall", location: "east stairwell", priority: "medium", due: "Thursday", assignee_company: "ABC Drywall",
+  });
+  assert.deepEqual(r.suggested_assignee, { name: null, company: "ABC Drywall" });
+  assert.deepEqual(r.assignees, [], "a company, not a person: the card picks the person");
+  assert.equal(r.due_date, "2026-10-15");
+  assert.equal(r.follow_up_question, null, "sure of it: no question");
+  assert.deepEqual(r.missing_info, r.missing_fields);
+});
+
+test("a company that isn't on the project is dropped; a named person is the suggested name", () => {
+  assert.equal(run("Get the roofer out here.", { assignee_company: "Skyline Roofing" }).suggested_assignee.company, null);
+  assert.equal(run("Tell Lisa.", { assignee_names: ["Lisa"], assignee_company: "abc drywall" }).suggested_assignee.name, "Lisa Hubbard");
+  assert.equal(run("Tell Lisa.", { assignee_company: "abc drywall" }).suggested_assignee.company, "ABC Drywall", "as the project lists it");
+});
+
+test("not sure: the one follow-up question is kept; sure: it's dropped", () => {
+  const unsure = run("Something's off back there.", { record_type: "unknown", confidence: 0.3, follow_up_question: "What needs fixing, and where is it?" });
+  assert.equal(unsure.follow_up_question, "What needs fixing, and where is it?");
+  const sure = run("Fire caulking missing.", { confidence: 0.9, follow_up_question: "Which room?" });
+  assert.equal(sure.follow_up_question, null);
+  assert.equal(c.fallback("x").follow_up_question, null);
+  assert.ok(c.SCHEMA.required.includes("assignee_company") && c.SCHEMA.required.includes("follow_up_question"));
+  assert.ok(c.SCHEMA.properties.record_type.enum.includes("daily_log"));
+});
+
+test("the emulator stand-in hears 'drywall sub' and asks when it's vague", () => {
+  const ctx = { ...context, people: [...context.people, { id: 903, name: "Carlos Mendez", company: "Clean Line Drywall", title: "Drywall Foreman" }] };
+  const sub = c.validate(c.fakeAnswer({ transcript: "Cracked drywall at the east stairwell, needs fixing before paint Thursday, drywall sub.", context: { ...ctx, people: ctx.people.filter((p) => p.id !== 900) } }), { transcript: "x", context: ctx, now: NOW });
+  assert.equal(sub.suggested_assignee.company, "Clean Line Drywall");
+  const vague = c.validate(c.fakeAnswer({ transcript: "Something's off.", context: ctx }), { transcript: "Something's off.", context: ctx, now: NOW });
+  assert.match(vague.follow_up_question, /What needs fixing/);
+});

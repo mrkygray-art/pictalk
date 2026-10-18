@@ -55,13 +55,34 @@ async function classify(transcript, context, now = new Date()) {
 }
 exports.classify = classify;
 
+// The Evaluation Lab's record of each run (full-loop demo spec step B): procoreProjects/{key}/classifications/
+// {captureId}.runs[] = { at, transcript, output, by }; api/_captures.js adds what was finally sent and the edits.
+// Server only (no client rule matches procoreProjects/**). Never for the guest demo; a failed write never blocks.
+const CAPTURE_RE = /^[A-Za-z0-9_-]{1,64}$/;
+async function logRun(key, captureId, words, output, by) {
+  try {
+    const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+    const kept = { ...output };
+    delete kept.transcript; // the words are kept once, next to it
+    await getFirestore().doc(`procoreProjects/${key}/classifications/${captureId}`).set({
+      runs: FieldValue.arrayUnion({ at: Date.now(), transcript: words.slice(0, 2000), output: kept, by }),
+      updatedAt: Date.now(),
+    }, { merge: true });
+  } catch (err) {
+    logger.warn("Classification log not saved", { error: err.message });
+  }
+}
+exports.logRun = logRun;
+
 exports.classifyCapture = onCall(
   piccoloCallable({ region: "us-west2", secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 60, memory: "512MiB" }),
   async (request) => {
-    const { key, transcript, context } = request.data ?? {};
-    await requireMember(request, key, { demoAi: true }); // the guest demo may Fill It In (limited)
+    const { key, transcript, context, captureId } = request.data ?? {};
+    const by = await requireMember(request, key, { demoAi: true }); // the guest demo may Fill It In (limited)
     const words = String(transcript ?? "").slice(0, 8000);
     if (!words.trim()) throw new HttpsError("invalid-argument", "Say or type what you see first.");
-    return classify(words, cleanContext(context));
+    const out = await classify(words, cleanContext(context));
+    if (request.auth.token.demo !== true && CAPTURE_RE.test(String(captureId ?? ""))) await logRun(key, String(captureId), words, out, by);
+    return out;
   },
 );

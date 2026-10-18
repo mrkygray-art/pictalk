@@ -31,8 +31,9 @@ export function cleanFiles(list) {
   return files;
 }
 
-/** Create the record. Answers { recordType, id, number, url, warnings, reporterName, card } (card as finally sent). */
-export async function createRecord(req, res, cfg, { companyId, projectId, card, files = [], link = null, extra = null, checkedProject = false }) {
+/** Create the record. Answers { recordType, id, number, url, warnings, reporterName, reporterId, card } (card as finally sent).
+ *  retry429: wait out a 429 on each Procore call (the full-loop demo). */
+export async function createRecord(req, res, cfg, { companyId, projectId, card, files = [], link = null, extra = null, checkedProject = false, retry429 = false }) {
   if (!checkedProject) {
     const { projects } = await listProjects(req, res, cfg);
     if (!projects.some((p) => p.companyId === companyId && p.projectId === projectId)) throw new HttpError(403, "no_access", "You're not on that project in Procore.");
@@ -43,7 +44,7 @@ export async function createRecord(req, res, cfg, { companyId, projectId, card, 
   const warnings = [];
   const uploadIds = [];
   for (const f of files) {
-    const u = await uploadFile(req, res, cfg, { companyId, projectId, name: f.name, type: f.type, bytes: f.bytes });
+    const u = await uploadFile(req, res, cfg, { companyId, projectId, name: f.name, type: f.type, bytes: f.bytes, retry429 });
     if (u.ok) uploadIds.push(u.uuid);
     else warnings.push(`${f.type.startsWith("audio") ? "The voice note" : "A photo"} didn't attach (Procore answered ${u.status}).`);
   }
@@ -54,12 +55,12 @@ export async function createRecord(req, res, cfg, { companyId, projectId, card, 
     const body = (isObs ? observationBody : punchBody)(c, projectId, { reporterName, uploadIds, link });
     return extra ? extra(body) : body;
   };
-  let made = await procoreSend(req, res, cfg, "POST", path, { companyId, body: build(card) });
+  let made = await procoreSend(req, res, cfg, "POST", path, { companyId, body: build(card), retry429 });
   // A typed place Procore won't let this person add as a new location: send it without the location,
   // with the place written in the description, and say so
   if (!made.ok && card.locationText && !card.locationId && [403, 422].includes(made.status) && /location/i.test(procoreError(made) ?? "")) {
     const where = card.locationText;
-    const retry = await procoreSend(req, res, cfg, "POST", path, { companyId, body: build({ ...card, locationText: null, whereText: where }) });
+    const retry = await procoreSend(req, res, cfg, "POST", path, { companyId, body: build({ ...card, locationText: null, whereText: where }), retry429 });
     if (retry.ok || !/location/i.test(procoreError(retry) ?? "")) {
       made = retry;
       card = { ...card, locationText: null, whereText: where };
@@ -69,7 +70,7 @@ export async function createRecord(req, res, cfg, { companyId, projectId, card, 
   // Someone Procore won't let this person assign: create it anyway, unassigned, and say so
   if (!made.ok && card.assigneeIds.length && [403, 422].includes(made.status)) {
     const first = procoreError(made);
-    const retry = await procoreSend(req, res, cfg, "POST", path, { companyId, body: build({ ...card, assigneeIds: [] }) });
+    const retry = await procoreSend(req, res, cfg, "POST", path, { companyId, body: build({ ...card, assigneeIds: [] }), retry429 });
     if (retry.ok) {
       made = retry;
       warnings.push(`Created without an assignee: Procore said "${first}". Assign it in Procore.`);
@@ -85,8 +86,8 @@ export async function createRecord(req, res, cfg, { companyId, projectId, card, 
 
   // Decision C: Procore emails the assignees only
   if (card.assigneeIds.length) {
-    const mail = await procoreSend(req, res, cfg, "POST", `${path}/${id}/send_email`, { companyId, query: { project_id: projectId }, body: assigneeEmail(card, reporterName, number) });
+    const mail = await procoreSend(req, res, cfg, "POST", `${path}/${id}/send_email`, { companyId, query: { project_id: projectId }, body: assigneeEmail(card, reporterName, number), retry429 });
     if (!mail.ok) warnings.push(`Created, but Procore didn't send the email (${procoreError(mail)}).`);
   }
-  return { recordType: card.recordType, id, number, url: recordUrl(cfg.apiUrl, projectId, card.recordType, id), warnings, reporterName, card, uploads: uploadIds.length };
+  return { recordType: card.recordType, id, number, url: recordUrl(cfg.apiUrl, projectId, card.recordType, id), warnings, reporterName, reporterId: me?.id == null ? null : String(me.id), card, uploads: uploadIds.length };
 }

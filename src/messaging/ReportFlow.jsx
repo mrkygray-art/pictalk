@@ -7,12 +7,18 @@ import { autoFilePhotos } from "./photoQueue";
 import { useDemo } from "./demo";
 import { recipientOf } from "../directorySearch";
 import { cantGet, draftRecord, managersFor, MAX_PHOTOS, projectAccess, RECORD_HINT, RECORD_LABEL, RECORD_TOOL, recordOptions, sendRecord } from "./recordStore";
+import { proposeAssignee } from "./assigneeMatch";
 
 // Report an Issue (voice + photo -> Procore record). The foreman describes it; SiteSnap works out what
-// kind of Procore record it is, fills it in, and one tap on Send creates it in Procore under their own
-// sign-in. Then a SiteSnap thread follows it. Steps: capture -> drafting -> card -> sending -> done.
+// kind of Procore record it is, fills it in, and one tap on Approve & Send creates it in Procore under their own
+// sign-in. Then a SiteSnap thread follows it. Steps: capture -> drafting -> (question) -> card -> sending -> done.
 // Blank on the card means "not said": never guessed. Typing works everywhere voice does.
+// Full-loop demo (record options' fullLoopDemo; docs/FULL_LOOP_DEMO.md): Observations only, an assignee is needed,
+// and another type the AI heard is offered as "Create as Observation" or "Save as note" (a SiteSnap message only).
+// When the AI isn't sure it asks its one follow-up question first (spec step B); the answer is added to the words.
+// The capture id (ids.cid) makes the send idempotent on the server: a retry never makes a second record.
 const PRIORITIES = [["low", "Low"], ["medium", "Medium"], ["high", "High"]];
+const OTHER_TYPE = { punch_item: "a Punch Item", rfi: "a question for the design team", change_event: "extra work (a Change Event)", daily_log: "a note for the daily log" };
 
 export default function ReportFlow({ session, onClose, onOpenThread }) {
   const { demo, explain } = useDemo();
@@ -31,7 +37,17 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState("");
   const [sent, setSent] = useState(null);
+  const [question, setQuestion] = useState(null); // the AI's one follow-up question, when it wasn't sure
+  const [answer, setAnswer] = useState("");
+  const [choices, setChoices] = useState([]); // 2-3 people who could take it (same company or trade)
+  const [otherType, setOtherType] = useState(null); // demo: the AI heard something other than an Observation
+  const [noted, setNoted] = useState(false); // saved as a SiteSnap note instead of a Procore record
   const fileInput = useRef(null);
+  const asked = useRef(false); // the follow-up question is asked once per capture
+  const lastDraft = useRef(null); // the draft that asked it (Skip uses it as is)
+  const proposed = useRef(null); // the card as SiteSnap first filled it in (the log counts the edits)
+  const talkInto = useRef("words"); // where spoken words go: the report, or the answer to the question
+  const demoLoop = !!options?.fullLoopDemo;
 
   // One Procore read after the other (a token refresh replaces the refresh token)
   useEffect(() => {
@@ -55,7 +71,7 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
       const path = await uploadFile(voicePathFor(key, ids.current.cid, ids.current.mid, blob.type), blob);
       setVoice({ ...v, path });
       const t = await transcribeVoice(key, path, blob.type);
-      setWords((w) => [w.trim(), t].filter(Boolean).join(" "));
+      (talkInto.current === "answer" ? setAnswer : setWords)((w) => [w.trim(), t].filter(Boolean).join(" "));
       setWordsState(t ? "done" : "failed");
     } catch {
       setWordsState("failed");
@@ -69,36 +85,64 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
   };
 
   // The AI's draft -> the card. People are the project directory (names, companies, titles).
-  const draft = async () => {
+  const draft = async (said = words) => {
     setError("");
-    if (!words.trim()) return setError("Say or type what you see first.");
+    if (!said.trim()) return setError("Say or type what you see first.");
     setStep("drafting");
     let d;
     try {
-      d = await draftRecord(key, words, { project, options: options ?? { observationTypes: [], trades: [], locations: [] }, people: session.dir?.people });
+      d = await draftRecord(key, said, { project, options: options ?? { observationTypes: [], trades: [], locations: [] }, people: session.dir?.people, captureId: ids.current.cid });
     } catch {
       d = null; // no signal or the AI is down: an Observation with the words as said
     }
+    // Not sure: ask its one question instead of guessing (once; Skip goes straight to the card)
+    if (d?.low_confidence && d.follow_up_question && !asked.current) {
+      asked.current = true;
+      lastDraft.current = d;
+      setQuestion(d.follow_up_question);
+      setAnswer("");
+      setStep("question");
+      return;
+    }
+    fillCard(d, said);
+  };
+
+  // The answer goes after the words, and SiteSnap fills it in again
+  const answerQuestion = () => {
+    const all = [words.trim(), answer.trim()].filter(Boolean).join(" ");
+    setWords(all);
+    talkInto.current = "words";
+    draft(all);
+  };
+
+  const fillCard = (d, said) => {
     const people = session.dir?.people ?? [];
     const toRecipient = (a) => {
       const p = people.find((x) => String(x.id) === String(a.id));
       return { procoreUserId: String(a.id), name: a.name, company: p?.company ?? null, title: p?.title || p?.role || null };
     };
-    setCard({
-      recordType: d?.record_type === "punch_item" ? "punch_item" : "observation",
-      title: d?.title ?? words.trim().split(/\s+/).slice(0, 10).join(" "),
-      description: d?.description ?? words.trim(),
+    const tradeName = (options?.trades ?? []).find((t) => t.id === d?.trade?.id)?.name ?? d?.trade?.name ?? null;
+    const who = proposeAssignee({ draft: d, people, tradeName });
+    setChoices(who.choices);
+    const heard = d?.suggested_record_type;
+    setOtherType(demoLoop && OTHER_TYPE[heard] ? heard : null);
+    const first = {
+      recordType: !demoLoop && d?.record_type === "punch_item" ? "punch_item" : "observation",
+      title: d?.title ?? said.trim().split(/\s+/).slice(0, 10).join(" "),
+      description: d?.description ?? said.trim(),
       observationTypeId: d?.observation_type?.id ?? defaultType(options)?.id ?? null,
       tradeId: d?.trade?.id ?? null,
       locationText: d?.location_text ?? "",
       locationId: d?.location?.id ?? null,
       priority: d?.priority ?? null,
-      assignees: (d?.assignees ?? []).map(toRecipient),
+      assignees: who.picked.map(toRecipient),
       alsoTag: [], // on the SiteSnap thread only: someone Procore wouldn't take, replaced by a PM
       cc: [], // CC: on the SiteSnap thread (their CC tab) only; never the Procore record's assignees or distribution
       dueDate: d?.due_date ?? "",
       impactMentioned: !!d?.impact_mentioned,
-    });
+    };
+    setCard(first);
+    proposed.current = recordFields(first);
     setDraftNote({
       lowConfidence: !d || d.low_confidence,
       suggested: d?.suggested_record_type ?? null,
@@ -115,24 +159,17 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
     setError("");
     if (!card.title.trim()) return setError("Add a short title.");
     if (card.recordType === "observation" && !card.observationTypeId) return setError("Pick what kind of observation it is.");
+    if (demoLoop && !card.assignees.length) return setError("Pick who it's for.");
     if (demo) return explain(`Sending this ${card.recordType === "punch_item" ? "Punch Item" : "Observation"} to Procore`);
     setStep("sending");
     try {
       const made = await sendRecord(project, {
-        recordType: card.recordType,
-        title: card.title,
-        description: card.description,
+        ...recordFields(card),
         transcript: words,
-        observationTypeId: card.observationTypeId,
-        tradeId: card.tradeId,
         locationId: card.locationId,
-        locationText: card.locationText,
-        priority: card.priority,
-        assigneeIds: card.assignees.map((a) => Number(a.procoreUserId)),
-        dueDate: card.dueDate || null,
         impactMentioned: card.impactMentioned,
         captureId: ids.current.cid,
-      }, { photos: photos.map((p) => p.blob), voice: voice?.blob ?? null, link: window.location.origin });
+      }, { photos: photos.map((p) => p.blob), voice: voice?.blob ?? null, link: window.location.origin, proposed: proposed.current });
       // Spec section 4: also into the day's album, linked to the record (in the background; never blocks this)
       autoFilePhotos({
         project, captureBase: `r-${ids.current.mid}`, photos: photos.map((p) => p.blob), words: card.description || words, by: me.name,
@@ -158,9 +195,32 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
       setSent(made);
       setStep("done");
     } catch (err) {
-      setError(err.message || "Couldn't send it to Procore. Try again.");
+      // Same capture id on the next tap, so a retry never makes a second record
+      setError(err.status === 409 ? "Still sending the first tap. Wait a moment, then try again." : err.message || "Couldn't send it to Procore. Try again.");
       setStep("card");
     }
+  };
+
+  // Demo: not an Observation after all: a SiteSnap message to the people picked, nothing in Procore
+  const saveAsNote = async () => {
+    setError("");
+    if (!card.assignees.length) { setError("Pick who should see the note."); return setPicking(true); }
+    if (demo) return explain("Saving this as a note");
+    try {
+      await queueMessage({
+        key, cid: ids.current.cid, mid: ids.current.mid, me,
+        newConversation: { tagged: card.assignees, cc: card.cc.filter((t) => !card.assignees.some((a) => a.procoreUserId === t.procoreUserId)) },
+        text: card.description || words, transcript: words, transcriptDone: true,
+        photos: photos.map((p) => ({ blob: p.blob })), voice: voice ? { blob: voice.blob, path: voice.path } : null,
+      });
+      setNoted(true);
+    } catch (err) {
+      setError(err.message || "Couldn't save the note. Try again.");
+    }
+  };
+
+  const discard = () => {
+    if (window.confirm("Discard this report? Nothing was sent to Procore.")) onClose();
   };
 
   if (picking) {
@@ -173,6 +233,40 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
           onDone={() => setPicking(false)} doneLabel="Done" allowCc
           noteFor={(p) => { const why = cantGet(access, p.id, card.recordType); return why ? `Can't get ${RECORD_LABEL[card.recordType]}s in Procore: ${why}` : ""; }}
         />
+      </section>
+    );
+  }
+
+  if (noted) {
+    return (
+      <section className="report">
+        <h2 className="page-title">Saved as a note</h2>
+        <div className="report-sent">
+          <p>Sent to {card.assignees.map((a) => a.name).join(", ")} in SiteSnap. Nothing was created in Procore.</p>
+        </div>
+        <button type="button" className="save-btn" onClick={() => onOpenThread(ids.current.cid)}>Open the Thread</button>
+        <button type="button" className="text-btn" onClick={onClose}>Done</button>
+      </section>
+    );
+  }
+
+  if (step === "question") {
+    return (
+      <section className="report" aria-label="One question">
+        <h2 className="page-title">One question</h2>
+        <p className="report-question">{question}</p>
+        <button type="button" className={`big-btn talk-btn${recorder.recording ? " is-recording" : ""}`} aria-pressed={recorder.recording}
+          onClick={() => { talkInto.current = "answer"; recorder.toggle(); }}>
+          {recorder.recording ? <StopIcon /> : <MicIcon />}
+          {recorder.recording ? `Stop  ${formatTime(recorder.seconds)}` : "Tap to Answer"}
+        </button>
+        {wordsState === "working" && <p className="msg-status">Writing it down…</p>}
+        <label className="msg-field"><span>Your answer</span>
+          <textarea className="words-field" rows={3} value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Or type it here" />
+        </label>
+        {error && <p className="error" role="alert">{error}</p>}
+        <button type="button" className="save-btn" onClick={answerQuestion} disabled={!answer.trim() || recorder.recording || wordsState === "working"}>Fill It In</button>
+        <button type="button" className="text-btn" onClick={() => { talkInto.current = "words"; fillCard(lastDraft.current, words); }}>Skip</button>
       </section>
     );
   }
@@ -191,7 +285,7 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
           <p className="msg-status">Find it in Procore's {tool} tool, not {other === "Punch List" ? "the Punch List" : other}. It's there now.</p>
           {card.assignees.length > 0 && <p className="msg-status">{card.assignees.map((a) => a.name).join(", ")} will get Procore's email.</p>}
           {(sent.warnings ?? []).map((w) => <p key={w} className="msg-status">{w}</p>)}
-          <a className="big-btn plain-btn" href={sent.url} target="_blank" rel="noopener">Open in Procore</a>
+          <a className="big-btn plain-btn" href={sent.url} target="_blank" rel="noopener">View in Procore</a>
         </div>
         <button type="button" className="save-btn" onClick={() => onOpenThread(ids.current.cid)}>Open the Thread</button>
         <button type="button" className="text-btn" onClick={onClose}>Done</button>
@@ -213,14 +307,25 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
     const types = options?.observationTypes ?? [];
     return (
       <section className="report report-card" aria-label="Check and send">
-        <div className="dir-filters report-type" role="group" aria-label="Record type">
-          {["observation", "punch_item"].map((t) => (
-            <button key={t} type="button" className={card.recordType === t ? "is-on" : ""} aria-pressed={card.recordType === t} onClick={() => set({ recordType: t })}>{RECORD_LABEL[t]}</button>
-          ))}
-        </div>
+        {!demoLoop && (
+          <div className="dir-filters report-type" role="group" aria-label="Record type">
+            {["observation", "punch_item"].map((t) => (
+              <button key={t} type="button" className={card.recordType === t ? "is-on" : ""} aria-pressed={card.recordType === t} onClick={() => set({ recordType: t })}>{RECORD_LABEL[t]}</button>
+            ))}
+          </div>
+        )}
         <p className="procore-note">Goes to Procore's <strong>{RECORD_TOOL[card.recordType]}</strong>. {RECORD_HINT[card.recordType]}</p>
-        {draftNote.lowConfidence && <p className="procore-note">{draftNote.offline ? "Couldn't fill it in automatically. Check each field." : "Not sure what kind of record this is. Check the type above."}</p>}
-        {draftNote.suggested === "change_event" && <p className="procore-note">This sounds like extra work. It goes in as an Observation with the impact noted; Change Events come later.</p>}
+        {otherType && (
+          <div className="report-instead">
+            <p className="procore-note">This sounds like {OTHER_TYPE[otherType]}. Only Observations go to Procore for now.</p>
+            <div className="place-chips">
+              <button type="button" className="place-chip" onClick={() => setOtherType(null)}>Create as Observation</button>
+              <button type="button" className="place-chip" onClick={saveAsNote}>Save as note</button>
+            </div>
+          </div>
+        )}
+        {draftNote.lowConfidence && <p className="procore-note">{draftNote.offline ? "Couldn't fill it in automatically. Check each field." : demoLoop ? "Not sure this is right. Check each field." : "Not sure what kind of record this is. Check the type above."}</p>}
+        {draftNote.suggested === "change_event" && !otherType && <p className="procore-note">This sounds like extra work. It goes in as an Observation with the impact noted; Change Events come later.</p>}
 
         <label className="msg-field"><span>Title</span>
           <input className="dir-input" value={card.title} onChange={(e) => set({ title: e.target.value })} maxLength={80} />
@@ -240,9 +345,17 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
         )}
         <div className="msg-field"><span>Who it's for</span>
           <button type="button" className="to-line to-btn" onClick={() => setPicking(true)}>
-            <p>{card.assignees.length ? <strong>{card.assignees.map((a) => a.name).join(", ")}</strong> : blank}</p>
+            <p>{card.assignees.length ? <strong>{card.assignees.map((a) => a.name).join(", ")}</strong> : demoLoop ? "Pick who should fix it." : blank}</p>
             <span className="stop-more">{card.assignees.length ? "Change" : "Pick"}</span>
           </button>
+          {!card.assignees.length && choices.length > 0 && (
+            <>
+              <small className="msg-status">Who should take it?</small>
+              <div className="place-chips">
+                {choices.map((p) => <button key={p.id} type="button" className="place-chip" onClick={() => set({ assignees: [recipientOf(p)] })}>{p.name}{p.company ? ` · ${p.company}` : ""}</button>)}
+              </div>
+            </>
+          )}
           {card.assignees.map((a) => [a, cantGet(access, a.procoreUserId, card.recordType)]).filter(([, why]) => why).map(([a, why]) => {
             const pms = managersFor(session.dir?.people, access, card.recordType, a);
             const instead = (pm) => set({
@@ -300,8 +413,9 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
           <ul className="msg-photos">{photos.map((p, i) => <li key={p.url}><img src={p.url} alt={`Photo ${i + 1}`} /></li>)}</ul>
         )}
         {error && <p className="error" role="alert">{error}</p>}
-        <button type="button" className="save-btn report-send" onClick={send}>Send to Procore</button>
-        <button type="button" className="text-btn" onClick={() => setStep("capture")}>Back</button>
+        <button type="button" className="save-btn report-send" onClick={send}>Approve &amp; Send</button>
+        <button type="button" className="text-btn" onClick={() => setStep("capture")}>Edit</button>
+        <button type="button" className="text-btn" onClick={discard}>Discard</button>
       </section>
     );
   }
@@ -338,7 +452,7 @@ export default function ReportFlow({ session, onClose, onOpenThread }) {
         <textarea className="words-field" rows={4} value={words} onChange={(e) => setWords(e.target.value)} placeholder="Or type it here" />
       </label>
       {error && <p className="error" role="alert">{error}</p>}
-      <button type="button" className="save-btn" onClick={draft} disabled={recorder.recording || wordsState === "working"}>Fill It In</button>
+      <button type="button" className="save-btn" onClick={() => draft()} disabled={recorder.recording || wordsState === "working"}>Fill It In</button>
       <button type="button" className="text-btn" onClick={onClose}>Cancel</button>
     </section>
   );
@@ -356,3 +470,12 @@ function groupTypes(types) {
   return [...groups.entries()].sort(([a], [b]) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99) || a.localeCompare(b));
 }
 const defaultType = (options) => (options?.observationTypes ?? []).find((t) => t.name === "Deficiency") ?? null;
+
+// The card's fields as Procore's record takes them (also what the classification log compares)
+function recordFields(card) {
+  return {
+    recordType: card.recordType, title: card.title, description: card.description, observationTypeId: card.observationTypeId,
+    tradeId: card.tradeId, locationText: card.locationText, priority: card.priority,
+    assigneeIds: card.assignees.map((a) => Number(a.procoreUserId)), dueDate: card.dueDate || null,
+  };
+}

@@ -63,10 +63,10 @@ export const procoreSend = (req, res, cfg, method, path, opts) => call(req, res,
  * Attach a file: ask Procore for an upload slot (POST /rest/v1.1/projects/{id}/uploads), post the file to
  * its storage URL with every returned field unchanged plus "file", and return the upload's uuid for upload_ids.
  */
-export async function uploadFile(req, res, cfg, { companyId, projectId, name, type, bytes }) {
+export async function uploadFile(req, res, cfg, { companyId, projectId, name, type, bytes, retry429 = false }) {
   // (the upload slot below is a POST, so a demo session is refused there before any file is sent)
   const slot = await call(req, res, cfg, "POST", `/rest/v1.1/projects/${projectId}/uploads`, {
-    companyId, body: { response_filename: name, response_content_type: type },
+    companyId, body: { response_filename: name, response_content_type: type }, retry429,
   });
   if (!slot.ok || !slot.json?.uuid || !slot.json?.url) return { ok: false, step: "upload slot", status: slot.status, error: slot.json };
   const form = new FormData();

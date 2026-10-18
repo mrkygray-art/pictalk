@@ -27,9 +27,9 @@ test("kill switch: with demo mode off, nothing is refused", () => {
 });
 
 test("project allowlist: any other project is refused, by path or project_id, reads too", () => {
-  refused(() => guardFullLoop(app, "GET", "/rest/v1.0/projects/999/users", { query: {} }, ON), "demo_project");
-  refused(() => guardFullLoop(app, "GET", "/rest/v1.0/observations/items", { query: { project_id: 999 } }, ON), "demo_project");
-  refused(() => guardFullLoop(app, "POST", "/rest/v1.0/observations/items", { query: { project_id: "999" } }, ON), "demo_project");
+  refused(() => guardFullLoop(app, "GET", "/rest/v1.0/projects/999/users", { query: {} }, ON), "loop_project");
+  refused(() => guardFullLoop(app, "GET", "/rest/v1.0/observations/items", { query: { project_id: 999 } }, ON), "loop_project");
+  refused(() => guardFullLoop(app, "POST", "/rest/v1.0/observations/items", { query: { project_id: "999" } }, ON), "loop_project");
   guardFullLoop(app, "GET", "/rest/v1.0/projects/101/users", { query: {} }, ON);
   guardFullLoop(app, "GET", "/rest/v1.0/me", { query: {} }, ON);
 });
@@ -44,13 +44,13 @@ test("action allowlist: the loop's writes pass; any other write is refused", () 
   for (const [m, p] of [
     ["DELETE", "/rest/v1.0/observations/items/77"], ["POST", "/rest/v1.1/punch_items"], ["PATCH", "/rest/v1.0/projects/102/users/5"],
     ["POST", "/rest/v1.0/projects/102/daily_logs/notes_logs"], ["POST", "/rest/v1.0/vendors"],
-  ]) refused(() => guardFullLoop(app, m, p, { query: q }, ON), "demo_action");
+  ]) refused(() => guardFullLoop(app, m, p, { query: q }, ON), "loop_action");
 });
 
 test("a write's project can be in the body; a write naming no project is refused", () => {
   guardFullLoop(app, "POST", "/rest/v1.0/observations/items", { body: { project_id: 101 } }, ON);
-  refused(() => guardFullLoop(app, "POST", "/rest/v1.0/observations/items", { body: { project_id: 999 } }, ON), "demo_project");
-  refused(() => guardFullLoop(app, "PATCH", "/rest/v1.0/observations/items/77", { body: { observation: { status: "closed" } } }, ON), "demo_project");
+  refused(() => guardFullLoop(app, "POST", "/rest/v1.0/observations/items", { body: { project_id: 999 } }, ON), "loop_project");
+  refused(() => guardFullLoop(app, "PATCH", "/rest/v1.0/observations/items/77", { body: { observation: { status: "closed" } } }, ON), "loop_project");
 });
 
 test("sandbox tool pages keep their own guards and are exempt", () => {
@@ -97,8 +97,8 @@ const req = (url = "/api/procore/records") => ({ url, headers: { cookie: `${SESS
 const res = () => ({ setHeader() {}, getHeader() {} });
 
 test("procoreGet and procoreSend refuse outside the demo before calling Procore", async () => {
-  await assert.rejects(procoreGet(req(), res(), cfg(), "/rest/v1.0/projects/555/users"), (e) => e.code === "demo_project");
-  await assert.rejects(procoreSend(req(), res(), cfg(), "POST", "/rest/v1.1/punch_items", { body: { project_id: 101 } }), (e) => e.code === "demo_action");
+  await assert.rejects(procoreGet(req(), res(), cfg(), "/rest/v1.0/projects/555/users"), (e) => e.code === "loop_project");
+  await assert.rejects(procoreSend(req(), res(), cfg(), "POST", "/rest/v1.1/punch_items", { body: { project_id: 101 } }), (e) => e.code === "loop_action");
   assert.equal(calls.length, 0, "Procore never saw them");
   const ok = await procoreSend(req(), res(), cfg(), "POST", "/rest/v1.0/observations/items", { body: { project_id: 101 } });
   assert.equal(ok.status, 200);

@@ -1,7 +1,7 @@
 // Report an Issue (voice + photo -> Procore record) end to end at phone width, against the emulators
 // (PICTALK_FAKE_AI=1 for the classifier, PICTALK_FAKE_STT=1 for the words), with /api/procore/* mocked in the
 // browser: photo + voice + words -> Fill It In -> the card (Punch Item for Lisa Hubbard, due Friday) ->
-// Send to Procore (checks what the server is sent) -> Sent screen -> the thread with its Procore link.
+// Approve & Send (checks what the server is sent) -> Sent screen -> the thread with its Procore link.
 // Needs: npm run emulators, and npx vite --port 5176. Screenshots: e2e/report-shots/.
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
@@ -136,7 +136,7 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   await page.type("textarea", "Tell Lisa the drywall in room 204 needs to be redone by Friday");
   await shot("1-capture");
   await click("button::-p-text(Fill It In)");
-  await waitText("Send to Procore", 30000);
+  await waitText("Approve & Send", 30000);
   const t = await text();
   const typeOn = await page.$eval(".report-type button.is-on", (e) => e.textContent);
   check("the card: Punch Item picked by the AI", typeOn === "Punch Item", typeOn);
@@ -171,10 +171,10 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   const after = await text();
   check("permissions: the PM takes the record; Jim stays tagged on the thread", after.includes("Pat Manager") && after.includes("Also tagged on the thread: Jim Henson") && !after.includes("Jim Henson can't get"));
 
-  await click("button::-p-text(Send to Procore)");
+  await click("button::-p-text(Approve & Send)");
   await waitText("Sent to Procore", 30000);
   const done = await text();
-  check("Sent screen: Punch Item #2 with Open in Procore", done.includes("Punch Item #2") && done.includes("Open in Procore"));
+  check("Sent screen: Punch Item #2 with View in Procore", done.includes("Punch Item #2") && done.includes("View in Procore"));
   check("Sent screen: says plainly where it went (Punch List, not Observations)", done.includes("Created in Procore") && done.includes("Find it in Procore's Punch List tool, not Observations"));
   check("Sent screen: says Lisa and the PM get Procore's email", done.includes("Lisa Hubbard, Pat Manager will get Procore's email"));
   const sc = sentToServer?.card ?? {};
@@ -239,8 +239,9 @@ const friday = (() => { const d = new Date(); const add = (5 - d.getDay() + 7) %
   await shot("8-photo");
   await click(".ph-full-back");
   await click(".ph-tabs button::-p-text(Albums)");
-  await waitText("Unclassified");
-  check("photos: albums with counts", (await text()).includes("3 photos") && (await text()).includes("0 photos"));
+  await waitText("3 photos");
+  // Since 3c1a021 the Albums list leaves out empty albums (Snap's picker still offers them)
+  check("photos: albums with counts; the empty one isn't listed", (await text()).includes("Field photos") && !(await text()).includes("0 photos"));
   await shot("9-albums");
 
   // Snap: the camera opens straight away (file chooser here), optional words, today's album, Save Photo

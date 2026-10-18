@@ -25,10 +25,11 @@ export async function recordOptions(project) {
 }
 
 /** The AI's draft for the card (functions/classifier.js decides what's kept) */
-export async function draftRecord(key, transcript, { project, options, people }) {
+export async function draftRecord(key, transcript, { project, options, people, captureId = null }) {
   const r = await httpsCallable(functions, "classifyCapture", { timeout: 60000 })({
     key,
     transcript,
+    captureId, // the classification log for the Evaluation Lab (functions/captures.js)
     context: {
       projectName: project.name,
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -64,8 +65,9 @@ const base64 = (blob) => new Promise((ok, bad) => {
 });
 const ext = (type) => (/png/.test(type) ? "png" : /jpe?g/.test(type) ? "jpg" : /mp4|m4a|aac/.test(type) ? "m4a" : /webm/.test(type) ? "webm" : /wav/.test(type) ? "wav" : "bin");
 
-/** Create the record in Procore. card: the confirmed fields; photos: [Blob]; voice: Blob | null */
-export async function sendRecord(project, card, { photos = [], voice = null, link = null } = {}) {
+/** Create the record in Procore. card: the confirmed fields (card.captureId makes a retry safe); photos: [Blob];
+ *  voice: Blob | null; proposed: the card as SiteSnap first filled it in (for the classification log). */
+export async function sendRecord(project, card, { photos = [], voice = null, link = null, proposed = null } = {}) {
   const files = [];
   for (const [i, p] of photos.slice(0, MAX_PHOTOS).entries()) {
     const small = await shrinkPhoto(p);
@@ -75,7 +77,7 @@ export async function sendRecord(project, card, { photos = [], voice = null, lin
   const r = await fetch("/api/procore/records", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ companyId: project.companyId, projectId: project.projectId, card, files, link }),
+    body: JSON.stringify({ companyId: project.companyId, projectId: project.projectId, card, files, link, proposed }),
   });
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw Object.assign(new Error(body.message ?? "Couldn't send it to Procore. Try again."), { status: r.status });

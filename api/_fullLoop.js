@@ -48,7 +48,7 @@ export function fullLoopProblem(s = fullLoopSettings()) {
 const pathOf = (req) => new URL(req?.url ?? "/", "http://localhost").pathname;
 export const isToolPage = (req) => TOOL_PAGES.test(pathOf(req));
 
-const outside = () => new HttpError(403, "demo_project", "Demo mode is on: SiteSnap only works in the demo projects right now.");
+const outside = () => new HttpError(403, "loop_project", "Demo mode is on: SiteSnap only works in the demo projects right now.");
 
 /**
  * Throws 403 when demo mode is on and this Procore call is outside the demo; does nothing when it's off.
@@ -66,7 +66,7 @@ export function guardFullLoop(req, method, path, { query, body } = {}, s = fullL
   const bare = String(path).split("?")[0];
   if (!WRITES.some(([wm, re]) => wm === m && re.test(bare))) {
     console.error("SiteSnap demo mode refused a write:", m, bare.replace(/\d+/g, "{id}"));
-    throw new HttpError(403, "demo_action", "Demo mode is on: only Observations can be sent to Procore right now.");
+    throw new HttpError(403, "loop_action", "Demo mode is on: only Observations can be sent to Procore right now.");
   }
 }
 

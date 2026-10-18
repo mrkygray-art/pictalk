@@ -161,6 +161,7 @@ test("record-options: the project's Observation types, trades and locations", as
     locations: [{ id: 50, name: "Level 2" }],
     canObservations: true,
     tradesReadable: true,
+    fullLoopDemo: false, // FULL_LOOP_DEMO isn't on here (tests/full-loop-records.test.js covers it)
   });
 });
 

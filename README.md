@@ -4,13 +4,14 @@
 
 > **In development.** SiteSnap AI has been tested only in Procore's developer sandbox, with fictional people, companies, and projects. No real crew uses it yet. Anyone can look around in the **[live demo](https://sitesnap-procore.vercel.app/demo)**: it opens with no sign-in as a view-only guest on three sample sandbox projects, and anything that would change Procore is turned off (see [`docs/guest-demo.md`](docs/guest-demo.md)). SiteSnap AI is an independent project. It isn't affiliated with, sponsored by, or endorsed by Procore Technologies, Inc.; Procore is a trademark of its owner.
 
-SiteSnap AI is a phone-first web app for construction crews that works with Procore. Everyone signs in with their own Procore account and picks a Procore project, and that project's directory is the team. The project home has five tiles: Report an issue, Message (with the count of messages waiting for you), Inspection, Daily log, and Project photos.
+SiteSnap AI is a phone-first web app for construction crews that works with Procore. Everyone signs in with their own Procore account and picks a Procore project, and that project's directory is the team. The project home has six tiles, two by three: Report something, Message (with the count of messages waiting for you), My items, Inspection (with how many are assigned to you), Daily log, and Project photos. SiteSnap asks Procore what the signed-in person can use on that project and only offers what their Procore role allows.
 
-1. **Report an Issue: voice + photo → a real Procore record.** A foreman takes a photo and says what's wrong. Claude drafts an **Observation** or a **Punch Item** using the project's own lists, and one tap creates it in Procore with the photo and the voice recording attached.
+1. **Report something: voice + photo → a real Procore record.** Report something opens a short list of what to report; Issue is there today, and Safety, Delay, Extra work and Question for the PM are being added. For an issue, a foreman takes a photo and says what's wrong. Claude drafts an **Observation** or a **Punch Item** using the project's own lists, and one tap creates it in Procore with the photo and the voice recording attached.
 2. **Project messaging, like Microsoft Teams for one jobsite.** A Procore project is the team and messages are threads. You tag who a message is for, CC people to keep them in the loop, and attach photos and a transcribed voice note. Claude pulls out the to-dos and who they're for.
 3. **Project photos, kept in Procore's own Photos tool.** Browse the project's photos by day, area, trade, or album, and snap new ones with an optional voice note. They file into that day's album, even when there's no signal at the time.
 4. **Inspections, one question at a time (new, being checked in the sandbox).** A foreman walks a Procore inspection on the phone with big Pass, Fail, and N/A buttons, by tap or by voice, with photos and spoken notes. A Fail becomes a Procore Observation in one tap, linked to the failed item.
-5. **Daily log by voice (being checked in the sandbox).** A foreman says one end-of-day update ("six guys on site, drywall delayed waiting on materials, forklift delivery at 10"). Claude sorts it into Procore Daily Log entries (Manpower, Delays, Deliveries, Notes), the foreman checks the cards, and Send writes each one into Procore's Daily Log for that day, with photos.
+5. **My items (new, being checked in the sandbox).** The Observations and Punch Items assigned to you on the project, grouped Overdue, Open, and Ready for review, with a count on the home tile. Mark fixed: snap a photo of the fix, say what you did, and the item goes to Ready for review in Procore.
+6. **Daily log by voice (being checked in the sandbox).** A foreman says one end-of-day update ("six guys on site, drywall delayed waiting on materials, forklift delivery at 10"). Claude sorts it into Procore Daily Log entries (Manpower, Delays, Deliveries, Notes), the foreman checks the cards, and Send writes each one into Procore's Daily Log for that day, with photos.
 
 **Live demo (view only, no sign-in):** https://sitesnap-procore.vercel.app/demo
 
@@ -91,6 +92,7 @@ Before building, the Photos API was checked in Procore's sandbox: album creation
 ## What Procore's API taught us
 
 - **Permissions are per person.** Each person can create only what their own permission template allows, and Procore answers 403 otherwise. SiteSnap reads the templates' levels while a company admin is signed in, saves them on the server, and warns before sending who can't receive Observations or Punch Items.
+- **Procore will say what each person can use.** `GET /rest/v1.0/settings/permissions?project_id=` returns the signed-in person's own access level per tool, and only lists tools turned on for that project. A sandbox subcontractor could create RFIs but not Change Events, and had Directory at None while still able to read the project's people, so SiteSnap trusts a plain read for that one.
 - **Observations created through the API are private by default.** SiteSnap sends `personal: false` so the team can see them.
 - **Procore doesn't email anyone when the API creates a record.**
 - **Rate limit:** about 25 calls per 10 seconds per user, so bulk work is paced, and a 429 waits and tries once more.
@@ -110,6 +112,8 @@ Hidden pages make realistic test data and check the API. They refuse to run outs
 | `/api/procore/demo-staging` | Demo staging (needs `DEMO_MODE=true` and a Procore admin): creates three demo projects at early, middle, and closeout stages, adds 12 people, imports 15 scenarios as Observations and Punch Items with photos in small batches, and resets them. It only touches records tagged `[SS-DEMO]`. See [`docs/DEMO_STAGING.md`](docs/DEMO_STAGING.md). |
 | `/api/procore/test-records` | Record test: proves the write path by creating an Observation and a Punch Item with a photo and an audio file. |
 | `/api/procore/test-inspections` | Inspections check: reads the project's inspections, sections, and items; Run Write Check also answers the last item, sets the last section N/A and back, and adds a test note. See [`docs/inspections-api-notes.md`](docs/inspections-api-notes.md). |
+| `/api/procore/test-capabilities` | Tool access check (read only): the signed-in person's Procore permission list next to a one-row read of each tool, and what SiteSnap decides to show. |
+| `/api/procore/test-my-items` | My items check (read only): the "assigned to me" filters, assignee fields, and photo attachments on Observations and Punch Items. |
 | `/api/procore/test-permissions` | Permissions check (read only): what each permission template allows for Observations, the Punch List, Tasks, and the Directory, and who each tool accepts as an assignee. |
 
 ## How it's built

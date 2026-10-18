@@ -8,10 +8,14 @@
 //                  Ky's own SiteSnap sign-in cookie is left as it was.
 //   POST { action: "refresh" | "delete" }   test a refresh now (single flight, like any visitor) / remove it
 //   POST { action: "samples" | "remove_samples" }   load / remove the sample messages (api/_demoMessages.js)
+//   POST { action: "myitems" | "remove_myitems" }   add / delete the sample My items in Procore, assigned to the guest,
+//                  with the owner's own Procore sign-in (api/_demoMyItems.js)
 // Tokens are never shown, logged or put in a URL. The guest's name and email are never shown either.
 import { randomBytes } from "node:crypto";
 import { config, HttpError, newState, procoreGet, readBody, redirect, requireSameOriginJson, sendError, sendJson, setCookie, STATE_COOKIE, queryOf } from "../_procore.js";
 import { loadSampleMessages, removeSampleMessages } from "../_demoMessages.js";
+import { addMyItemsSamples, removeMyItemsSamples } from "../_demoMyItems.js";
+import { demoProjects } from "../_demoScenarios.js";
 import { allowedProjectsFor, deleteGuestAuth, demoProblem, demoSettings, forgetDemoMemo, getWithToken, guestAuthInfo, guestTokens, saveGuestAuth } from "../_demo.js";
 
 export const PURPOSE = "demo-authorize";
@@ -77,7 +81,7 @@ function page(res, body, status = 200) {
   res.end(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow"><title>Demo authorization</title>
-<style nonce="${nonce}">
+<style nonce="${nonce}">.lines{white-space:pre-line}
 body{margin:0;background:#000;color:#f2f2f7;font:16px/1.5 -apple-system,"Segoe UI",Roboto,sans-serif}
 main{max-width:40rem;margin:0 auto;padding:24px 16px}
 h1{font-size:24px;margin:0 0 4px}.card{background:#1c1a17;border-radius:14px;padding:14px 16px;margin:14px 0}
@@ -88,14 +92,16 @@ button.ghost{background:#2b2823;color:#f2f2f7}ul{padding-left:20px;margin:6px 0}
 <script nonce="${nonce}">
 for (const b of document.querySelectorAll("button[data-action]")) b.addEventListener("click", async () => {
   if (b.dataset.action === "delete" && !confirm("Remove the stored guest authorization? The demo stops working until you authorize again.")) return;
+  if (b.dataset.action === "remove_myitems" && !confirm("Delete the sample My items from the three demo projects in Procore?")) return;
   b.disabled = true;
-  const out = document.getElementById(b.dataset.action.includes("samples") ? "out-samples" : "out");
+  const out = document.getElementById(b.dataset.action.includes("myitems") ? "out-myitems" : b.dataset.action.includes("samples") ? "out-samples" : "out");
   if (b.dataset.action === "samples") out.textContent = "Adding sample messages… (about 20 seconds)";
+  if (b.dataset.action === "myitems") out.textContent = "Adding sample items in Procore… (about 30 seconds)";
   try {
     const r = await fetch(location.pathname, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: b.dataset.action }) });
     const j = await r.json();
     out.textContent = j.message || (r.ok ? "Done." : "Didn't work.");
-    if (r.ok && !b.dataset.action.includes("samples")) setTimeout(() => location.replace(location.pathname), 1200);
+    if (r.ok && !b.dataset.action.includes("samples") && !b.dataset.action.includes("myitems")) setTimeout(() => location.replace(location.pathname), 1200);
   } catch { out.textContent = "Couldn't reach the server."; }
   b.disabled = false;
 });
@@ -117,7 +123,9 @@ ${info.missing?.length ? `<p class="bad">The guest can't open: ${info.missing.ma
 ${info?.hasTokens ? `<button class="ghost" data-action="refresh">Test a Refresh Now</button><button class="ghost" data-action="delete">Remove It</button>` : ""}<p id="out" class="muted"></p></div>
 ${info?.hasTokens ? `<div class="card"><strong>Sample messages</strong>
 <p>Adds a few conversations to each demo project so every Messages tab has something: For Me (the guest is in To), CC, Sent (the guest started it) and All Project. Loading again replaces them. Takes about 20 seconds.</p>
-<button data-action="samples">Add Sample Messages</button><button class="ghost" data-action="remove_samples">Remove Sample Messages</button><p id="out-samples" class="muted"></p></div>` : ""}
+<button data-action="samples">Add Sample Messages</button><button class="ghost" data-action="remove_samples">Remove Sample Messages</button><p id="out-samples" class="muted"></p>
+<p><strong>Sample My items</strong>: three items in each demo project (one overdue, one open, one Ready for review), assigned to the guest, made in Procore with your own sign-in.</p>
+<button data-action="myitems">Add My Items Samples</button><button class="ghost" data-action="remove_myitems">Remove My Items Samples</button><p id="out-myitems" class="muted lines"></p></div>` : ""}
 <div class="card"><strong>Authorize the guest</strong>
 <p>1. Sign out of Procore in this browser (Procore remembers your own login). A Procore tab opens; close it when it says you're signed out.</p>
 <a class="btn" href="/api/procore/logout" target="_blank" rel="noopener">Sign Out of Procore</a>
@@ -149,6 +157,22 @@ export default async function handler(req, res) {
         });
         console.log("SiteSnap demo: sample messages added ·", r.threads, "threads · skipped", r.skipped.length);
         return sendJson(res, 200, { ok: true, message: `Added ${r.threads} sample conversations.${r.skipped.length ? ` Skipped: ${r.skipped.join("; ")}` : ""}` });
+      }
+      if (action === "myitems" || action === "remove_myitems") {
+        const info = await guestAuthInfo();
+        if (!info?.guestUserId) throw new HttpError(404, "not_found", "Authorize the guest first.");
+        const codes = demoProjects() ?? {};
+        const projects = (info.projects ?? []).map((p) => ({ ...p, code: Object.keys(codes).find((c) => codes[c] === String(p.projectId)) })).filter((p) => p.code);
+        if (!projects.length) throw new HttpError(400, "no_projects", "None of the guest's projects is in DEMO_PROJECT_IDS (HP, WG, LV).");
+        if (action === "remove_myitems") {
+          const r = await removeMyItemsSamples(req, res, cfg, { projects });
+          console.log("SiteSnap demo: My items samples removed ·", r.removed, "· failed", r.failed.length);
+          return sendJson(res, 200, { ok: !r.failed.length, message: `Deleted ${r.removed} sample items.${r.failed.length ? ` Couldn't delete: ${r.failed.join("; ")}` : ""}` });
+        }
+        const lines = await addMyItemsSamples(req, res, cfg, { projects, guestUserId: info.guestUserId, today: new Date().toISOString().slice(0, 10) });
+        console.log("SiteSnap demo: My items samples ·", JSON.stringify(lines.map((l) => `${l.code} ${l.ok ? "ok" : "failed"}: ${l.detail}`)));
+        const bad = lines.filter((l) => !l.ok);
+        return sendJson(res, 200, { ok: !bad.length, message: lines.map((l) => `${l.ok ? "✓" : "✗"} ${l.code}: ${l.title} (${l.detail})`).join("\n") });
       }
       if (action === "remove_samples") {
         const n = await removeSampleMessages();

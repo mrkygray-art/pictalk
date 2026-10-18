@@ -58,7 +58,8 @@ export function itemRow(type, row) {
     type, // observation | punch_item
     id: String(row.id),
     number: str(type === "observation" ? row.number : row.position ?? row.number, 20) || null,
-    title: str(row.name || row.title, 200) || "(no title)",
+    // demo records carry a [SS-DEMO] tag for the staging page's reset; it means nothing to the person reading
+    title: str(row.name || row.title, 200).replace(/^\[SS-DEMO\](\[ARCHIVED\])?\s*/, "") || "(no title)",
     location: placeOf(row.location),
     due: day(row.due_date),
     createdAt: str(row.created_at, 40) || null,

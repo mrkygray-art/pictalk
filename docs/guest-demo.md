@@ -33,6 +33,12 @@ view-only Procore guest. No login page, no username or password, no popup, no th
    **Authorize the Guest** and sign in with the guest's Procore email and password. The page refuses your own
    account, and says which allowlisted projects the guest can't open.
 4. Open `/demo` in a private window (desktop Chrome and iPhone Safari).
+5. Optional: **Add Sample Messages** on the same page loads a few conversations per demo project
+   (`api/_demoMessages.js`, threads `sample-*` with `sample: true`) so every Messages tab has something:
+   For Me (guest in To), CC, Sent (guest started it) and All Project. The people are the demo staging people,
+   matched by email in each project's directory; anyone missing skips that thread (the page says which).
+   Each message runs through `onConversationMessage` like a real one (feed card, AI to-dos). Loading again
+   replaces them; **Remove Sample Messages** deletes them and their read marks.
 
 If the demo ever shows "temporarily unavailable": open `/admin/demo-authorize`; it shows the failure reason. Search
 the Vercel logs for `[ALERT] SiteSnap demo` (a Vercel log alert or drain on that text can email you; SiteSnap

@@ -16,6 +16,7 @@ import recordsHandler from "../api/procore/records.js";
 import { setAuth, setStore } from "../api/_firestore.js";
 import { config, demoBudget, forgetDemoCache, procoreGet, rateLimitWait, seal, SESSION_COOKIE, unseal } from "../api/_procore.js";
 import { procoreSend } from "../api/_procoreWrite.js";
+import { loadSampleMessages, removeSampleMessages, setWait } from "../api/_demoMessages.js";
 import { AUTH_DOC, demoSettings, demoTiming, forgetDemoMemo, forgetRateLimits, guestTokens, saveGuestAuth } from "../api/_demo.js";
 
 const ENV = {
@@ -46,9 +47,18 @@ const ref = (path) => ({
   get: async () => ({ exists: docs.has(path), data: () => structuredClone(docs.get(path)) }),
   set: async (v, opts) => { docs.set(path, opts?.merge ? { ...(docs.get(path) ?? {}), ...v } : v); },
   delete: async () => { docs.delete(path); },
+  collection: (name) => col(`${path}/${name}`),
 });
+// a collection's direct children, optionally filtered by one field ==
+const col = (path) => {
+  const children = (field, value) => [...docs.keys()].filter((k) => k.startsWith(`${path}/`) && !k.slice(path.length + 1).includes("/"))
+    .filter((k) => field == null || docs.get(k)?.[field] === value)
+    .map((k) => ({ id: k.split("/").pop(), ref: ref(k), data: () => structuredClone(docs.get(k)) }));
+  return { doc: (id) => ref(`${path}/${id}`), get: async () => ({ docs: children() }), where: (f, _op, v) => ({ get: async () => ({ docs: children(f, v) }) }) };
+};
 const fakeDb = {
   doc: ref,
+  collection: col,
   batch: () => {
     const ops = [];
     return { set: (r, v) => ops.push(() => docs.set(r.path, v)), delete: (r) => ops.push(() => docs.delete(r.path)), commit: async () => ops.forEach((op) => op()) };
@@ -443,4 +453,39 @@ test("authorize: stores the guest's tokens sealed with only the allowlisted proj
   globalThis.fetch = async (url, init) => (new URL(url).pathname === "/rest/v1.0/me" ? json({ id: 1, login: "OWNER@example.com" }) : procore(url, init));
   assert.equal(await finishDemoAuthorize(cfg, { at: "ky", rt: "ky", exp: 1e10 }), "/api/procore/demo-authorize?error=owner_account");
   assert.ok(!docs.has(AUTH_DOC));
+});
+
+// ---------- sample messages ----------
+
+test("sample messages: each demo project gets For Me, CC, Sent and All Project threads with real directory ids", async () => {
+  await storeGuest();
+  setWait(async () => {});
+  // the directory has the demo people by email (ids 9000+), plus the guest; Hannah (Westgate's owner) is missing
+  const { DEMO_PEOPLE } = await import("../api/_demoScenarios.js");
+  const dirFor = () => DEMO_PEOPLE.filter((p) => p.key !== "hannah").map((p, i) => ({ id: 9000 + i, name: `${p.first_name} ${p.last_name}`, email_address: p.email_address, vendor: { name: "Co" }, job_title: p.job_title }));
+  globalThis.fetch = async (url, init) => (/\/projects\/\d+\/users/.test(new URL(url).pathname) ? json(dirFor()) : procore(url, init));
+  const r = await loadSampleMessages(config());
+  assert.ok(r.threads >= 12, `threads ${r.threads}`);
+  assert.ok(r.skipped.length >= 1 && r.skipped.every((x) => x.includes("Hannah Brooks")), r.skipped.join(" | "));
+  for (const p of PROJECTS) {
+    const key = `${p.companyId}_${p.projectId}`;
+    const threads = [...docs.entries()].filter(([k, v]) => k.startsWith(`procoreProjects/${key}/conversations/`) && k.split("/").length === 4 && v.sample);
+    const convs = threads.map(([, v]) => v);
+    assert.ok(convs.some((c) => c.taggedIds.includes("777") && c.status === "open"), `${p.name}: For Me`);
+    assert.ok(convs.some((c) => (c.ccIds ?? []).includes("777")), `${p.name}: CC`);
+    assert.ok(convs.some((c) => c.createdBy.procoreUserId === "777" && c.createdBy.name === "Guest"), `${p.name}: Sent`);
+    assert.ok(convs.some((c) => c.createdBy.procoreUserId !== "777" && !c.taggedIds.includes("777") && !(c.ccIds ?? []).includes("777")), `${p.name}: All Project only`);
+    // messages written with authors from the directory, and nothing names the guest's real name or email
+    const msgs = [...docs.entries()].filter(([k]) => k.startsWith(`procoreProjects/${key}/conversations/sample-`) && k.includes("/messages/"));
+    assert.ok(msgs.length >= threads.length);
+    assertClean(JSON.stringify(convs) + JSON.stringify(msgs.map(([, v]) => v)));
+  }
+  // loading again replaces, never doubles
+  const before = [...docs.keys()].length;
+  await loadSampleMessages(config());
+  assert.equal([...docs.keys()].length, before);
+  // remove takes them all away
+  const n = await removeSampleMessages();
+  assert.equal(n, r.threads);
+  assert.ok(![...docs.keys()].some((k) => k.includes("/conversations/sample-")));
 });

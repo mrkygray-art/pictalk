@@ -7,9 +7,11 @@
 //                  an owner account, keeps only the allowlisted projects, and stores the tokens sealed in Firestore.
 //                  Ky's own SiteSnap sign-in cookie is left as it was.
 //   POST { action: "refresh" | "delete" }   test a refresh now (single flight, like any visitor) / remove it
+//   POST { action: "samples" | "remove_samples" }   load / remove the sample messages (api/_demoMessages.js)
 // Tokens are never shown, logged or put in a URL. The guest's name and email are never shown either.
 import { randomBytes } from "node:crypto";
 import { config, HttpError, newState, procoreGet, readBody, redirect, requireSameOriginJson, sendError, sendJson, setCookie, STATE_COOKIE, queryOf } from "../_procore.js";
+import { loadSampleMessages, removeSampleMessages } from "../_demoMessages.js";
 import { allowedProjectsFor, deleteGuestAuth, demoProblem, demoSettings, forgetDemoMemo, getWithToken, guestAuthInfo, guestTokens, saveGuestAuth } from "../_demo.js";
 
 export const PURPOSE = "demo-authorize";
@@ -88,11 +90,12 @@ for (const b of document.querySelectorAll("button[data-action]")) b.addEventList
   if (b.dataset.action === "delete" && !confirm("Remove the stored guest authorization? The demo stops working until you authorize again.")) return;
   b.disabled = true;
   const out = document.getElementById("out");
+  if (b.dataset.action === "samples") out.textContent = "Adding sample messages… (about 20 seconds)";
   try {
     const r = await fetch(location.pathname, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: b.dataset.action }) });
     const j = await r.json();
     out.textContent = j.message || (r.ok ? "Done." : "Didn't work.");
-    if (r.ok) setTimeout(() => location.replace(location.pathname), 1200);
+    if (r.ok && !b.dataset.action.includes("samples")) setTimeout(() => location.replace(location.pathname), 1200);
   } catch { out.textContent = "Couldn't reach the server."; }
   b.disabled = false;
 });
@@ -112,6 +115,9 @@ ${info.missing?.length ? `<p class="bad">The guest can't open: ${info.missing.ma
   page(res, `<h1>Guest demo authorization</h1><p class="muted">Owner only. Tokens are stored encrypted on the server and are never shown.</p>${msg}
 <div class="card"><strong>Stored authorization</strong>${stored}
 ${info?.hasTokens ? `<button class="ghost" data-action="refresh">Test a Refresh Now</button><button class="ghost" data-action="delete">Remove It</button>` : ""}<p id="out" class="muted"></p></div>
+${info?.hasTokens ? `<div class="card"><strong>Sample messages</strong>
+<p>Adds a few conversations to each demo project so every Messages tab has something: For Me (the guest is in To), CC, Sent (the guest started it) and All Project. Loading again replaces them. Takes about 20 seconds.</p>
+<button data-action="samples">Add Sample Messages</button><button class="ghost" data-action="remove_samples">Remove Sample Messages</button></div>` : ""}
 <div class="card"><strong>Authorize the guest</strong>
 <p>1. Sign out of Procore in this browser (Procore remembers your own login). A Procore tab opens; close it when it says you're signed out.</p>
 <a class="btn" href="/api/procore/logout" target="_blank" rel="noopener">Sign Out of Procore</a>
@@ -134,6 +140,14 @@ export default async function handler(req, res) {
       if (action === "delete") {
         await deleteGuestAuth();
         return sendJson(res, 200, { ok: true, message: "Removed. The demo now shows \"temporarily unavailable\"." });
+      }
+      if (action === "samples") {
+        const r = await loadSampleMessages(cfg);
+        return sendJson(res, 200, { ok: true, message: `Added ${r.threads} sample conversations.${r.skipped.length ? ` Skipped: ${r.skipped.join("; ")}` : ""}` });
+      }
+      if (action === "remove_samples") {
+        const n = await removeSampleMessages();
+        return sendJson(res, 200, { ok: true, message: `Removed ${n} sample conversations.` });
       }
       if (action === "refresh") {
         const info = await guestAuthInfo();

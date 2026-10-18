@@ -89,7 +89,7 @@ button.ghost{background:#2b2823;color:#f2f2f7}ul{padding-left:20px;margin:6px 0}
 for (const b of document.querySelectorAll("button[data-action]")) b.addEventListener("click", async () => {
   if (b.dataset.action === "delete" && !confirm("Remove the stored guest authorization? The demo stops working until you authorize again.")) return;
   b.disabled = true;
-  const out = document.getElementById("out");
+  const out = document.getElementById(b.dataset.action.includes("samples") ? "out-samples" : "out");
   if (b.dataset.action === "samples") out.textContent = "Adding sample messages… (about 20 seconds)";
   try {
     const r = await fetch(location.pathname, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: b.dataset.action }) });
@@ -117,7 +117,7 @@ ${info.missing?.length ? `<p class="bad">The guest can't open: ${info.missing.ma
 ${info?.hasTokens ? `<button class="ghost" data-action="refresh">Test a Refresh Now</button><button class="ghost" data-action="delete">Remove It</button>` : ""}<p id="out" class="muted"></p></div>
 ${info?.hasTokens ? `<div class="card"><strong>Sample messages</strong>
 <p>Adds a few conversations to each demo project so every Messages tab has something: For Me (the guest is in To), CC, Sent (the guest started it) and All Project. Loading again replaces them. Takes about 20 seconds.</p>
-<button data-action="samples">Add Sample Messages</button><button class="ghost" data-action="remove_samples">Remove Sample Messages</button></div>` : ""}
+<button data-action="samples">Add Sample Messages</button><button class="ghost" data-action="remove_samples">Remove Sample Messages</button><p id="out-samples" class="muted"></p></div>` : ""}
 <div class="card"><strong>Authorize the guest</strong>
 <p>1. Sign out of Procore in this browser (Procore remembers your own login). A Procore tab opens; close it when it says you're signed out.</p>
 <a class="btn" href="/api/procore/logout" target="_blank" rel="noopener">Sign Out of Procore</a>
@@ -142,11 +142,17 @@ export default async function handler(req, res) {
         return sendJson(res, 200, { ok: true, message: "Removed. The demo now shows \"temporarily unavailable\"." });
       }
       if (action === "samples") {
-        const r = await loadSampleMessages(cfg);
+        console.log("SiteSnap demo: loading sample messages");
+        const r = await loadSampleMessages(cfg).catch((err) => {
+          console.error("SiteSnap demo: sample messages failed:", err?.code ?? err?.status ?? err?.name ?? "Error", String(err?.message ?? "").slice(0, 200));
+          throw err instanceof HttpError ? err : new HttpError(500, "samples_failed", `Couldn't add the sample messages: ${String(err?.message ?? "error").slice(0, 200)}`);
+        });
+        console.log("SiteSnap demo: sample messages added ·", r.threads, "threads · skipped", r.skipped.length);
         return sendJson(res, 200, { ok: true, message: `Added ${r.threads} sample conversations.${r.skipped.length ? ` Skipped: ${r.skipped.join("; ")}` : ""}` });
       }
       if (action === "remove_samples") {
         const n = await removeSampleMessages();
+        console.log("SiteSnap demo: sample messages removed ·", n);
         return sendJson(res, 200, { ok: true, message: `Removed ${n} sample conversations.` });
       }
       if (action === "refresh") {
@@ -160,6 +166,7 @@ export default async function handler(req, res) {
       }
       throw new HttpError(400, "bad_request", "Unknown action.");
     } catch (err) {
+      console.error("SiteSnap demo authorize POST refused:", err?.code ?? err?.name ?? "Error");
       return sendError(res, err);
     }
   }

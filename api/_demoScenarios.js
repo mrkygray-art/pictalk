@@ -66,6 +66,8 @@ export const DEMO_COMPANIES = {
   westgate: vendor("Westgate Logistics", "Westgate", "(562) 555-0187", "Ontario", "91761", "owner, Westgate Distribution Center"),
   lakeview: vendor("Lakeview School District", "LakeviewSD", "(562) 555-0188", "Lakewood", "90712", "owner, Lakeview Elementary"),
   finishpro: vendor("Finish Pro Painting", "Finish Pro", "(323) 555-0189", "Inglewood", "90301", "painting"),
+  // Full-loop demo (2026-10-18): a roofing / envelope trade in every demo project
+  skyline: vendor("Skyline Roofing & Waterproofing", "Skyline", "(562) 555-0174", "Long Beach", "90813", "roofing and building envelope"),
 };
 
 // Permission templates by kind, best first (the first one the project has is used): the GC's people are
@@ -93,12 +95,13 @@ export const DEMO_PEOPLE = [
   person("luis", "Luis", "Herrera", "bayline", "Concrete Foreman", "sub", ["HP"], "(310) 555-0193"),
   person("tom", "Tom", "Becker", "pacific", "Special Inspector", "sub", ["HP"], "(310) 555-0194"),
   person("alicia", "Alicia", "Nguyen", "volt", "Electrical Foreman", "sub", ["HP", "WG", "LV"], "(310) 555-0195"),
-  person("ray", "Ray", "Castillo", "summit", "Plumbing / Sprinkler Foreman", "sub", ["WG", "LV"], "(424) 555-0196"),
+  person("ray", "Ray", "Castillo", "summit", "Plumbing / Sprinkler Foreman", "sub", ["HP", "WG", "LV"], "(424) 555-0196"),
   person("jenna", "Jenna", "Park", "sentry", "Security Systems Foreman", "sub", ["HP", "WG", "LV"], "(424) 555-0197"),
-  person("carlos", "Carlos", "Mendez", "cleanline", "Drywall Foreman", "sub", ["WG"], "(323) 555-0198"),
+  person("carlos", "Carlos", "Mendez", "cleanline", "Drywall Foreman", "sub", ["HP", "WG", "LV"], "(323) 555-0198"),
   person("hannah", "Hannah", "Brooks", "westgate", "Owner's Representative", "owner", ["WG"], "(562) 555-0199"),
   person("alan", "Alan", "Reese", "lakeview", "Facilities Director", "owner", ["LV"], "(562) 555-0170"),
   person("nikki", "Nikki", "Tran", "finishpro", "Painting Foreman", "sub", ["LV"], "(323) 555-0171"),
+  person("owen", "Owen", "Fletcher", "skyline", "Roofing Foreman", "sub", ["HP", "WG", "LV"], "(562) 555-0175"),
 ];
 export const personByKey = (k) => DEMO_PEOPLE.find((p) => p.key === k);
 export const fullName = (p) => `${p.first_name} ${p.last_name}`;

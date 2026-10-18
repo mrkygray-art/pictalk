@@ -76,7 +76,7 @@ export const PEOPLE = [
   person("alvarez", "Victor", "Alvarez", "beacon", "Electrical Foreman", "trade", ["MH", "CV"], "(310) 555-0128", "Carlos Mendez"),
   person("reed", "Darnell", "Reed", "beacon", "Journeyman Electrician", "trade", ALL, "(310) 555-0129", "Jamal Reed"),
   person("mori", "Aiko", "Mori", "beacon", "Low-Voltage Technician (CCTV / access control)", "trade", ["CV", "DS"], "(310) 555-0130", "Aiko Tanaka"),
-  person("boone", "Owen", "Boone", "beacon", "Apprentice Electrician", "trade", ["MH", "CV"], "(310) 555-0156", "Tyler Boone"),
+  person("boone", "Caleb", "Boone", "beacon", "Apprentice Electrician", "trade", ["MH", "CV"], "(310) 555-0156", "Tyler Boone"),
   person("flores", "Sandra", "Flores", "coastal", "Project Manager", "subpm", ["CV", "DS"], "(424) 555-0157", "Sandra Flores"),
   person("odonnell", "Mike", "O'Donnell", "coastal", "HVAC Foreman", "trade", ["CV", "DS"], "(424) 555-0158", "Mike O'Donnell"),
   person("cho", "Eddie", "Cho", "coastal", "Plumbing Foreman", "trade", ["CV"], "(424) 555-0159", "Eddie Park"),

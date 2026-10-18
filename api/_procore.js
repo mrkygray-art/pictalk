@@ -6,6 +6,7 @@
 //   GET /rest/v1.0/me, GET /rest/v1.0/projects/{project_id}/users (Procore-Company-Id header)
 // Never log or return the client secret, a token, or a cookie value.
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes, timingSafeEqual } from "node:crypto";
+import { guardFullLoop } from "./_fullLoop.js";
 
 export const REDIRECT_URI = "https://sitesnap-procore.vercel.app/api/procore/callback";
 export const STATE_COOKIE = "pc_state";
@@ -270,7 +271,7 @@ export async function session(req, res, cfg, { force = false } = {}) {
 
 // How long to wait after a 429: until Procore's X-Rate-Limit-Reset (epoch seconds), 2 to 12 s; tests set it to 0
 export const rateLimitWait = { maxMs: 12_000 };
-function waitFor429(resp, now = Date.now()) {
+export function waitFor429(resp, now = Date.now()) {
   const reset = Number(resp.headers?.get?.("x-rate-limit-reset"));
   const ms = Number.isFinite(reset) && reset > 0 ? reset * 1000 - now : 10_000;
   return Math.min(rateLimitWait.maxMs, Math.max(Math.min(2000, rateLimitWait.maxMs), ms));
@@ -281,6 +282,7 @@ function waitFor429(resp, now = Date.now()) {
 export async function procoreGet(req, res, cfg, path, { companyId, query } = {}) {
   let tokens = await session(req, res, cfg);
   guardDemo(tokens, "GET", path, query);
+  if (!tokens.demo) guardFullLoop(req, "GET", path, { query });
   const url = `${cfg.apiUrl}${path}${query ? `?${new URLSearchParams(query)}` : ""}`;
   const cacheKey = tokens.demo ? `get ${companyId ?? ""} ${url}` : null;
   if (cacheKey) {

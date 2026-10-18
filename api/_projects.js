@@ -8,6 +8,7 @@
 //     the user has been added to." Default 100 per page, max 300; view=compact returns id and name.
 // Calls run one after another: a token refresh replaces the refresh token, so two at once could clash.
 import { demoCookie, procoreGet, session } from "./_procore.js";
+import { demoProjectsOnly } from "./_fullLoop.js";
 
 const PER_PAGE = 100;
 const MAX_PAGES = 10;
@@ -51,7 +52,8 @@ export async function listProjects(req, res, cfg) {
     }
   }
   projects.sort((a, b) => a.name.localeCompare(b.name) || a.projectId.localeCompare(b.projectId));
-  return { projects, companies: companies.length, refused };
+  // Full-loop demo mode on: the picker lists only the demo projects (api/_fullLoop.js)
+  return { projects: demoProjectsOnly(req, projects), companies: companies.length, refused };
 }
 
 // Firestore key for a project: procoreProjects/{companyId}_{projectId}

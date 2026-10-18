@@ -1,14 +1,17 @@
 // The one place SiteSnap writes to Procore. Every record is written with the signed-in person's own
 // Procore sign-in (everyone on a project has a Procore login), so Procore shows the real author.
 // Kept in one module so a service account (DMSA, client credentials) could replace it later.
-// Like procoreGet: refreshes the token first when needed and retries once on a 401. Never logs tokens.
+// Like procoreGet: refreshes the token first when needed and retries once on a 401 (and, with retry429, waits
+// out a 429). Never logs tokens.
 // A guest demo session (docs/guest-demo.md) only gets GETs on its allowlisted projects through here; anything
 // else is refused before it reaches Procore, even if the guest's own Procore permissions would allow it.
-import { demoRead, session } from "./_procore.js";
+import { demoRead, session, waitFor429 } from "./_procore.js";
+import { guardFullLoop } from "./_fullLoop.js";
 
-async function call(req, res, cfg, method, path, { companyId, query, body, form } = {}) {
+async function call(req, res, cfg, method, path, { companyId, query, body, form, retry429 = false } = {}) {
   let tokens = await session(req, res, cfg);
   demoRead.guard(tokens, method, path, query);
+  if (!tokens.demo) guardFullLoop(req, method, path, { query, body }); // full-loop demo mode (api/_fullLoop.js)
   const url = `${cfg.apiUrl}${path}${query ? `?${new URLSearchParams(query)}` : ""}`;
   const cacheKey = tokens.demo ? `send ${companyId ?? ""} ${url}` : null;
   if (cacheKey) {
@@ -32,6 +35,12 @@ async function call(req, res, cfg, method, path, { companyId, query, body, form 
     tokens = await session(req, res, cfg, { force: true });
     resp = await send(tokens);
   }
+  // retry429 (the full-loop demo's calls): 429 = Procore didn't take the call, so trying again is safe even for a
+  // write; wait out the window, twice at most. Off by default: demo staging and others handle a 429 themselves.
+  for (let tries = 0; retry429 && resp.status === 429 && tries < 2; tries++) {
+    await new Promise((r) => setTimeout(r, waitFor429(resp)));
+    resp = await send(tokens);
+  }
   let json = null;
   try { json = await resp.json(); } catch { /* empty or not JSON */ }
   // Paging and rate-limit headers only (Total, Per-Page, Link, X-Rate-Limit-*)
@@ -46,7 +55,8 @@ async function call(req, res, cfg, method, path, { companyId, query, body, form 
 }
 
 /** A Procore API call; returns { status, ok, json, headers } and never throws on a Procore error answer.
- *  opts.form: a function returning a fresh FormData (called again if the token is refreshed and the call retried). */
+ *  opts.form: a function returning a fresh FormData (called again if the token is refreshed and the call retried).
+ *  opts.retry429: wait out a 429 and try again (twice at most). */
 export const procoreSend = (req, res, cfg, method, path, opts) => call(req, res, cfg, method, path, opts);
 
 /**

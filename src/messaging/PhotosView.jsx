@@ -150,12 +150,14 @@ function AlbumList({ project, onOpenAlbum }) {
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let live = true;
-    loadAlbums(project).then((a) => live && setAlbums(a)).catch((e) => live && setError(e.message));
+    // Empty albums (Procore's default "Unclassified", for one) have nothing to browse, so they're left out here;
+    // Snap's album picker still offers them
+    loadAlbums(project).then((a) => live && setAlbums(a.filter((x) => x.count !== 0))).catch((e) => live && setError(e.message));
     return () => { live = false; };
   }, [project, attempt]);
   if (error) return <div className="ph-more"><p className="procore-note">{error}</p><button type="button" className="stop-more" onClick={() => { setError(""); setAttempt((n) => n + 1); }}>Try Again</button></div>;
   if (!albums) return <p className="ph-muted">Loading albums…</p>;
-  if (!albums.length) return <p className="empty">No albums on this project yet.</p>;
+  if (!albums.length) return <p className="empty">No albums with photos on this project yet.</p>;
   return (
     <ul className="ph-albums">
       {albums.map((a) => (

@@ -39,20 +39,21 @@ test("the permission list decides when it names the tool; probes cover the rest"
   assert.equal(t.rfis.canCreate, false);
   assert.equal(t.daily_log.state, "denied");
   assert.equal(t.incidents.state, "unknown");
-  assert.equal(t.punch_list.source, "probe");
-  assert.ok(!calls.some((p) => p.includes("observations/items")), "no probe for a tool the list answered");
+  assert.deepEqual(t.punch_list, { state: "denied", canCreate: false, level: null, source: "manifest" }); // not in a 200 list = off
+  assert.ok(!calls.some((p) => p.includes("observations/items") || p.includes("punch_items")), "no probe for a tool the list answered");
+  assert.ok(calls.some((p) => p.includes("incidents")), "incidents' name isn't confirmed, so it's still probed");
   assert.equal(Object.keys(t).length, TOOLS.length);
 });
 
 test("a refused permission list falls back to probes for every tool", async () => {
-  const { tools: t, manifest } = await probeAll(async (path) => ({ status: path.includes("settings") ? 404 : 200 }), { projectId: "1", today: "x" });
+  const { tools: t, manifest } = await probeAll(async (path) => ({ status: path.includes("settings") ? 404 : 200 }), { projectId: "1", today: "2026-10-17" });
   assert.equal(manifest.status, 404);
   assert.ok(Object.values(t).every((x) => x.state === "available" && x.source === "probe"));
 });
 
 test("signed out (an HttpError from the session) is passed on, not turned into unknown", async () => {
   const err = Object.assign(new Error("signed out"), { status: 401 });
-  await assert.rejects(probeAll(async () => { throw err; }, { projectId: "1", today: "x" }), /signed out/);
+  await assert.rejects(probeAll(async () => { throw err; }, { projectId: "1", today: "2026-10-17" }), /signed out/);
 });
 
 test("manifest entries: matched by name, None and unavailable mean denied", () => {
@@ -100,4 +101,10 @@ test("the New pill ends NEW_DAYS after release", () => {
   const start = new Date(`${NEW_RELEASED}T00:00:00Z`).getTime();
   assert.equal(isNew(start + 86_400_000), true);
   assert.equal(isNew(start + (NEW_DAYS + 1) * 86_400_000), false);
+});
+
+test("the Daily Log probe asks for the day before (a UTC today can be tomorrow on the project's clock)", async () => {
+  const seen = [];
+  await probeAll(async (path, q) => { seen.push([path, q]); return { status: path.includes("settings") ? 500 : 200 }; }, { projectId: "1", today: "2026-10-18" });
+  assert.equal(seen.find(([p]) => p.includes("manpower_logs"))[1].log_date, "2026-10-17");
 });

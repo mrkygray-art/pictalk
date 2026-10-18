@@ -20,18 +20,24 @@ Spec: `sitesnap-report-picker-my-items-spec.md` (Ky, 2026-10-17). Branch `featur
   are left out; if none is left, a plain "Ask your project admin" line. Guest demo: every built row shows.
 - **My items** tile: hidden only when Procore refuses both Observations and Punch List; opens a placeholder.
 
-## Not verified in the sandbox yet (needs `/api/procore/test-capabilities`, sandbox only)
+## Sandbox results
 
-| Call | Source | Status |
-|---|---|---|
-| `GET /rest/v1.0/settings/permissions?project_id=` | third-party copy of Procore's reference | unconfirmed; tool names in it are guesses (`MANIFEST_NAMES`) |
-| `GET /rest/v1.0/projects/{p}/rfis?per_page=1` | third-party copy | unconfirmed |
-| `GET /rest/v1.0/change_events?project_id=&per_page=1` | third-party copy | unconfirmed (v1.1 is the create path in PROCORE_API_NOTES) |
-| `GET /rest/v1.0/projects/{p}/incidents?per_page=1` | third-party copy | unconfirmed |
-| Observations, Punch List, Daily Log (manpower_logs), Inspections, Directory, Photos | earlier sandbox checks | confirmed |
+**2026-10-17, Edward (admin), 4 projects (HP 373715, WG 373716, LV 373717, sandbox test 373212):**
 
-The check page shows both sources side by side plus what SiteSnap decides. Run it as Edward (admin), a Foreman /
-Superintendent, and a Subcontractor - External person.
+- `settings/permissions?project_id=` answers 200 and lists **only the tools turned on for that project**. So a tool
+  missing from a 200 answer is now treated as denied, with no probe. Confirmed names: `checklists`, `observations`,
+  `punch_list`, `daily_log`, `images`, `directory`, `rfi`, `change_events`. Incidents is off on every project, so
+  its name isn't known yet and it's still probed.
+- `can_create` comes back only on some tools (observations, punch_list, rfi, change_events, submittal_log); the rest
+  leave it out (null = not known).
+- The three demo projects have **no RFIs and no Change Events** turned on (403 on the read, missing from the list).
+  Only the sandbox test project has them. So in HP / WG / LV, Question for the PM and Extra work would use the
+  Message fallback unless those tools are turned on there.
+- The Daily Log probe answered 422: a UTC "today" was tomorrow on the project's clock. It now asks for the day before.
+- RFIs, Change Events, Incidents read paths: 403 where off, 200 (RFIs, Change Events) where on. Confirmed.
+
+**Still to run:** a Foreman / Superintendent and a Subcontractor - External person (levels below Admin, and whether
+`can_create` turns false for them).
 
 ## Differences from the spec (for Ky)
 

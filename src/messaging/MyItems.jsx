@@ -160,8 +160,8 @@ function ItemDetail({ session, row, today, onBack, onFixed, onOpenThread }) {
         <ul className="mi-photos">
           {item.photos.map((p) => (
             <li key={p.url}>
-              {/^https:\/\/([a-z0-9-]+\.)*procore\.com\//i.test(p.url)
-                ? <img src={`/api/procore/photo-file?${new URLSearchParams({ companyId: project.companyId, projectId: project.projectId, u: p.url })}`} alt={p.name || "Photo"} loading="lazy" />
+              {/^https:\/\/([a-z0-9-]+\.)*procore\.com\//i.test(p.thumb || p.url)
+                ? <img src={`/api/procore/photo-file?${new URLSearchParams({ companyId: project.companyId, projectId: project.projectId, u: p.thumb || p.url })}`} alt={p.name || "Photo"} loading="lazy" />
                 : <span className="mi-photo-off">{p.name || "Photo"}</span>}
             </li>
           ))}

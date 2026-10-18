@@ -1,7 +1,8 @@
 // My items (sitesnap-report-picker-my-items-spec.md, section 6): Observations and Punch Items assigned to the
 // signed-in person, merged, grouped Overdue / Open / Ready for review, due date first. Plain functions so tests
-// can feed Procore-shaped rows. Field names from third-party copies of Procore's reference (withone.ai,
-// 2026-10-17), to confirm with /api/procore/test-my-items:
+// can feed Procore-shaped rows. Field names confirmed in the sandbox 2026-10-17 (/api/procore/test-my-items as
+// Chloe Abara): the Observation assignee filter works (1 of 4 rows came back, the one assigned to her); Punch Item
+// rows carry assignees[].id and assignments[].login_information_id; filters[status]=open left out the closed one.
 //   Observations  GET /rest/v1.0/observations/items?project_id=&filters[assignee_id][]=me
 //                 row: id, number, name, description, status (initiated | ready_for_review | not_accepted | closed),
 //                 due_date, assignee {id, name}, created_by {id, name}, location {name | node_name}, type {name}
@@ -93,14 +94,16 @@ export function listQuery(type, { projectId, myId, page }) {
   return { project_id: projectId, "filters[status]": "open", per_page: PER_PAGE, page };
 }
 
-/** Photos on a record (detail read): every attachment that looks like an image, { url, name } */
+/** Photos on a record (detail read): every attachment that looks like an image, { url, thumb, name }.
+ *  Sandbox 2026-10-17: attachments carry url + thumbnail_url on sandbox.procore.com (the photo proxy's hosts). */
 export function photosOf(json) {
   const found = [];
   const add = (a) => {
     const url = a?.url || a?.download_url || a?.thumbnail_url;
+    const thumb = a?.thumbnail_url || url;
     const name = str(a?.name || a?.filename, 120);
     if (!url || found.some((f) => f.url === url)) return;
-    if (/\.(jpe?g|png|heic|webp|gif)$/i.test(name || url) || /^image\//.test(String(a?.content_type ?? ""))) found.push({ url: String(url), name });
+    if (/\.(jpe?g|png|heic|webp|gif)$/i.test(name || url) || /^image\//.test(String(a?.content_type ?? ""))) found.push({ url: String(url), thumb: String(thumb), name });
   };
   for (const a of json?.attachments ?? []) add(a);
   for (const asg of json?.assignments ?? []) for (const a of asg?.attachments ?? []) add(a);

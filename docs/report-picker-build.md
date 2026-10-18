@@ -39,8 +39,14 @@ Spec: `sitesnap-report-picker-my-items-spec.md` (Ky, 2026-10-17). Branch `featur
 - Check page: `/api/procore/test-my-items` (sandbox only): filtered vs unfiltered counts, first-row field names,
   assignee / assignment shapes, attachment fields.
 
-Not confirmed in the sandbox yet: the Observation `assignee_id` filter, Punch Item `assignees` / `assignments`
-field names, attachment fields on a full read (photo hosts must be *.procore.com for the photo proxy).
+**Sandbox 2026-10-17 (`/api/procore/test-my-items` as Chloe Abara, a demo project):** the Observation
+`filters[assignee_id][]` filter works (1 of 4 rows, hers); rows have `assignee {id, name, vendor}` and `assignees[]`,
+`created_by`, `location`, `due_date`, `status: "initiated"`. Punch Items: `filters[status]=open` left out the closed
+one (3 of 4); assignees are `assignees[].id` and `assignments[].login_information_id` (both handled);
+`punch_item_manager` is there (shown as "Assigned by"). Full reads have `attachments` with `url` + `thumbnail_url`
+on sandbox.procore.com, so the photo proxy can show them; the grid now loads the thumbnail. Chloe has no open Punch
+Items, so a punch row on the list wasn't seen live. Mark fixed can't be tried until the branch is live (Procore
+sign-in only works on the production URL).
 
 ## Sandbox results
 

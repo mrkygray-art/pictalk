@@ -107,6 +107,8 @@ test("detail: description and image attachments only", async () => {
   const { item } = (await get("companyId=4291776&projectId=373235&type=observation&id=3")).json();
   assert.equal(item.description, "Cracked tile at the door");
   assert.deepEqual(item.photos.map((p) => p.name), ["crack.jpg"]);
+  assert.equal(item.photos[0].thumb, item.photos[0].url, "no thumbnail_url: the full link");
+  assert.equal(itemDetail("observation", { id: 1, attachments: [{ url: "https://sandbox.procore.com/f/1", thumbnail_url: "https://sandbox.procore.com/t/1", name: "a.jpg" }] }).photos[0].thumb, "https://sandbox.procore.com/t/1");
   assert.equal(item.stage, "ready");
   assert.equal(itemDetail("punch_item", { id: 1, assignments: [{ attachments: [{ url: "https://x.procore.com/p.png", filename: "p.png" }] }] }).photos.length, 1);
 });

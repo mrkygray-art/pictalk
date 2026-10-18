@@ -9,6 +9,8 @@
 //    denied without a probe. can_create comes only on some tools (observations, punch_list, rfi, change_events,
 //    submittal_log); elsewhere it's absent (null). Names confirmed: checklists, observations, punch_list, daily_log,
 //    images, directory, rfi, change_events. Not seen yet: Incidents (off on every sandbox project), so it's probed.
+//    Directory is always probed: a sub with Directory = None in the list still reads the project's people (200,
+//    sandbox 2026-10-17), and that read is all SiteSnap needs from it (people search).
 // 2. A one-row read per tool (page size 1). 2xx = can see it; 401/403 = denied; anything else (404, 5xx, no
 //    signal) = unknown, which never hides anything. A read can't tell Read Only from Standard, so canCreate is null.
 // A failed probe is never an error for the app: unknown means "show it and let Procore decide at Send".
@@ -28,7 +30,9 @@ export const MANIFEST_NAMES = {
   photos: ["images"],
 };
 // Tools whose manifest name is confirmed: missing from a 200 answer = turned off / no access, no probe needed
-export const CONFIRMED_NAMES = new Set(["observations", "punch_list", "rfis", "change_events", "daily_log", "inspections", "directory", "photos"]);
+export const CONFIRMED_NAMES = new Set(["observations", "punch_list", "rfis", "change_events", "daily_log", "inspections", "photos"]);
+// Decided by the one-row read even when the list names them (the list's level doesn't match what the API allows)
+export const PROBE_ALWAYS = new Set(["directory", "incidents"]);
 
 /** The one-row read for each tool: [path, query]. Paths already confirmed in the sandbox are marked. */
 export function probeRequest(tool, { projectId, today }) {
@@ -91,6 +95,7 @@ export async function probeAll(send, { projectId, today }) {
     manifest = { status: m.status };
     if (m.status >= 200 && m.status < 300) {
       for (const tool of TOOLS) {
+        if (PROBE_ALWAYS.has(tool)) continue;
         const entry = manifestEntry(m.json, tool);
         if (entry) tools[tool] = fromManifest(entry);
         else if (CONFIRMED_NAMES.has(tool)) tools[tool] = { state: "denied", canCreate: false, level: null, source: "manifest" }; // not on for this project

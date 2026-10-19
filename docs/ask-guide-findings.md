@@ -5,8 +5,10 @@ end of `src/index.css`, flag `VITE_FEATURE_ASK` in `src/features.js`. Automated 
 
 ## Decisions from Ky (2026-10-18, after section 0)
 
-- The Ask button is on the **sign-in screen** (top right, above the title) and the **project home** (right end of
-  the name / Sign out row). Not on other screens.
+- The Ask button is on the **project home** only (right end of the name / Sign out row). It was on the sign-in
+  screen too at first; Ky removed it there the same day (sign-in goes straight on to the home screen).
+- The guide's four suggested questions were removed from the guide itself (sitesnap-guide repo, 2026-10-18), because
+  they took too much of a phone's screen.
 - The guest demo (`/demo`) gets it too.
 - The button is a small pill (14 px text, 18 px icon) with a 44 px tap area that doesn't make the row taller.
 - Inside Procore's frame, SiteSnap still shows only its "Open SiteSnap AI in a New Tab" launcher (Procore's login
@@ -27,8 +29,7 @@ end of `src/index.css`, flag `VITE_FEATURE_ASK` in `src/features.js`. Automated 
 - Heights use `dvh`. On phones the sheet follows `visualViewport` (height and offset), so it shrinks to the area
   above the keyboard and doesn't slide off the top.
 - The iframe is made on the first open (with a connection) and kept until the page is left, including across
-  switching projects. Signing in loads a new page, so a conversation started on the sign-in screen doesn't carry
-  over to the home screen.
+  switching projects.
 - Nothing about the person or project is sent: the address is fixed, `referrerpolicy="no-referrer"`, no `allow`,
   `sandbox="allow-scripts allow-same-origin allow-forms"`. Nothing about the guide is stored in SiteSnap.
 
@@ -39,7 +40,7 @@ local page took the guide's place; "live" means the real guide.
 
 | # | Question | Result |
 |---|---|---|
-| 1 | Panel on a phone, safe-area spacing | **Phone-size Chrome (390 x 844, touch): passes.** 85% sheet, close button 44 px, page locked, Tab kept inside. Real iPhone Safari and Android Chrome: **not tested yet (needs Ky's phone).** |
+| 1 | Panel on a phone, safe-area spacing | **Phone-size Chrome (390 x 844, touch): passes.** 85% sheet, close button 44 px, page locked, Tab kept inside. **Android (Ky's phone, live site): opens and answers questions.** iPhone Safari: not tested yet. |
 | 2 | Inside Procore's frame | **Not applicable as built:** the framed view is the launcher only (see decisions). The live guide sends no `X-Frame-Options` or `frame-ancestors`, so it frames from any site. Run against the live guide from localhost: it loaded, with no "Refused to frame" message. |
 | 3 | Typing in the guide on iPhone with the keyboard open | **Not tested yet (needs a real iPhone).** The sheet sizes itself from `visualViewport`; the guide's text box is 16 px (not overridden). |
 | 4 | Close and reopen keeps the conversation | **Passes** (stand-in): text typed in the guide is still there after X, backdrop, Escape, rotation and resizing; the guide was requested once. |
@@ -51,7 +52,7 @@ local page took the guide's place; "live" means the real guide.
 | 10 | 200% zoom, largest text | **Not tested yet.** No fixed heights besides the 44 px buttons; the title wraps. |
 | 11 | iPhone Home Screen app | **Not tested yet (needs a real iPhone).** |
 
-Other checks that passed: the Ask button shows on the sign-in screen and home, not on Messages; it sits at the
+Other checks that passed: the Ask button shows on the home screen, not on the sign-in screen or Messages; it sits at the
 right end of the name row without making the row taller or reaching the cards; the iframe's address, title,
 referrer policy, sandbox and missing `allow` are as specified; no `Referer` header reached the guide; Loading shows
 until the frame loads; a guide that takes over 10 s shows "The guide could not load." with Try again and Open in a
@@ -64,4 +65,4 @@ doesn't happen now.
 ## Still to do on real devices (Ky)
 
 iPhone Safari, iPhone Home Screen app, Android Chrome, iPad Safari, desktop Edge / Firefox / Safari: open Ask on the
-sign-in screen and home, type a question with the keyboard up, rotate, close and reopen, and turn on airplane mode.
+home screen, type a question with the keyboard up, rotate, close and reopen, and turn on airplane mode.

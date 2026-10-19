@@ -63,7 +63,7 @@ export default function MessagingApp() {
   const caps = useCapabilities(signedIn ? project : null); // which Procore tools this person can use here
   const badges = useHomeBadges(signedIn ? project : null, view.name === "home" && !choosing);
   const newPill = isNew();
-  // Ask (docs/ask-guide-spec.md): on the sign-in screen and the project home. The panel is made on the first
+  // Ask (docs/ask-guide-spec.md): on the project home only. The panel is made on the first
   // open and then kept, so the guide's conversation survives closing it.
   const [ask, setAsk] = useState(""); // "" never opened | "open" | "closed"
   const askBtn = useRef(null);
@@ -105,7 +105,6 @@ export default function MessagingApp() {
   if (!signedIn) {
     return (
       <main className="app msg-app msg-signin">
-        {askButton && <div className="signin-ask">{askButton}</div>}
         <h1 className="page-title">SiteSnap AI</h1>
         <p className="subtitle">Snap a photo, say what you see, and send it to the right people on your Procore project.</p>
         {result && <p className="procore-note">{result}</p>}
@@ -123,7 +122,6 @@ export default function MessagingApp() {
         )}
         {state.step === "ready" && <p className="procore-note">Signing in…</p>}
         {state.step === "switching" && <p className="procore-note">Signing you out of Procore… A small Procore window opened: don't log in there. It closes by itself in a few seconds, then Procore's login opens here.</p>}
-        {askPanel}
       </main>
     );
   }

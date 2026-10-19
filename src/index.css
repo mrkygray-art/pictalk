@@ -3285,7 +3285,6 @@ select.dir-input { appearance: auto; }
    44 px tap area (the negative margins keep the row from growing); the panel is one element styled per screen size. */
 .msg-who-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .msg-who-row .msg-who { min-width: 0; }
-.signin-ask { display: flex; justify-content: flex-end; }
 .ask-btn {
   flex: none; min-width: 44px; min-height: 44px; margin: -6px -6px -6px 0; padding: 0 6px;
   display: inline-flex; align-items: center; justify-content: center;

@@ -1,6 +1,6 @@
 // Ask the SiteSnap Guide (docs/ask-guide-spec.md) against the emulators, /api/procore/* mocked in the browser and the
 // guide itself replaced by a small stand-in page (GUIDE=real uses the live guide instead, to see whether it lets
-// itself be framed). Sign-in screen and project home: the Ask button, the iframe's settings, no referrer, loading,
+// itself be framed). No Ask on the sign-in screen; on the project home: the Ask button, the iframe's settings, no referrer, loading,
 // close by X / backdrop / Escape, focus back to Ask, the conversation kept, phone sheet (85%, page locked, Tab kept
 // inside), landscape (full height), desktop side panel (no backdrop, page usable), resizing across 768 px without
 // reloading, offline and back, a guide that doesn't load (10 s), the guest demo, and not on other screens.
@@ -82,10 +82,11 @@ async function setup(browser, { mode = "plain", guide = "ok", phone = true } = {
 async function phoneSignInAndHome(browser) {
   const t = await setup(browser);
   const { page } = t;
-  check("sign-in: Ask button shows", !!(await page.$(".signin-ask .ask-btn")));
-  check("sign-in: no iframe before the first open", !(await page.$(".ask-body iframe")));
+  check("sign-in: no Ask button", !(await page.$(".ask-btn")));
   await t.shot("1-signin");
-  await page.click(".signin-ask .ask-btn");
+  await t.signIn();
+  check("home: no iframe before the first open", !(await page.$(".ask-body iframe")));
+  await page.click(".msg-who-row .ask-btn");
   await page.waitForSelector(".ask-body iframe");
   const attrs = await page.$eval(".ask-body iframe", (f) => ({ src: f.getAttribute("src"), title: f.title, ref: f.getAttribute("referrerpolicy"), sandbox: f.getAttribute("sandbox"), allow: f.getAttribute("allow") }));
   check("iframe address is the guide's, nothing added", attrs.src === `${GUIDE}?embed=1`, attrs.src);
@@ -110,27 +111,26 @@ async function phoneSignInAndHome(browser) {
   if (!REAL) {
     const f = t.frame();
     await f.type("#q", "How do I send a daily log?");
-    await t.shot("2-signin-sheet");
+    await t.shot("2-home-sheet-first");
   }
   // Close with X, focus back
   await page.click(".ask-close");
   check("X closes", !(await t.panelOpen()));
   check("focus back on Ask", await t.focusIsAsk());
   check("page unlocked after close", await page.evaluate(() => !document.documentElement.classList.contains("ask-locked")));
-  await page.click(".signin-ask .ask-btn");
+  await page.click(".msg-who-row .ask-btn");
   if (!REAL) check("reopen keeps the conversation", (await t.frame().$eval("#q", (i) => i.value)) === "How do I send a daily log?");
   check("only one guide load so far", t.guideRequests.length === 1, String(t.guideRequests.length));
   // Backdrop closes
   await page.mouse.click(195, 40);
   check("backdrop closes", !(await t.panelOpen()));
   // Escape closes
-  await page.click(".signin-ask .ask-btn");
+  await page.click(".msg-who-row .ask-btn");
   await page.keyboard.press("Escape");
   check("Escape closes", !(await t.panelOpen()));
   check("focus back on Ask after Escape", await t.focusIsAsk());
 
-  // Home
-  await t.signIn();
+  // Home layout
   const row = await page.$eval(".msg-who-row", (r) => {
     const rr = r.getBoundingClientRect();
     const ask = r.querySelector(".ask-btn")?.getBoundingClientRect();
@@ -144,7 +144,10 @@ async function phoneSignInAndHome(browser) {
   await page.click(".msg-who-row .ask-btn");
   await page.waitForSelector(".ask-body iframe");
   await page.waitForFunction(() => !document.querySelector(".ask-state"), { timeout: 15000 }).catch(() => {});
-  if (!REAL) await t.frame().type("#q", "Where are my items?");
+  if (!REAL) {
+    await t.frame().$eval("#q", (i) => { i.value = ""; });
+    await t.frame().type("#q", "Where are my items?");
+  }
   await t.shot("4-home-sheet");
   // Rotate to landscape: full height, same frame
   await page.setViewport({ width: 844, height: 390, isMobile: true, hasTouch: true });
@@ -202,9 +205,10 @@ async function desktop(browser) {
 async function offline(browser) {
   const t = await setup(browser);
   const { page } = t;
+  await t.signIn();
   await page.setOfflineMode(true);
   await page.evaluate(() => window.dispatchEvent(new Event("offline")));
-  await page.click(".signin-ask .ask-btn");
+  await page.click(".msg-who-row .ask-btn");
   await t.waitText("The guide needs a connection. Your other SiteSnap features still work.");
   check("offline: message, no iframe", !(await page.$(".ask-body iframe")));
   await t.shot("7-offline");
@@ -218,7 +222,8 @@ async function offline(browser) {
 async function slow(browser) {
   const t = await setup(browser, { guide: "slow" });
   const { page } = t;
-  await page.click(".signin-ask .ask-btn");
+  await t.signIn();
+  await page.click(".msg-who-row .ask-btn");
   await t.waitText("Loading the guide...");
   await t.waitText("The guide could not load.", 13000);
   const link = await page.$eval(".ask-state a", (a) => ({ href: a.href, target: a.target, rel: a.rel }));

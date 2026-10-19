@@ -12,10 +12,11 @@ SiteSnap AI is a phone-first web app for construction crews that works with Proc
 4. **Inspections, one question at a time (new, being checked in the sandbox).** A foreman walks a Procore inspection on the phone with big Pass, Fail, and N/A buttons, by tap or by voice, with photos and spoken notes. A Fail becomes a Procore Observation in one tap, linked to the failed item.
 5. **My items (new, being checked in the sandbox).** The Observations and Punch Items assigned to you on the project, grouped Overdue, Open, and Ready for review, with a count on the home tile. Mark fixed: snap a photo of the fix, say what you did, and the item goes to Ready for review in Procore.
 6. **Daily log by voice (being checked in the sandbox).** A foreman says one end-of-day update ("six guys on site, drywall delayed waiting on materials, forklift delivery at 10"). Claude sorts it into Procore Daily Log entries (Manpower, Delays, Deliveries, Notes), the foreman checks the cards, and Send writes each one into Procore's Daily Log for that day, with photos.
+7. **Ask, the SiteSnap Guide (new).** A small Ask button on the project home opens a how-to chatbot in a panel (a bottom sheet on phones, a side panel on tablets and computers). It answers questions about the tiles and workflows only from SiteSnap's own guide pages. The guide is a separate retrieval chatbot on Cloudflare (Workers, Workers AI, Vectorize, D1); SiteSnap shows it in a sandboxed frame with no referrer, so no user or Procore data reaches it. [How the guide works](https://ky-gray-portfolio.vercel.app/#sitesnap-guide).
 
 **Live demo (view only, no sign-in):** https://sitesnap-procore.vercel.app/demo
 
-**Portfolio case study, with a looping demo:** https://ky-gray-portfolio.vercel.app/#sitesnap
+**Portfolio case study:** https://ky-gray-portfolio.vercel.app/#sitesnap
 **Built on:** [PicTalk](https://github.com/mrkygray-art/pictalk) (the `master` branch). This `sitesnap` branch is the SiteSnap fork, and every push to it deploys to the SiteSnap app on Vercel.
 
 <p>
@@ -134,6 +135,7 @@ Firebase project sitesnap-procore
 
 - **Front end:** React 19 + Vite, an installable PWA with a hand-written service worker (it never reuses stale server answers), and offline queues in IndexedDB for messages and photos.
 - **Procore:** OAuth runs entirely server-side in Vercel functions. Tokens never go into the browser's storage or a `VITE_` variable, and a test scans for that. Access tokens refresh shortly before they expire.
+- **Ask panel:** `src/messaging/AskGuide.jsx` frames the separate SiteSnap Guide (sandboxed, no referrer, no microphone or camera). One component, laid out by CSS: a bottom sheet under 768 px wide (sized to the space above the phone keyboard with `visualViewport`), a side panel above. The frame is made on the first tap and kept, so the conversation survives closing the panel. Behind `VITE_FEATURE_ASK=1`; `e2e/e2e-ask.js` runs 41 checks.
 - **AI:** the Claude API drafts records (strict JSON, checked against the project's lists) and finds to-dos. Deepgram nova-3 transcribes.
 - **Tests:** `node:test` suites against the Firebase emulators and a mocked Procore (rules, sessions, classifier, records, record status, permissions, demo staging, alerts), plus browser end-to-end tests in `e2e/`.
 
